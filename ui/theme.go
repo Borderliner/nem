@@ -89,6 +89,23 @@ type Theme struct {
 	// since an unclosed bracket is the other thing worth interrupting you for.
 	ParenMatch    tcell.Style
 	ParenMismatch tcell.Style
+	// Region styles the cells between point and the mark.
+	//
+	// A selection is the one thing in the editor that legitimately needs a
+	// background: a span cannot be indicated with a foreground alone. That sits
+	// against the palette's rule that nothing paints a background, which exists
+	// so nem works on a light or a dark terminal without knowing which it is on.
+	//
+	// Reverse resolves it. Swapping foreground and background guarantees correct
+	// contrast on any palette because it adapts to the palette rather than
+	// guessing at it, and an inverted span is the universal terminal convention
+	// for a selection.
+	//
+	// This is deliberately not a contradiction of dropping reverse video from
+	// bracket matching. Reverse as decoration - marking something that is merely
+	// interesting - is the dated tell. Reverse as selection is what it means
+	// everywhere, and is the only palette-independent way to mark a span.
+	Region tcell.Style
 
 	// Chrome, rendered through Lip Gloss and blitted in. The modeline is built
 	// from four separately styled segments rather than one flat bar, which is
@@ -128,6 +145,7 @@ func DefaultTheme() Theme {
 
 		ParenMatch:    tcell.StyleDefault.Bold(true).Underline(true),
 		ParenMismatch: tcell.StyleDefault.Bold(true).Foreground(tcell.GetColor(colourMark)),
+		Region:        tcell.StyleDefault.Reverse(true),
 
 		ModelineName:    lipgloss.NewStyle().Bold(true),
 		ModelineNameOff: lipgloss.NewStyle().Foreground(quiet),

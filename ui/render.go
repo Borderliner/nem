@@ -89,14 +89,19 @@ func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active bool,
 		if active {
 			paren = matchParenAt(win.Buf, win.Pt, th)
 		}
+		// The selection is computed the same way and in the same place, and is
+		// likewise shown only in the active window. regionFor returns nothing
+		// when the window is inactive or the buffer has no mark.
+		region := regionFor(win.Buf, win.Pt, active, th)
 
 		for i := 0; i < textH; i++ {
 			ln := win.Top + i
 			if ln >= win.Buf.NumLines() {
 				break // rows past the end of the buffer stay blank, as in emacs
 			}
+			l := win.Buf.Line(ln)
 			drawLine(scr, rect.X, rect.Y+i, rect.W,
-				win.Buf.Line(ln), win.LeftCol, th, paren.onLine(ln))
+				l, win.LeftCol, th, paren.onLine(ln), region.onLine(ln, l))
 		}
 	}
 
@@ -115,8 +120,10 @@ func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active bool,
 // matters because tcell measures width with the same uniseg segmenter that text
 // does, so the two cannot disagree about how many columns a glyph takes.
 //
-// hl carries any bracket-match highlight falling on this line.
-func drawLine(scr tcell.Screen, x, y, width int, l *text.Line, left text.ColIdx, th Theme, hl lineHL) {
+// hl carries any bracket-match highlight falling on this line, reg any part of
+// the selection. Where both fall on a cell they compose: the region contributes
+// the inverted background and the bracket keeps its weight and underline.
+func drawLine(scr tcell.Screen, x, y, width int, l *text.Line, left text.ColIdx, th Theme, hl lineHL, reg regionHL) {
 	lineW := l.Width()
 	truncated := lineW-left > text.ColIdx(width)
 
@@ -131,6 +138,9 @@ func drawLine(scr tcell.Screen, x, y, width int, l *text.Line, left text.ColIdx,
 		for c := range l.Clusters() {
 			sx := c.Col - left
 			style := hl.styleFor(c.Start, th.Text)
+			if reg.covers(c.Start, c.Start+text.RuneIdx(len(c.Runes))) {
+				style = overlay(style, reg.style)
+			}
 
 			switch {
 			case sx+c.Width <= 0:
@@ -151,6 +161,21 @@ func drawLine(scr tcell.Screen, x, y, width int, l *text.Line, left text.ColIdx,
 			default:
 				scr.SetContent(x+int(sx), y, c.Runes[0], c.Runes[1:], style)
 			}
+		}
+	}
+
+	// A selection running on to the next line is filled past this line's text to
+	// the window's right edge, so a multi-line region reads as one block instead
+	// of following the ragged ends of the lines. An empty line inside a
+	// selection is only visible at all because of this.
+	//
+	// It starts at the line's full display width, so it can never overwrite the
+	// trailing cell of a wide glyph. The truncation marker is deliberately left
+	// out: it is chrome reporting that text continues off screen, not content,
+	// and drawing it selected would claim it is part of what C-w would kill.
+	if reg.on && reg.toEOL && avail > 0 {
+		for sx := max(l.Width()-left, 0); sx < avail; sx++ {
+			scr.SetContent(x+int(sx), y, ' ', nil, reg.style)
 		}
 	}
 

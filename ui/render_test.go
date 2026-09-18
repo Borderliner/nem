@@ -539,7 +539,7 @@ func TestDrawLineDoesNotWriteLeftOfItsRectangle(t *testing.T) {
 	// in a split is the divider column and in general is not this pane's cell.
 	l := text.NewLine([]rune(strings.Repeat("日", 3))) // 6 columns
 	scr := sim(t, 8, 1)
-	drawLine(scr, 1, 0, 4, &l, 1, DefaultTheme(), lineHL{})
+	drawLine(scr, 1, 0, 4, &l, 1, DefaultTheme(), lineHL{}, regionHL{})
 	scr.Show()
 
 	if got := cellAt(t, scr, 0, 0); len(got.Runes) != 0 && string(got.Runes) != " " {
