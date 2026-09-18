@@ -1,0 +1,294 @@
+# nem — design
+
+A terminal text editor with nano's shape and emacs's keybindings.
+
+Status: approved 2026-09-18. Section 1 approved in conversation; Sections 2–4
+written against the same settled decisions.
+
+## Settled decisions
+
+| Decision | Choice | Why |
+|---|---|---|
+| Language | Go 1.27 | Windows sharing buffers is a pointer graph; GC removes the one structural problem the chosen scope guarantees. |
+| Renderer | tcell engine + Lip Gloss chrome | Real hardware cursor, exact key events, free damage-diffing, terminfo portability. Lip Gloss for styling only. |
+| Scope | Pocket emacs + multi-buffer + window splits | User's call. Prefix keymaps, `M-x`, `C-u`, minibuffer, isearch, kill ring, mark, undo. |
+| In v1 | Lua config + rebinding; auto-indent + bracket matching | |
+| Deferred | Syntax highlighting; mouse support | Render path stays per-cell-styleable so highlighting drops in without a rewrite. |
+| Undo | Linear undo/redo | Predictable. `C-/` and `C-_` undo, `M-_` redoes; new edit after undo discards the redo branch. |
+| Architecture | Layered packages; minibuffer is a real buffer | Prompts reuse real editing; `M-x`/`C-s`/find-file/query-replace become callers of one mechanism. |
+| Scripting | gopher-lua, config-as-script | Pure Go, no cgo, single static binary preserved. No config-format migration later. |
+
+Rejected: Rust (borrow-checker friction on the windows-share-buffers graph, and
+`ropey`'s advantage is moot at nano scale); Bubble Tea (fake cursor, key
+normalization, Elm ceremony against a mutable buffer); Luau (cgo cost
+undermines the single static binary; its sandbox and gradual typing are
+calibrated for untrusted third-party scripts at Roblox scale).
+
+## Section 1 — Package layout and the text model
+
+```
+nem/
+  cmd/nem/main.go      flag parsing, terminal setup/teardown, panic recovery
+  text/                buffer, lines, positions, edit ops, undo log
+  keymap/              key parsing, prefix tree, binding resolution
+  command/             named command registry + Env
+  ui/                  tcell screen, window tree, render, Lip Gloss blitter
+  lua/                 gopher-lua host: config loading, API surface
+  editor/              wires it all together, owns the event loop
+```
+
+Dependency direction is strictly one-way: `text` and `keymap` import nothing of
+ours, `command` imports `text` + `keymap`, `ui` imports `text`, `lua` imports
+`command`, `editor` imports everything, and nothing imports `editor`. That is
+what keeps the terminal out of the testable parts.
+
+### Three coordinate spaces
+
+Conflating these is where editors get their cursor bugs. They are distinct
+named types so the compiler catches mixups.
+
+1. **Rune index** (`RuneIdx`) — position within `[]rune`. Storage and editing.
+2. **Grapheme cluster boundary** — where the cursor is allowed to stop.
+   `é` as `e`+U+0301 is two runes, one stop. 👨‍👩‍👧‍👦 is seven runes, one stop.
+3. **Display column** (`ColIdx`) — screen cells. Tab advances to the next
+   multiple of 8; CJK and most emoji are 2 cells; combining marks are 0.
+
+`C-f` moves one grapheme. `C-n` preserves a display column. The buffer stores
+runes.
+
+### Types
+
+`Line` holds `[]rune` plus a cached display width invalidated on edit.
+`Buffer` is a line array (`[]Line`) — not a rope. Nano and micro both do this;
+it is fine to multi-megabyte files, and `text` is the only package that changes
+if gigabyte files ever matter.
+
+**Point lives in the Window, not the Buffer** — two windows on one buffer need
+independent cursors. The buffer keeps a saved point for when no window displays
+it, and the mark (the region is per-buffer in emacs).
+
+### Mutation
+
+All mutation goes through exactly two primitives: `Insert(Pos, []rune)` and
+`Delete(from, to Pos)`. Every command composes from those, so undo, mark
+adjustment, and render invalidation hook in at one place rather than forty.
+
+Undo is a log of those primitives with inverses. Consecutive single-rune
+inserts coalesce into one unit, broken by movement, any non-insert command, or
+a save.
+
+## Section 2 — Input pipeline
+
+### Event loop
+
+```
+tcell event
+  → editor.decodeKey() → keymap.Key        (the ONLY place tcell meets keymap)
+  → append to pending sequence
+  → resolve against the keymap stack
+  → Pending:   echo the prefix, wait for the next key
+  → Undefined: echo "C-x C-z is undefined", clear pending
+  → Found:     registry lookup by name → execute with *Env
+```
+
+The keymap stack is consulted innermost-first: **minibuffer map** (only while a
+prompt is active) → **buffer-local map** → **global map**.
+
+`decodeKey` is where every terminal quirk is absorbed — `C-SPC` arriving as
+NUL, `C-/` arriving as `C-_`, Meta arriving either as Alt or as a separate ESC
+event. `keymap` itself stays stdlib-only and therefore unit-testable; the
+quirk folds live in `keymap.Normalize` and are applied here.
+
+### Universal argument
+
+`C-u` → 4, `C-u C-u` → 16, `C-u 1 2` → 12, `M-1 M-2` → 12, `C-u -` → negative.
+The pending argument lives on the Env and is consumed by the command:
+`e.Arg() (n int, explicit bool)`.
+
+### Command registry
+
+```go
+type Func func(*Env) error
+
+type Command struct {
+    Name        string // "kill-line"
+    Doc         string
+    Fn          Func
+    Interactive bool   // appears in M-x
+}
+
+func (r *Registry) Register(Command) error
+func (r *Registry) Lookup(name string) (Command, bool)
+func (r *Registry) Names() []string // M-x completion
+```
+
+One table with three consumers: `M-x` searches it, the Lua config binds against
+it, and `C-u` feeds it an argument. Lua-defined commands register into the same
+table, so `M-x` finds them with no special casing.
+
+### Env — what a command may touch
+
+```go
+func (e *Env) Win() *Window          // active window (point lives here)
+func (e *Env) Buf() *text.Buffer     // active buffer
+func (e *Env) Arg() (int, bool)      // universal argument
+func (e *Env) Kill(s string)         // push onto the kill ring
+func (e *Env) KillAppend(s string)   // append to the top entry (consecutive C-k)
+func (e *Env) Yank() string
+func (e *Env) YankPop() (string, error)
+func (e *Env) Echo(format string, a ...any)
+func (e *Env) ReadString(ReadOpts) (string, error) // nested minibuffer edit
+func (e *Env) Buffers() []*text.Buffer
+func (e *Env) OpenFile(path string) (*text.Buffer, error)
+func (e *Env) SplitWindow(vertical bool)
+func (e *Env) OtherWindow(n int)
+func (e *Env) DeleteWindow()
+func (e *Env) Quit(force bool) error
+```
+
+Commands never reach the `Screen` or the layout tree. That boundary is what
+keeps commands testable against a headless Env.
+
+### The minibuffer is a recursive edit
+
+`ReadString` enters a **nested event loop** with the minibuffer window active,
+returning on `RET` and returning `ErrQuit` on `C-g`. This is how emacs does it,
+and it is why commands read as straight-line code:
+
+```go
+func findFile(e *command.Env) error {
+    path, err := e.ReadString(command.ReadOpts{
+        Prompt:   "Find file: ",
+        Complete: command.CompleteFile,
+    })
+    if err != nil { return err }
+    buf, err := e.OpenFile(path)
+    if err != nil { return err }
+    e.Win().Visit(buf)
+    return nil
+}
+```
+
+The alternative — commands returning "I need input, call me back" continuations
+— makes every prompting command a state machine. Rejected.
+
+The loop carries a recursion depth guard (max 8) so a misbehaving Lua script
+cannot stack prompts forever.
+
+`ReadOpts.OnChange func(string)` is the hook that makes incremental search fall
+out of the same mechanism: isearch is `ReadString` with an `OnChange` that
+searches and moves point, plus `C-s`/`C-r` bound inside the minibuffer map to
+advance the match. `C-g` restores the point saved at entry.
+
+Because the minibuffer is a real buffer in a real window, `C-a`, `C-e`, `C-k`,
+`M-b`, and the kill ring all work inside prompts with no extra code.
+
+## Section 3 — Rendering
+
+### The rule that de-risks the blitter
+
+- **Text area → direct tcell, cell by cell.** Hot path, needs exact control,
+  and is where per-cell styling will later hang syntax highlighting.
+- **Chrome → Lip Gloss through the blitter.** Modeline, minibuffer, dividers,
+  hint bar. Cold path, redrawn once per frame at most.
+
+The blitter therefore never touches the hot path. If it proves fragile, only
+the chrome is affected.
+
+### Window tree
+
+A binary tree of splits; leaves hold windows.
+
+```go
+type Node interface{ isNode() }
+type Leaf  struct { Win *Window }
+type Split struct {
+    Vertical bool    // true = side by side (C-x 3); false = stacked (C-x 2)
+    A, B     Node
+    Ratio    float64
+}
+```
+
+Layout walks the tree assigning each leaf a rect. The modeline is the leaf's
+last row. **The minibuffer window is not in the tree** — it is a dedicated
+single row pinned to the bottom of the screen, as in emacs.
+
+### Frame
+
+1. Walk the tree, assign rects.
+2. Per leaf: adjust `top` to keep point visible (scroll margin 2), draw visible
+   lines directly to tcell, draw the modeline via the blitter.
+3. Draw dividers.
+4. Draw the minibuffer or echo message via the blitter.
+5. `scr.ShowCursor(x, y)` at point in the active window — the real hardware
+   cursor, which is the whole reason tcell won over Bubble Tea.
+
+### Long lines: truncate, do not wrap (v1)
+
+Lines wider than the window are truncated with a `$` continuation marker and
+the window scrolls horizontally to follow point. Wrapping makes one buffer line
+map to N screen rows, which changes `C-n`/`C-p` semantics, scrolling maths, and
+every rect calculation. Deferred, and flagged as user-visible: emacs and nano
+both wrap by default, so this will feel different until it lands.
+
+## Section 4 — Lua layer, config, and testing
+
+### API surface
+
+`~/.config/nem/init.lua`, loaded at startup after built-in commands register
+and after built-in bindings are installed, so user config overrides cleanly.
+
+```lua
+nem.set("tab-width", 4)
+nem.set("scroll-margin", 3)
+
+nem.bind("C-x C-f", "find-file")
+nem.bind("C-c r", "reverse-line")
+
+nem.command("reverse-line", "Reverse the current line.", function()
+  local l = nem.buf.line()
+  nem.buf.replace_line(l:reverse())
+end)
+
+nem.hook("before-save", function(buf)
+  if buf.path:match("%.go$") then nem.run("gofmt-buffer") end
+end)
+```
+
+`nem.command` registers into the same Go registry, so Lua commands appear in
+`M-x` and are bindable exactly like built-ins.
+
+**A script error must never kill the editor.** Config load and every Lua
+callback run under `pcall`; failures surface in the echo area with the Lua
+traceback and the editor continues with the built-in default.
+
+Scripts receive a narrow `nem` table, never a raw `Env` — that keeps the door
+open to swapping in a sandboxed VM later without breaking scripts.
+
+### Testing strategy
+
+| Layer | How | Terminal needed |
+|---|---|---|
+| `text` | Table-driven unit tests | No |
+| `keymap` | Table-driven + `ParseSpec`/`String` round-trip property | No |
+| `ui/blit` | `tcell.NewSimulationScreen()`, assert cells and styles | No |
+| `command` | Headless fake Env | No |
+| `editor` | Integration: scripted key sequences → assert buffer + screen | Simulation only |
+
+The integration harness is the one that catches emacs-behaviour regressions:
+feed `C-k C-k C-y`, assert both killed lines came back as one block. Feed
+`C-n` through a short line, assert the goal column survived.
+
+## Build order
+
+1. `text`, `keymap`, `ui/blit` — no dependencies on our other code. **Parallel.**
+2. `command` registry + Env + the movement/edit command set.
+3. `ui` window tree, layout, render.
+4. `editor` event loop, keymap stack, `decodeKey`, recursive minibuffer edit.
+5. `lua` host and config loading.
+6. Auto-indent, bracket matching, integration harness.
+
+## Deferred, by explicit decision
+
+Syntax highlighting · mouse support · line wrapping · undo tree · rope buffer ·
+plugin ecosystem and sandboxing · language-aware indentation
