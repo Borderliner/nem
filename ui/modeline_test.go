@@ -31,21 +31,77 @@ func TestModelineShowsBaseNameNotFullPath(t *testing.T) {
 	}
 }
 
-func TestModelineModifiedFlag(t *testing.T) {
+func TestModelineModifiedMark(t *testing.T) {
 	b := bufferOf(t, "hi")
 	w := view.NewWindow(b)
 
 	clean := modelineString(DefaultTheme(), w, 40, true)
-	if !strings.Contains(clean, "--") {
-		t.Errorf("clean modeline = %q, want the -- flag", clean)
+	if strings.ContainsRune(clean, ModifiedMark) {
+		t.Errorf("clean modeline = %q, want no modified mark", clean)
 	}
 
 	if err := b.Insert(b.End(), []rune("!")); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
 	dirty := modelineString(DefaultTheme(), w, 40, true)
-	if !strings.Contains(dirty, "**") {
-		t.Errorf("modified modeline = %q, want the ** flag", dirty)
+	if !strings.ContainsRune(dirty, ModifiedMark) {
+		t.Errorf("modified modeline = %q, want the modified mark", dirty)
+	}
+}
+
+// The mark occupies a cell whether or not it is showing, so the buffer name
+// must sit at the same screen column either way. Without this the name jumps
+// sideways the instant you type the first character, which is exactly the kind
+// of jitter that makes an interface feel cheap.
+func TestModifiedMarkDoesNotShiftTheName(t *testing.T) {
+	b := bufferOf(t, "hi")
+	b.SetPath("/tmp/steady.go")
+	w := view.NewWindow(b)
+
+	clean := modelineString(DefaultTheme(), w, 40, true)
+	if err := b.Insert(b.End(), []rune("!")); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	dirty := modelineString(DefaultTheme(), w, 40, true)
+
+	// Measure the DISPLAY column, not the byte offset: the mark is three bytes
+	// of UTF-8 where a space is one, so strings.Index would report a shift that
+	// the user never sees.
+	col := func(s string) int {
+		plain := stripANSI(s)
+		i := strings.Index(plain, "steady.go")
+		if i < 0 {
+			t.Fatalf("name missing from modeline %q", plain)
+		}
+		return lipgloss.Width(plain[:i])
+	}
+	if got, want := col(dirty), col(clean); got != want {
+		t.Errorf("name starts at column %d when modified and %d when clean; it must not move", got, want)
+	}
+	if lipgloss.Width(clean) != lipgloss.Width(dirty) {
+		t.Errorf("modeline width changed with the modified state: %d vs %d",
+			lipgloss.Width(clean), lipgloss.Width(dirty))
+	}
+}
+
+// Nothing in the chrome may paint a background. A background colour is what
+// makes a terminal program look like it is squatting in your terminal instead
+// of living in it, and it is the one thing that would clash with whichever
+// palette the user has already chosen.
+func TestModelinePaintsNoBackground(t *testing.T) {
+	b := bufferOf(t, "hi")
+	b.SetPath("/tmp/plain.go")
+	if err := b.Insert(b.End(), []rune("!")); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	w := view.NewWindow(b)
+
+	for _, active := range []bool{true, false} {
+		got := modelineString(DefaultTheme(), w, 40, active)
+		// SGR 48 is "set background"; 4x in the 40-47 range is a basic one.
+		if strings.Contains(got, "\x1b[48") || strings.Contains(got, ";48;") {
+			t.Errorf("active=%v modeline sets a background colour: %q", active, got)
+		}
 	}
 }
 

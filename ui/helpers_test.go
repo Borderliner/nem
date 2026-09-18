@@ -11,6 +11,7 @@ import (
 	"github.com/hajianpour/nem/text"
 	"github.com/hajianpour/nem/view"
 	"github.com/muesli/termenv"
+	"regexp"
 )
 
 // TestMain pins the Lip Gloss colour profile to truecolor.
@@ -123,3 +124,11 @@ func singleFrame(t *testing.T, lines ...string) (Frame, *view.Window) {
 	w := view.NewWindow(bufferOf(t, lines...))
 	return Frame{Tree: view.NewTree(w), Active: w}, w
 }
+
+// stripANSI removes SGR sequences so a test can reason about which column a
+// piece of text lands in.
+func stripANSI(s string) string {
+	return ansiSGR.ReplaceAllString(s, "")
+}
+
+var ansiSGR = regexp.MustCompile("\x1b\\[[0-9;:]*m")

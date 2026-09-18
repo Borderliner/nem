@@ -31,9 +31,46 @@ const TruncMarker = '$'
 // DividerRune is drawn down the column between side-by-side windows.
 const DividerRune = '│'
 
+// ModifiedMark sits at the head of a modeline when the buffer has unsaved
+// changes, in place of emacs's ** flag. One mark carries the whole state: a
+// clean buffer shows a blank cell, so the buffer name never shifts position
+// when you start typing.
+const ModifiedMark = '▍'
+
+// ModelineRule fills a modeline between the buffer name and the position
+// readout. The rule is what separates stacked panes, since a horizontal split
+// draws no divider row of its own - the modeline is the boundary.
+const ModelineRule = '─'
+
 // DefaultScrollMargin is how many rows of context the render path keeps above
 // and below point where the buffer allows.
 const DefaultScrollMargin = 2
+
+// nem's palette is three colours, and the most important thing about it is the
+// absence of a fourth: no background is ever painted behind text. The editor
+// sits in whatever terminal colours you already chose instead of replacing
+// them, which is what makes it feel native rather than like an application
+// squatting in your terminal.
+//
+// The reference is letterpress, not a CRT - a hairline rule with the buffer
+// name set into it. Focus is shown by weight rather than by a coloured bar,
+// because a bar is the thing that dates a terminal program.
+//
+// Values are truecolor; tcell degrades them for 256- and 16-colour terminals.
+const (
+	// colourQuiet carries secondary information: inactive buffer names, the
+	// position readout, transient messages. Deliberately a mid-grey rather
+	// than a dark one - nem cannot know whether it is sitting on a light or a
+	// dark terminal, so both ends have to stay legible.
+	colourQuiet = "#8a857c"
+	// colourRule draws each modeline's hairline and the divider between
+	// side-by-side panes. Dimmer than quiet, still readable either way.
+	colourRule = "#6b655b"
+	// colourMark is the only saturated colour in the editor and it marks
+	// exactly one thing: unsaved changes. The palette's single accent is spent
+	// on the one piece of state you can lose work by ignoring.
+	colourMark = "#b4543a"
+)
 
 // Theme collects every colour and style in one place.
 //
@@ -46,19 +83,30 @@ type Theme struct {
 	Text  tcell.Style
 	Trunc tcell.Style
 	// ParenMatch styles both halves of a matched bracket pair, ParenMismatch a
-	// bracket whose partner is missing or of the wrong kind. Both are tcell
-	// styles because they apply to the text area, which never goes through Lip
-	// Gloss.
+	// bracket whose partner is missing or of the wrong kind. Match is marked by
+	// weight and an underline rather than by a hue, so it needs no colour and
+	// cannot clash with a terminal palette; a mismatch borrows the accent,
+	// since an unclosed bracket is the other thing worth interrupting you for.
 	ParenMatch    tcell.Style
 	ParenMismatch tcell.Style
 
-	// Chrome, rendered through Lip Gloss and blitted in.
-	ModelineActive   lipgloss.Style
-	ModelineInactive lipgloss.Style
-	Divider          lipgloss.Style
-	// Echo styles a transient message, which is dimmed to read as ephemeral.
+	// Chrome, rendered through Lip Gloss and blitted in. The modeline is built
+	// from four separately styled segments rather than one flat bar, which is
+	// what lets focus read as weight instead of as a block of colour.
+	//
+	// ModelineName carries no colour on purpose: the focused buffer name uses
+	// the terminal's own foreground, so it is the most legible thing on screen
+	// whatever palette you run.
+	ModelineName    lipgloss.Style
+	ModelineNameOff lipgloss.Style
+	ModelineRule    lipgloss.Style
+	ModelinePos     lipgloss.Style
+	ModelineMark    lipgloss.Style
+
+	Divider lipgloss.Style
+	// Echo styles a transient message, which is quiet to read as ephemeral.
 	Echo lipgloss.Style
-	// Mini styles an active minibuffer prompt. It is deliberately not dimmed:
+	// Mini styles an active minibuffer prompt. It is deliberately not quieted:
 	// text being typed is ordinary content, not a passing notice.
 	Mini lipgloss.Style
 
@@ -67,36 +115,29 @@ type Theme struct {
 }
 
 // DefaultTheme returns nem's default look.
-//
-// The palette is drawn from the 256-colour cube rather than from named ANSI
-// colours, so it reads the same against a light or a dark terminal background
-// instead of inheriting whatever the user's palette maps "blue" to. The text
-// area itself is left at the terminal's default foreground and background,
-// which is what makes an editor feel native.
 func DefaultTheme() Theme {
 	var (
-		dim       = lipgloss.Color("244")
-		divider   = lipgloss.Color("240")
-		modeBgOn  = lipgloss.Color("60")
-		modeFgOn  = lipgloss.Color("231")
-		modeBgOff = lipgloss.Color("236")
-		modeFgOff = lipgloss.Color("245")
+		quiet = lipgloss.Color(colourQuiet)
+		rule  = lipgloss.Color(colourRule)
+		mark  = lipgloss.Color(colourMark)
 	)
 
 	return Theme{
 		Text:  tcell.StyleDefault,
-		Trunc: tcell.StyleDefault.Foreground(tcell.ColorGray),
-		// A matched pair is marked by weight and reverse video rather than by a
-		// hue, so it stays legible whatever the terminal palette is; a mismatch
-		// is red, the one colour that reads as wrong everywhere.
-		ParenMatch:    tcell.StyleDefault.Bold(true).Reverse(true),
-		ParenMismatch: tcell.StyleDefault.Bold(true).Foreground(tcell.ColorWhite).Background(tcell.ColorRed),
+		Trunc: tcell.StyleDefault.Foreground(tcell.GetColor(colourQuiet)),
 
-		ModelineActive:   lipgloss.NewStyle().Foreground(modeFgOn).Background(modeBgOn).Bold(true),
-		ModelineInactive: lipgloss.NewStyle().Foreground(modeFgOff).Background(modeBgOff),
-		Divider:          lipgloss.NewStyle().Foreground(divider),
-		Echo:             lipgloss.NewStyle().Foreground(dim),
-		Mini:             lipgloss.NewStyle(),
+		ParenMatch:    tcell.StyleDefault.Bold(true).Underline(true),
+		ParenMismatch: tcell.StyleDefault.Bold(true).Foreground(tcell.GetColor(colourMark)),
+
+		ModelineName:    lipgloss.NewStyle().Bold(true),
+		ModelineNameOff: lipgloss.NewStyle().Foreground(quiet),
+		ModelineRule:    lipgloss.NewStyle().Foreground(rule),
+		ModelinePos:     lipgloss.NewStyle().Foreground(quiet),
+		ModelineMark:    lipgloss.NewStyle().Foreground(mark).Bold(true),
+
+		Divider: lipgloss.NewStyle().Foreground(rule),
+		Echo:    lipgloss.NewStyle().Foreground(quiet),
+		Mini:    lipgloss.NewStyle(),
 
 		ScrollMargin: DefaultScrollMargin,
 	}
