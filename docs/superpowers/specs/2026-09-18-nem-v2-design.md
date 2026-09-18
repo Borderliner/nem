@@ -90,7 +90,7 @@ type Continuation struct {
     Key      Key
     Command  string // empty when IsPrefix
     IsPrefix bool
-    Count    int    // bindings beneath, when IsPrefix
+    Count    int    // recursive bindings beneath a prefix; 1 for a leaf
 }
 func (m *Map) Continuations(seq []Key) []Continuation
 ```
