@@ -121,8 +121,17 @@ runs, penalty for gap length, shorter candidate wins ties. Smart case:
 case-insensitive while the query is all lowercase.
 
 An empty query matches everything with score 0 and no indices, in input order.
-Ordering must be total and stable — pinned against a fixed candidate set, because
-"predictable" is a feature and a scoring tweak must show up as a test diff.
+**That rule collides with "shorter candidate wins ties"** — with every score 0 the
+length tie-break would sort by length — so `Rank` returns early for an empty query
+before sorting at all. Ordering is otherwise total and stable, pinned against a
+fixed candidate set, because "predictable" is a feature and a scoring tweak must
+show up as a test diff.
+
+Settled while building: matching is **best-alignment via dynamic programming**,
+not first-alignment, so `abc` against `axbxabc` returns the contiguous tail rather
+than locking onto the leading `a`. There is no extra weight on the first matched
+rune's boundary bonus — an fzf-style multiplier there made a scattered match
+outscore a contiguous one, and the leading-position penalty already does that job.
 
 ### `backup`: new package
 
