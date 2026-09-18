@@ -485,32 +485,37 @@ incremental-search commands are driven the way real typing drives them, and
 exhausting its canned replies returns `ErrNoReply` rather than `ErrQuit` — a test
 bug must never masquerade as the user pressing `C-g`.
 
-## Tracked follow-ups
+## Tracked follow-ups — all three resolved
 
-Real defects or design regressions found while building, deliberately deferred so
-they do not race the in-flight command work. Each is small and each has a known
-fix — they are tracked here rather than left in a transcript.
+Real defects found while building, deferred at the time so they would not race
+the in-flight command work. Recorded here with their outcomes rather than
+deleted, because the reasoning is what is worth keeping.
 
-**1. Horizontal scroll is in the wrong package.** It currently lives in
-`ui.Renderer.hscroll`, a `map[*view.Window]text.ColIdx`, because the render
-agent was told not to modify `view`. That was my constraint and it was wrong:
-vertical scroll is `view.Window.Top`, and horizontal scroll is the same kind of
-state, so it belongs as `view.Window.LeftCol`. Two consequences of the current
-home: `Render` cannot be a package-level function, and the map leaks an entry per
-closed window (mitigated today by pruning windows absent from the layout each
-frame, which is a workaround for misplaced state).
+**1. Horizontal scroll was in the wrong package. RESOLVED.** It lived in
+`ui.Renderer.hscroll`, a `map[*view.Window]text.ColIdx`, because the render agent
+was told not to modify `view` — my constraint, and wrong: vertical scroll is
+`view.Window.Top` and horizontal scroll is the same kind of state. It is now
+`view.Window.LeftCol` with `ScrollToPointHorizontally` beside `ScrollToPoint`.
+Two things fell out: the map no longer exists, so neither does the per-frame
+pruning that stopped it leaking an entry per closed window; and with only the
+theme left in it, `Renderer` disappeared entirely — `Render(scr, f, th)` is a
+package-level function, because every piece of per-window state it needs now
+lives on the window it draws.
 
-**2. `text.Line.Runes()` allocates in the hot path.** It copies the whole line,
-and the render path needs every visible line's runes on every keystroke — one
-allocation per visible line per frame. Fix: a lending accessor, or better a
-grapheme iterator yielding `(runes, startCol, width)` so `ui` stops
-reconstructing one from `NextGrapheme` + `DisplayCol`.
+**2. `text.Line.Runes()` allocated in the hot path. RESOLVED, and the premise
+was understated.** `Line` gained `Clusters() iter.Seq[Cluster]` yielding
+`{Runes, Start, Col, Width}` and lending the line's storage; `Runes()` is
+unchanged, since `command` has callers that rely on the copy. Measured:
+**2,393 → 371 ns/op, 352 → 0 B/op** — 6.5× faster. The allocation was the
+smaller half of the cost; the real expense was three binary searches per cluster
+(`NextGrapheme` plus two `DisplayCol`). Worth knowing: tcell's `SetContent`
+allocates per cell written regardless, so the honest win is CPU, not total
+allocations. A zero-allocation test guards the iterator, because range-over-func
+inlining is what makes it free and a refactor could silently lose that.
 
-**3. `DisplayCol(Len()) == Width()` is relied upon but only implied.** The render
-path depends on it for the last cluster of every line. I verified it holds for
-ASCII, tabs, CJK, emoji, combining marks and ZWJ clusters — it should be promoted
-to a documented guarantee on `Line` with a test pinning it, since it is currently
-an accident of the implementation rather than a contract.
+**3. `DisplayCol(Len()) == Width()` was relied on but only implied. RESOLVED.**
+Now stated as a guarantee on `Line` and on `DisplayCol`, pinned across every
+width class including three `TabWidth` variations and out-of-range indices.
 
 ### One ordering hazard, recorded rather than fixed
 
