@@ -61,9 +61,15 @@ set by horizontal motion and preserved by vertical motion.
 
 The kill ring is a fixed-size ring (60 entries, as emacs). Consecutive kill
 commands append to the top entry rather than pushing; any non-kill command
-breaks the run. `C-k C-k C-k` then `C-y` restores three lines as one block —
-this is the single most-cited kill-ring behaviour and the integration harness
-tests it directly.
+breaks the run.
+
+**Counting `C-k` presses correctly:** at the start of a non-empty line `C-k`
+kills the line's text but not its newline; a second `C-k` kills the newline and
+joins the next line up. So *three* presses kill `"a\nb"`, and killing three
+whole lines takes *six*. A single `C-y` then restores the whole run as one
+block. This is the most-cited kill-ring behaviour and the integration harness
+tests it directly — at both press counts, since an off-by-one here is exactly
+the kind of thing that reads as correct in prose and is wrong in code.
 
 Run-awareness lives **in the ring**, not in the commands: `KillForward` and
 `KillBackward` decide for themselves whether to extend the newest entry or push
