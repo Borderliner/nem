@@ -85,7 +85,22 @@ func DecodeKey(ev *tcell.EventKey, treatCtrlHAsBackspace bool) keymap.Key {
 	var out keymap.Key
 	switch {
 	case k == tcell.KeyRune:
-		out = keymap.Key{Rune: ev.Rune()}
+		// ModCtrl is consulted here and nowhere else, because this is the only
+		// branch where the Ctrl is not already encoded in the key constant.
+		//
+		// On the legacy input path tcell folds Ctrl into its KeyCtrlX constants,
+		// so the modifier bit adds nothing. But tcell requests the advanced
+		// keyboard protocols on any XTermLike terminal (tscreen.go sends
+		// modifyOtherKeys, kitty CSI-u and win32-input-mode), and under CSI-u a
+		// Ctrl'd character arrives as KeyRune plus ModCtrl instead. Dropping the
+		// bit there silently turned C-SPC into a literal space and C-/ into a
+		// literal slash, making set-mark and undo dead keys on exactly the
+		// modern terminals that report the most detail.
+		//
+		// Applying it outside this branch would be wrong: tcell reports the C0
+		// control codes with ModCtrl set, so a blanket rule turns <backspace>
+		// into C-<backspace> and RET into C-RET.
+		out = keymap.Key{Rune: ev.Rune(), Ctrl: mod&tcell.ModCtrl != 0}
 
 	case k == tcell.KeyBacktab:
 		// NewEventKey rewrites Shift+Tab to KeyBacktab and clears ModShift, so

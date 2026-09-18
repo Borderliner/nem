@@ -293,3 +293,59 @@ func TestDecodeKeyRoundTripsThroughSpec(t *testing.T) {
 		}
 	}
 }
+
+// Under the advanced keyboard protocols that tcell requests on any XTermLike
+// terminal, a Ctrl'd character arrives as KeyRune plus ModCtrl rather than as
+// one of the KeyCtrlX constants. Dropping that modifier made C-SPC insert a
+// literal space and C-/ insert a slash - set-mark and undo were dead keys on
+// precisely the terminals that report the most detail.
+func TestCtrlModifierOnRuneEventsIsCarried(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		r    rune
+		want keymap.Key
+	}{
+		{"C-SPC via CSI-u", ' ', keymap.Normalize(keymap.Key{Rune: 0, Ctrl: true})},
+		{"C-/ via CSI-u", '/', keymap.Normalize(keymap.Key{Rune: '/', Ctrl: true})},
+		{"C-_ via CSI-u", '_', keymap.Normalize(keymap.Key{Rune: '_', Ctrl: true})},
+		{"C-a via CSI-u", 'a', keymap.Normalize(keymap.Key{Rune: 'a', Ctrl: true})},
+		{"C-; via CSI-u", ';', keymap.Normalize(keymap.Key{Rune: ';', Ctrl: true})},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ev := tcell.NewEventKey(tcell.KeyRune, tc.r, tcell.ModCtrl)
+			if got := DecodeKey(ev, false); got != tc.want {
+				t.Errorf("DecodeKey = %#v, want %#v", got, tc.want)
+			}
+		})
+	}
+}
+
+// Every encoding a terminal might use for Ctrl+Space must reach the same key,
+// because set-mark-command is bound once.
+func TestEveryCtrlSpaceEncodingReachesSetMark(t *testing.T) {
+	want := keymap.Normalize(keymap.Key{Rune: 0, Ctrl: true})
+	for _, tc := range []struct {
+		name string
+		ev   *tcell.EventKey
+	}{
+		{"KeyNUL", tcell.NewEventKey(tcell.KeyNUL, 0, tcell.ModNone)},
+		{"KeyCtrlSpace", tcell.NewEventKey(tcell.KeyCtrlSpace, 0, tcell.ModCtrl)},
+		{"KeyRune 0 with ModCtrl", tcell.NewEventKey(tcell.KeyRune, 0, tcell.ModCtrl)},
+		{"KeyRune space with ModCtrl", tcell.NewEventKey(tcell.KeyRune, ' ', tcell.ModCtrl)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := DecodeKey(tc.ev, false); got != want {
+				t.Errorf("DecodeKey = %#v, want %#v (set-mark-command would be unreachable)", got, want)
+			}
+		})
+	}
+}
+
+// A plain space must stay a plain space. The fix above must not make every
+// space set the mark.
+func TestPlainSpaceIsStillASpace(t *testing.T) {
+	got := DecodeKey(tcell.NewEventKey(tcell.KeyRune, ' ', tcell.ModNone), false)
+	if want := (keymap.Key{Rune: ' '}); got != want {
+		t.Errorf("DecodeKey = %#v, want %#v", got, want)
+	}
+}
