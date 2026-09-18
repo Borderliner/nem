@@ -14,7 +14,10 @@ type Key struct {
 	Special SpecialKey // non-None for keys that have no character
 	Ctrl    bool
 	Meta    bool // emacs Meta: Alt, or an ESC prefix
-	Shift   bool // only meaningful for Special keys; a rune carries its own case
+	// Shift is only meaningful when Special != SpecialNone: a rune carries its own
+	// case, so S- on a character is meaningless. Normalize enforces this by
+	// clearing Shift on any rune key, and ParseSpec rejects "S-a" outright.
+	Shift bool
 }
 
 // SpecialKey identifies a key that produces no character.

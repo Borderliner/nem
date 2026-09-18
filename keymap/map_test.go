@@ -1,6 +1,7 @@
 package keymap
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -248,5 +249,78 @@ func TestDeepPrefixChainsResolve(t *testing.T) {
 	}
 	if got := lookup(t, m, "C-x 4 f"); got.Command != "find-file-other-window" {
 		t.Errorf("Lookup(C-x 4 f) = %q, want find-file-other-window", got.Command)
+	}
+}
+
+func TestWhereFindsEveryBindingForACommand(t *testing.T) {
+	m := New()
+	// undo legitimately has two bindings, which is the whole reason Where exists.
+	mustBind(t, m, "C-_", "undo")
+	mustBind(t, m, "C-x u", "undo")
+	mustBind(t, m, "C-y", "yank")
+
+	got := m.Where("undo")
+	want := []string{"C-_", "C-x u"}
+	if len(got) != len(want) {
+		t.Fatalf("Where(\"undo\") = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("Where(\"undo\")[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestWhereFindsSingleBinding(t *testing.T) {
+	m := New()
+	mustBind(t, m, "C-x C-f", "find-file")
+	got := m.Where("find-file")
+	if len(got) != 1 || got[0] != "C-x C-f" {
+		t.Errorf("Where(\"find-file\") = %v, want [\"C-x C-f\"]", got)
+	}
+}
+
+func TestWhereReturnsNilForUnknownCommand(t *testing.T) {
+	m := New()
+	mustBind(t, m, "C-y", "yank")
+	if got := m.Where("no-such-command"); got != nil {
+		t.Errorf("Where(\"no-such-command\") = %v, want nil", got)
+	}
+}
+
+func TestWhereOnEmptyMapReturnsNil(t *testing.T) {
+	if got := New().Where("undo"); got != nil {
+		t.Errorf("Where on empty map = %v, want nil", got)
+	}
+}
+
+func TestWhereIsSortedDeterministically(t *testing.T) {
+	// Map iteration order is randomized, so an unsorted Where would flake.
+	specs := []string{"C-x u", "C-_", "M-u", "C-c C-u", "<f7>"}
+	for range 50 {
+		m := New()
+		for _, s := range specs {
+			mustBind(t, m, s, "undo")
+		}
+		got := m.Where("undo")
+		if !slices.IsSorted(got) {
+			t.Fatalf("Where returned unsorted result: %v", got)
+		}
+		if len(got) != len(specs) {
+			t.Fatalf("Where returned %d bindings, want %d: %v", len(got), len(specs), got)
+		}
+	}
+}
+
+func TestWhereReflectsUnbind(t *testing.T) {
+	m := New()
+	mustBind(t, m, "C-_", "undo")
+	mustBind(t, m, "C-x u", "undo")
+	if err := m.Unbind(mustParse(t, "C-_")); err != nil {
+		t.Fatalf("Unbind: %v", err)
+	}
+	got := m.Where("undo")
+	if len(got) != 1 || got[0] != "C-x u" {
+		t.Errorf("after Unbind, Where(\"undo\") = %v, want [\"C-x u\"]", got)
 	}
 }

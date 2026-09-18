@@ -83,3 +83,33 @@ func TestNormalizedKeysStillRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizeClearsShiftOnRuneKeys(t *testing.T) {
+	// A character encodes its own case, so Shift on a rune carries no
+	// information. Normalize clears it, which is what makes the canonical form a
+	// guarantee rather than a convention.
+	cases := []struct {
+		in   Key
+		want Key
+	}{
+		{Key{Rune: 'a', Shift: true}, Key{Rune: 'a'}},
+		{Key{Rune: 'A', Shift: true}, Key{Rune: 'A'}},
+		{Key{Rune: 'x', Ctrl: true, Shift: true}, Key{Rune: 'x', Ctrl: true}},
+		{Key{Rune: 'f', Meta: true, Shift: true}, Key{Rune: 'f', Meta: true}},
+		{Key{Rune: 0, Shift: true}, Key{Rune: '@', Ctrl: true}},
+		{Key{Rune: 'i', Ctrl: true, Shift: true}, Key{Special: KeyTab}},
+	}
+	for _, c := range cases {
+		if got := Normalize(c.in); got != c.want {
+			t.Errorf("Normalize(%s) = %s, want %s", dbg(c.in), dbg(got), dbg(c.want))
+		}
+	}
+}
+
+func TestNormalizeKeepsShiftOnSpecialKeys(t *testing.T) {
+	// S-<up> is a genuinely distinct keystroke and must survive.
+	in := Key{Special: KeyUp, Shift: true}
+	if got := Normalize(in); got != in {
+		t.Errorf("Normalize(%s) = %s, want it unchanged", dbg(in), dbg(got))
+	}
+}

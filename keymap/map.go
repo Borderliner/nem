@@ -228,6 +228,28 @@ func collect(n *node, prefix []Key, out map[string]string) {
 	}
 }
 
+// Where returns every key sequence bound to command, in canonical notation,
+// sorted for determinism. It returns nil when the command has no bindings.
+//
+// A command legitimately has several bindings — undo answers to both C-_ and
+// C-x u — so this is the reverse index of [Map.Bindings], which callers would
+// otherwise have to invert themselves on every lookup.
+func (m *Map) Where(command string) []string {
+	if command == "" {
+		return nil
+	}
+	var out []string
+	for spec, cmd := range m.Bindings() {
+		if cmd == command {
+			out = append(out, spec)
+		}
+	}
+	// Bindings walks a map, so iteration order is randomized; sort or callers
+	// see a different order on every run.
+	sort.Strings(out)
+	return out
+}
+
 // sortKeys orders keys deterministically by their canonical notation, so a
 // conflict message names the same witness binding on every run.
 func sortKeys(keys []Key) {

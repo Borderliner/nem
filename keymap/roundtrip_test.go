@@ -3,8 +3,9 @@ package keymap
 import "testing"
 
 // representativeKeys enumerates every key this package can construct, across
-// every legal modifier combination. Runes never carry Shift (a character
-// encodes its own case), so that axis is only applied to special keys.
+// every modifier combination including ones that are not canonical: a rune
+// carrying Shift is constructible but meaningless, and Normalize folds it away.
+// Generating those deliberately is what keeps that guarantee honest.
 func representativeKeys() []Key {
 	var keys []Key
 
@@ -17,7 +18,11 @@ func representativeKeys() []Key {
 	for _, r := range runes {
 		for _, ctrl := range []bool{false, true} {
 			for _, meta := range []bool{false, true} {
-				keys = append(keys, Key{Rune: r, Ctrl: ctrl, Meta: meta})
+				for _, shift := range []bool{false, true} {
+					// Shift on a rune is meaningless and Normalize clears it;
+					// generating it here is what proves that.
+					keys = append(keys, Key{Rune: r, Ctrl: ctrl, Meta: meta, Shift: shift})
+				}
 			}
 		}
 	}
@@ -34,8 +39,24 @@ func representativeKeys() []Key {
 	return keys
 }
 
+// canonicalKeys is the normalized, deduplicated image of representativeKeys.
+// Round-tripping is a property of canonical keys specifically: String emits
+// canonical notation, so only a canonical key can survive unchanged.
+func canonicalKeys() []Key {
+	seen := make(map[Key]bool)
+	var out []Key
+	for _, k := range representativeKeys() {
+		n := Normalize(k)
+		if !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 func TestStringParseSpecRoundTrip(t *testing.T) {
-	for _, want := range representativeKeys() {
+	for _, want := range canonicalKeys() {
 		spec := want.String()
 		got, err := ParseSpec(spec)
 		if err != nil {
@@ -55,7 +76,7 @@ func TestStringParseSpecRoundTrip(t *testing.T) {
 func TestStringIsStableAcrossRoundTrip(t *testing.T) {
 	// The canonical form must be a fixed point: rendering a parsed key returns
 	// the identical string, so config files and describe-bindings agree.
-	for _, k := range representativeKeys() {
+	for _, k := range canonicalKeys() {
 		once := k.String()
 		parsed, err := ParseSpec(once)
 		if err != nil {

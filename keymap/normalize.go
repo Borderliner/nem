@@ -12,6 +12,15 @@ package keymap
 // Every fold here is unconditional. The one genuinely contentious case, C-h,
 // is opt-in per [Map] via Map.TreatCtrlHAsBackspace.
 func Normalize(k Key) Key {
+	// A character encodes its own case, so Shift carries no information on a rune
+	// key: "S-a" is ambiguous where "A" is not. Clearing it here is what turns the
+	// canonical form from a convention into a guarantee — every constructible key
+	// normalizes to one that String can round-trip. Special keys keep Shift,
+	// because S-<up> is a genuinely distinct keystroke.
+	if k.Special == SpecialNone {
+		k.Shift = false
+	}
+
 	// A bare NUL byte. xterm, foot, kitty and the Linux console all send 0x00
 	// for Ctrl+Space, and there is no separate encoding for Ctrl+@. Emacs calls
 	// this key C-@ and binds set-mark-command to it.
