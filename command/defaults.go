@@ -20,6 +20,7 @@ func RegisterAll(r *Registry) error {
 		{"region", RegisterRegion},
 		{"buffers", RegisterBuffers},
 		{"search", RegisterSearch},
+		{"lines", RegisterLines},
 	}
 	for _, g := range groups {
 		if err := g.fn(r); err != nil {
