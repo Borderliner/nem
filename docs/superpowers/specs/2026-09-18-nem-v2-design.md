@@ -146,6 +146,19 @@ backs up to `<root>/backups/home/reza/p/main.go~` — browsable, and two files w
 the same base name in different projects cannot collide. Directories created as
 needed. Nothing is ever written inside the edited file's own directory.
 
+Settled while building:
+
+- **One backup per file, overwritten.** No emacs-style numbered versions. If
+  those are ever wanted it is a new function, not a change to this one.
+- **`MkdirAll` applies `0700` only to directories it creates**, so a root that
+  already exists keeps whatever mode it has. nem does not tighten a directory the
+  user made.
+- **A relative `XDG_STATE_HOME` is ignored**, per the XDG spec — honouring it
+  would scatter state wherever nem happened to be started from.
+- **`BackupPath`/`AutosavePath` return no error**, so they cannot report an
+  escape. They are structurally safe instead, and the guard lives on the read and
+  write paths that can return one.
+
 ## Wave 2 — depends on wave 1
 
 **`ui` panel drawing.** `Frame` gains `Panels []Panel`; a panel is a rect plus
