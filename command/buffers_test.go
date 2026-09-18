@@ -13,32 +13,16 @@ import (
 	"github.com/hajianpour/nem/text"
 )
 
-// recEnv wraps a Fake to capture the ReadOpts each prompt was built with.
-//
-// commandtest.Fake records only opts.Prompt, so completion candidates and
-// pre-filled text are otherwise invisible to a test. Embedding and overriding
-// ReadString keeps that assertable without modifying the shared fake.
-type recEnv struct {
-	*commandtest.Fake
-	opts []command.ReadOpts
-}
+func newEnv(lines ...string) *commandtest.Fake { return commandtest.New(lines...) }
 
-func (r *recEnv) ReadString(opts command.ReadOpts) (string, error) {
-	r.opts = append(r.opts, opts)
-	return r.Fake.ReadString(opts)
-}
-
-// lastOpts returns the ReadOpts of the most recent prompt.
-func (r *recEnv) lastOpts(t *testing.T) command.ReadOpts {
+// lastOpts returns the ReadOpts of the most recent prompt, so completion
+// candidates and pre-filled text can be asserted on directly.
+func lastOpts(t *testing.T, e *commandtest.Fake) command.ReadOpts {
 	t.Helper()
-	if len(r.opts) == 0 {
+	if len(e.Reads) == 0 {
 		t.Fatal("no prompt was issued")
 	}
-	return r.opts[len(r.opts)-1]
-}
-
-func newEnv(lines ...string) *recEnv {
-	return &recEnv{Fake: commandtest.New(lines...)}
+	return e.Reads[len(e.Reads)-1]
 }
 
 // runCmd dispatches name through a registry holding only the buffer commands.
@@ -189,7 +173,7 @@ func TestFindFilePromptOffersCompletion(t *testing.T) {
 	e.Replies = []string{""}
 	mustRun(t, e, "find-file")
 
-	if e.lastOpts(t).Complete == nil {
+	if lastOpts(t, e).Complete == nil {
 		t.Error("find-file prompt has no completion function")
 	}
 }
@@ -210,7 +194,7 @@ func TestFilenameCompletionListsMatchingEntries(t *testing.T) {
 	e := newEnv()
 	e.Replies = []string{""}
 	mustRun(t, e, "find-file")
-	complete := e.lastOpts(t).Complete
+	complete := lastOpts(t, e).Complete
 
 	got := complete(filepath.Join(dir, "al"))
 	want := []string{
@@ -239,55 +223,53 @@ func TestFilenameCompletionListsMatchingEntries(t *testing.T) {
 
 // --- save-buffer and write-file ------------------------------------------
 
-func TestSaveBufferWritesToDisk(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "out.txt")
+func TestSaveBufferSavesThroughEnv(t *testing.T) {
 	e := newEnv("line one", "line two")
-	e.Buf().SetPath(path)
+	e.Buf().SetPath("/proj/out.txt")
 	e.Buf().SetModified(true)
 
 	mustRun(t, e, "save-buffer")
 
-	got, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("reading back: %v", err)
+	if got := savedPaths(e); !slices.Equal(got, []string{"/proj/out.txt"}) {
+		t.Errorf("saved %q, want one save of the buffer's own path", got)
 	}
-	if string(got) != "line one\nline two" {
-		t.Errorf("file holds %q", string(got))
+	if got := e.Saves[0].Path; got != "" {
+		t.Errorf("save-buffer passed path %q, want empty so the buffer keeps its own", got)
+	}
+	if got := e.Saves[0].Content; got != "line one\nline two" {
+		t.Errorf("saved content %q", got)
 	}
 	if e.Buf().Modified() {
 		t.Error("buffer still marked modified after a successful save")
 	}
-	if len(e.Echoes) == 0 || !strings.Contains(e.Echoes[len(e.Echoes)-1], path) {
+	if len(e.Echoes) == 0 || !strings.Contains(e.Echoes[len(e.Echoes)-1], "/proj/out.txt") {
 		t.Errorf("echoes %q, want a message naming the file", e.Echoes)
 	}
 }
 
 // A pathless buffer must prompt rather than fail with ErrNoPath.
 func TestSaveBufferWithNoPathPrompts(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "named.txt")
 	e := newEnv("content")
 	e.Buf().SetModified(true)
-	e.Replies = []string{path}
+	e.Replies = []string{"/proj/named.txt"}
 
 	mustRun(t, e, "save-buffer")
 
 	if len(e.Prompts) != 1 {
 		t.Fatalf("prompts %q, want exactly one", e.Prompts)
 	}
-	got, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("reading back: %v", err)
+	if got := savedPaths(e); !slices.Equal(got, []string{"/proj/named.txt"}) {
+		t.Errorf("saved %q, want the name the user supplied", got)
 	}
-	if string(got) != "content" {
-		t.Errorf("file holds %q, want %q", string(got), "content")
+	if got := e.Buf().Path(); got != "/proj/named.txt" {
+		t.Errorf("buffer path is %q, want the new name adopted", got)
 	}
-	if e.Buf().Path() != path {
-		t.Errorf("buffer path is %q, want %q", e.Buf().Path(), path)
+	if got := e.Files["/proj/named.txt"]; got != "content" {
+		t.Errorf("stored content %q, want %q", got, "content")
 	}
 }
 
 func TestSaveBufferWithNoPathQuitWritesNothing(t *testing.T) {
-	dir := t.TempDir()
 	e := newEnv("content")
 	e.Buf().SetModified(true)
 	e.Replies = []string{commandtest.Quit}
@@ -295,12 +277,8 @@ func TestSaveBufferWithNoPathQuitWritesNothing(t *testing.T) {
 	if err := runCmd(t, e, "save-buffer"); !errors.Is(err, command.ErrQuit) {
 		t.Errorf("returned %v, want ErrQuit", err)
 	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(entries) != 0 {
-		t.Errorf("C-g still wrote %d file(s)", len(entries))
+	if len(e.Saves) != 0 {
+		t.Errorf("C-g still attempted %d save(s)", len(e.Saves))
 	}
 	if !e.Buf().Modified() {
 		t.Error("abandoning the save cleared the modified flag")
@@ -308,55 +286,105 @@ func TestSaveBufferWithNoPathQuitWritesNothing(t *testing.T) {
 }
 
 func TestSaveBufferUnmodifiedDoesNotWrite(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "untouched.txt")
 	e := newEnv("content")
-	e.Buf().SetPath(path)
+	e.Buf().SetPath("/proj/untouched.txt")
 	e.Buf().SetModified(false)
 
 	mustRun(t, e, "save-buffer")
 
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Error("an unmodified buffer was written to disk anyway")
+	if len(e.Saves) != 0 {
+		t.Errorf("an unmodified buffer was saved anyway: %q", savedPaths(e))
 	}
 	if len(e.Echoes) == 0 {
 		t.Error("expected a message saying there was nothing to save")
 	}
 }
 
+// A failed write must leave the buffer marked modified. Clearing the flag would
+// tell the user their work is safe when it is not, and they would then close
+// the editor and lose it.
+func TestSaveBufferFailedWriteKeepsBufferModified(t *testing.T) {
+	e := newEnv("precious")
+	e.Buf().SetPath("/proj/out.txt")
+	e.Buf().SetModified(true)
+	wantErr := errors.New("no space left on device")
+	e.SaveErr = wantErr
+
+	err := runCmd(t, e, "save-buffer")
+
+	if !errors.Is(err, wantErr) {
+		t.Errorf("returned %v, want the write error", err)
+	}
+	if !e.Buf().Modified() {
+		t.Error("a failed save cleared the modified flag — the user would believe this was written")
+	}
+	if len(e.Saves) != 1 {
+		t.Errorf("recorded %d attempts, want 1: attempted and failed, not skipped", len(e.Saves))
+	}
+	for _, msg := range e.Echoes {
+		if strings.Contains(msg, "Wrote") {
+			t.Errorf("reported success after a failed write: %q", msg)
+		}
+	}
+}
+
 func TestWriteFileSavesUnderNewPathAndPrefillsCurrent(t *testing.T) {
-	dir := t.TempDir()
-	oldPath := filepath.Join(dir, "old.txt")
-	newPath := filepath.Join(dir, "new.txt")
 	e := newEnv("body")
-	e.Buf().SetPath(oldPath)
-	e.Replies = []string{newPath}
+	e.Buf().SetPath("/proj/old.txt")
+	e.Replies = []string{"/proj/new.txt"}
 
 	mustRun(t, e, "write-file")
 
-	if got := e.lastOpts(t).Initial; got != oldPath {
-		t.Errorf("prompt pre-filled with %q, want the current path %q", got, oldPath)
+	if got := lastOpts(t, e).Initial; got != "/proj/old.txt" {
+		t.Errorf("prompt pre-filled with %q, want the current path", got)
 	}
-	if got, err := os.ReadFile(newPath); err != nil || string(got) != "body" {
-		t.Errorf("new file: %q, err %v", string(got), err)
+	if got := savedPaths(e); !slices.Equal(got, []string{"/proj/new.txt"}) {
+		t.Errorf("saved %q, want only the new path", got)
 	}
-	if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
+	if got := e.Files["/proj/new.txt"]; got != "body" {
+		t.Errorf("new path holds %q, want %q", got, "body")
+	}
+	if _, wrote := e.Files["/proj/old.txt"]; wrote {
 		t.Error("write-file also wrote the old path")
 	}
-	if e.Buf().Path() != newPath {
-		t.Errorf("buffer path is %q, want %q", e.Buf().Path(), newPath)
+	if got := e.Buf().Path(); got != "/proj/new.txt" {
+		t.Errorf("buffer path is %q, want the new one", got)
+	}
+}
+
+// The path is adopted only on success. A failed write must not repoint the
+// buffer at a file that does not hold its contents.
+func TestWriteFileFailedWriteDoesNotAdoptThePath(t *testing.T) {
+	e := newEnv("body")
+	e.Buf().SetPath("/proj/old.txt")
+	wantErr := errors.New("read-only file system")
+	e.SaveErr = wantErr
+	e.Replies = []string{"/proj/new.txt"}
+
+	err := runCmd(t, e, "write-file")
+
+	if !errors.Is(err, wantErr) {
+		t.Errorf("returned %v, want the write error", err)
+	}
+	if got := e.Buf().Path(); got != "/proj/old.txt" {
+		t.Errorf("buffer path became %q after a failed write, want %q", got, "/proj/old.txt")
+	}
+	if got := savedPaths(e); !slices.Equal(got, []string{"/proj/new.txt"}) {
+		t.Errorf("attempts %q, want exactly one at the new path", got)
+	}
+	if _, wrote := e.Files["/proj/new.txt"]; wrote {
+		t.Error("a failed write still stored content at the new path")
 	}
 }
 
 func TestWriteFileEmptyReplyWritesNothing(t *testing.T) {
-	dir := t.TempDir()
 	e := newEnv("body")
 	e.Replies = []string{""}
 
 	mustRun(t, e, "write-file")
 
-	entries, _ := os.ReadDir(dir)
-	if len(entries) != 0 {
-		t.Errorf("an empty filename still wrote %d file(s)", len(entries))
+	if len(e.Saves) != 0 {
+		t.Errorf("an empty filename still attempted %d save(s)", len(e.Saves))
 	}
 	if e.Buf().Path() != "" {
 		t.Errorf("buffer path became %q, want it unset", e.Buf().Path())
@@ -364,38 +392,49 @@ func TestWriteFileEmptyReplyWritesNothing(t *testing.T) {
 }
 
 func TestWriteFileQuitWritesNothing(t *testing.T) {
-	dir := t.TempDir()
 	e := newEnv("body")
 	e.Replies = []string{commandtest.Quit}
 
 	if err := runCmd(t, e, "write-file"); !errors.Is(err, command.ErrQuit) {
 		t.Errorf("returned %v, want ErrQuit", err)
 	}
-	entries, _ := os.ReadDir(dir)
-	if len(entries) != 0 {
-		t.Errorf("C-g still wrote %d file(s)", len(entries))
+	if len(e.Saves) != 0 {
+		t.Errorf("C-g still attempted %d save(s)", len(e.Saves))
 	}
 }
 
 // --- save-some-buffers ---------------------------------------------------
 
-// modifiedIn seeds n extra buffers with paths in dir, all modified.
-func modifiedIn(t *testing.T, e *recEnv, dir string, names ...string) []*text.Buffer {
+// modified seeds extra buffers that each have a path and unsaved changes.
+func modified(t *testing.T, e *commandtest.Fake, names ...string) []*text.Buffer {
 	t.Helper()
 	var out []*text.Buffer
 	for _, n := range names {
 		b := e.AddBuffer(n, "body of "+n)
-		b.SetPath(filepath.Join(dir, n))
+		b.SetPath("/proj/" + n)
 		b.SetModified(true)
 		out = append(out, b)
 	}
 	return out
 }
 
+// savedPaths lists the target path of every recorded save attempt, resolving
+// an empty Path to the buffer's own.
+func savedPaths(e *commandtest.Fake) []string {
+	var out []string
+	for _, s := range e.Saves {
+		if s.Path != "" {
+			out = append(out, s.Path)
+		} else {
+			out = append(out, s.Buf.Path())
+		}
+	}
+	return out
+}
+
 func TestSaveSomeBuffersBangStopsPrompting(t *testing.T) {
-	dir := t.TempDir()
 	e := newEnv()
-	bufs := modifiedIn(t, e, dir, "a.txt", "b.txt", "c.txt")
+	bufs := modified(t, e, "a.txt", "b.txt", "c.txt")
 	e.Chars = []rune{'!'}
 
 	mustRun(t, e, "save-some-buffers")
@@ -403,20 +442,19 @@ func TestSaveSomeBuffersBangStopsPrompting(t *testing.T) {
 	if len(e.CharPrompts) != 1 {
 		t.Errorf("prompted %d times, want 1 — ! must stop asking", len(e.CharPrompts))
 	}
+	if got := len(e.Saves); got != 3 {
+		t.Errorf("attempted %d saves, want 3", got)
+	}
 	for _, b := range bufs {
 		if b.Modified() {
 			t.Errorf("%s still modified after !", b.Path())
-		}
-		if _, err := os.Stat(b.Path()); err != nil {
-			t.Errorf("%s was not written: %v", b.Path(), err)
 		}
 	}
 }
 
 func TestSaveSomeBuffersDeclineLeavesBufferModified(t *testing.T) {
-	dir := t.TempDir()
 	e := newEnv()
-	bufs := modifiedIn(t, e, dir, "keep.txt")
+	bufs := modified(t, e, "keep.txt")
 	e.Chars = []rune{'n'}
 
 	mustRun(t, e, "save-some-buffers")
@@ -424,21 +462,23 @@ func TestSaveSomeBuffersDeclineLeavesBufferModified(t *testing.T) {
 	if !bufs[0].Modified() {
 		t.Error("declining still saved the buffer")
 	}
-	if _, err := os.Stat(bufs[0].Path()); !os.IsNotExist(err) {
-		t.Error("declining still wrote the file")
+	if len(e.Saves) != 0 {
+		t.Errorf("declining still attempted %d save(s)", len(e.Saves))
 	}
 }
 
 func TestSaveSomeBuffersQuitStopsImmediately(t *testing.T) {
-	dir := t.TempDir()
 	e := newEnv()
-	bufs := modifiedIn(t, e, dir, "a.txt", "b.txt")
+	bufs := modified(t, e, "a.txt", "b.txt")
 	e.Chars = []rune{'q'}
 
 	mustRun(t, e, "save-some-buffers")
 
 	if len(e.CharPrompts) != 1 {
 		t.Errorf("prompted %d times, want 1 — q must stop the walk", len(e.CharPrompts))
+	}
+	if len(e.Saves) != 0 {
+		t.Errorf("q still attempted %d save(s)", len(e.Saves))
 	}
 	for _, b := range bufs {
 		if !b.Modified() {
@@ -447,11 +487,43 @@ func TestSaveSomeBuffersQuitStopsImmediately(t *testing.T) {
 	}
 }
 
+// A write that fails part-way through the walk aborts rather than continuing.
+// Carrying on would let the closing summary claim files were saved when they
+// were not, and whatever broke the first write will usually break the rest.
+func TestSaveSomeBuffersAbortsWhenAWriteFails(t *testing.T) {
+	e := newEnv()
+	bufs := modified(t, e, "first.txt", "second.txt")
+	wantErr := errors.New("no space left on device")
+	e.SaveErr = wantErr
+	e.Chars = []rune{'!'}
+
+	err := runCmd(t, e, "save-some-buffers")
+
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("returned %v, want the write error", err)
+	}
+	if !strings.Contains(err.Error(), "first.txt") {
+		t.Errorf("error %q does not name the buffer that failed", err)
+	}
+	if got := len(e.Saves); got != 1 {
+		t.Errorf("attempted %d saves, want 1 — the walk must stop at the failure", got)
+	}
+	for _, b := range bufs {
+		if !b.Modified() {
+			t.Errorf("%s reports unmodified though nothing was written", b.Path())
+		}
+	}
+	for _, msg := range e.Echoes {
+		if strings.Contains(msg, "Saved") {
+			t.Errorf("claimed success after a failure: %q", msg)
+		}
+	}
+}
+
 // "Saved 1 file", not "Saved 1 files".
 func TestSaveSomeBuffersReportsASingleFileInTheSingular(t *testing.T) {
-	dir := t.TempDir()
 	e := newEnv()
-	modifiedIn(t, e, dir, "only.txt")
+	modified(t, e, "only.txt")
 	e.Chars = []rune{'y'}
 
 	mustRun(t, e, "save-some-buffers")
@@ -463,9 +535,8 @@ func TestSaveSomeBuffersReportsASingleFileInTheSingular(t *testing.T) {
 }
 
 func TestSaveSomeBuffersReportsSeveralFilesInThePlural(t *testing.T) {
-	dir := t.TempDir()
 	e := newEnv()
-	modifiedIn(t, e, dir, "a.txt", "b.txt")
+	modified(t, e, "a.txt", "b.txt")
 	e.Chars = []rune{'!'}
 
 	mustRun(t, e, "save-some-buffers")
@@ -545,7 +616,7 @@ func TestSwitchToBufferCompletesOverBufferNames(t *testing.T) {
 
 	mustRun(t, e, "switch-to-buffer")
 
-	complete := e.lastOpts(t).Complete
+	complete := lastOpts(t, e).Complete
 	if complete == nil {
 		t.Fatal("switch-to-buffer offers no completion")
 	}
@@ -901,9 +972,8 @@ func TestKillTerminalWithNothingModifiedQuitsAtOnce(t *testing.T) {
 }
 
 func TestKillTerminalSavesThenQuits(t *testing.T) {
-	dir := t.TempDir()
 	e := newEnv("clean")
-	bufs := modifiedIn(t, e, dir, "work.txt")
+	bufs := modified(t, e, "work.txt")
 	e.Chars = []rune{'y'}
 
 	mustRun(t, e, "save-buffers-kill-terminal")
@@ -911,20 +981,42 @@ func TestKillTerminalSavesThenQuits(t *testing.T) {
 	if bufs[0].Modified() {
 		t.Error("buffer still modified after answering y")
 	}
-	if _, err := os.Stat(bufs[0].Path()); err != nil {
-		t.Errorf("file was not written: %v", err)
+	if got := savedPaths(e); !slices.Equal(got, []string{"/proj/work.txt"}) {
+		t.Errorf("saved %q, want the one modified buffer", got)
 	}
 	if len(e.QuitArgs) != 1 {
 		t.Errorf("Quit called %d times, want 1", len(e.QuitArgs))
 	}
 }
 
-// Declining the final confirmation must not quit — this is the last line of
-// defence against losing unsaved work.
-func TestKillTerminalDecliningFinalConfirmationAborts(t *testing.T) {
-	dir := t.TempDir()
+// The last line of defence: a failed save must abort before Quit is reached, so
+// the user is never dropped out of the editor having just been told their file
+// could not be written.
+func TestKillTerminalFailedSaveDoesNotQuit(t *testing.T) {
 	e := newEnv("clean")
-	modifiedIn(t, e, dir, "work.txt")
+	bufs := modified(t, e, "work.txt")
+	wantErr := errors.New("input/output error")
+	e.SaveErr = wantErr
+	e.Chars = []rune{'y'}
+
+	err := runCmd(t, e, "save-buffers-kill-terminal")
+
+	if !errors.Is(err, wantErr) {
+		t.Errorf("returned %v, want the write error", err)
+	}
+	if len(e.QuitArgs) != 0 {
+		t.Fatalf("the editor quit despite a failed save: %v", e.QuitArgs)
+	}
+	if !bufs[0].Modified() {
+		t.Error("a failed save cleared the modified flag")
+	}
+}
+
+// Declining the final confirmation must not quit — this is the last guard
+// against losing unsaved work.
+func TestKillTerminalDecliningFinalConfirmationAborts(t *testing.T) {
+	e := newEnv("clean")
+	modified(t, e, "work.txt")
 	e.Chars = []rune{'n', 'n'} // don't save, then don't exit
 
 	mustRun(t, e, "save-buffers-kill-terminal")
@@ -935,9 +1027,8 @@ func TestKillTerminalDecliningFinalConfirmationAborts(t *testing.T) {
 }
 
 func TestKillTerminalConfirmingExitWithUnsavedChangesQuits(t *testing.T) {
-	dir := t.TempDir()
 	e := newEnv("clean")
-	modifiedIn(t, e, dir, "work.txt")
+	modified(t, e, "work.txt")
 	e.Chars = []rune{'n', 'y'} // don't save, but do exit
 
 	mustRun(t, e, "save-buffers-kill-terminal")
@@ -965,9 +1056,8 @@ func TestKillTerminalCtrlGAtConfirmationAborts(t *testing.T) {
 }
 
 func TestKillTerminalQuitCharAborts(t *testing.T) {
-	dir := t.TempDir()
 	e := newEnv("clean")
-	modifiedIn(t, e, dir, "work.txt")
+	modified(t, e, "work.txt")
 	e.Chars = []rune{'q'}
 
 	mustRun(t, e, "save-buffers-kill-terminal")

@@ -86,7 +86,7 @@ func saveBuffer(e Env) error {
 		e.Echo("(No changes need to be saved)")
 		return nil
 	}
-	if err := b.Save(); err != nil {
+	if err := e.SaveBuffer(b, ""); err != nil {
 		return err
 	}
 	e.Echo("Wrote %s", b.Path())
@@ -107,7 +107,9 @@ func writeFile(e Env) error {
 	if path == "" {
 		return nil
 	}
-	if err := b.SaveAs(path); err != nil {
+	// SaveBuffer adopts the path only on success, so a failed write leaves the
+	// buffer still pointing at wherever it came from.
+	if err := e.SaveBuffer(b, path); err != nil {
 		return err
 	}
 	e.Echo("Wrote %s", path)
@@ -146,8 +148,13 @@ walk:
 				all = true
 			}
 		}
-		if err := b.Save(); err != nil {
-			return err
+		if err := e.SaveBuffer(b, ""); err != nil {
+			// Abort rather than carry on. Whatever stopped this write — a full
+			// disk, a read-only mount — will almost certainly stop the next
+			// one too, and continuing would let the closing summary report
+			// successes that never happened. The buffers not yet reached stay
+			// modified and untouched, which is the honest outcome.
+			return fmt.Errorf("saving %s: %w", b.Path(), err)
 		}
 		saved++
 	}
@@ -337,8 +344,12 @@ func saveBuffersKillTerminal(e Env) error {
 			e.Echo("Quit")
 			return nil
 		case 'y':
-			if err := b.Save(); err != nil {
-				return err
+			if err := e.SaveBuffer(b, ""); err != nil {
+				// Abort before reaching Quit. Exiting after a failed write
+				// would drop the user out of the editor having just been told
+				// their file could not be saved — losing the very work they
+				// asked to protect.
+				return fmt.Errorf("saving %s: %w", b.Path(), err)
 			}
 		}
 	}
