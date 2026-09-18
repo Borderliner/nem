@@ -98,17 +98,17 @@ var defaultBindings = []struct{ Spec, Command string }{
 	{"C-h k", "describe-key"},
 }
 
-// bindSpec parses an emacs key spec and binds it normalized, so that a binding
-// matches however the terminal happens to encode the keystroke. Binding the
-// unnormalized form would leave C-SPC (which arrives as NUL) and C-/ (which
-// arrives as C-_) unreachable.
+// bindSpec parses an emacs key spec and binds it.
+//
+// It does NOT normalize the sequence first: keymap.Map normalizes on both Bind
+// and Lookup, so a binding matches however the terminal encodes the keystroke —
+// C-SPC arriving as NUL and C-/ arriving as C-_ both resolve. Normalizing here
+// as well would be a second source of truth for the same rule, and dead code
+// that no test could fail on.
 func bindSpec(m *keymap.Map, spec, command string) error {
 	seq, err := keymap.ParseSpec(spec)
 	if err != nil {
 		return fmt.Errorf("binding %q to %s: %w", spec, command, err)
-	}
-	for i := range seq {
-		seq[i] = keymap.Normalize(seq[i])
 	}
 	if err := m.Bind(seq, command); err != nil {
 		return fmt.Errorf("binding %q to %s: %w", spec, command, err)

@@ -26,58 +26,58 @@ func TestEveryDefaultSpecParses(t *testing.T) {
 	}
 }
 
-// Bindings are stored normalized, so the keys the decoder produces must find
-// them. C-SPC arrives as NUL and C-/ arrives as C-_; if either were bound
-// unnormalized, set-mark and undo would be silently unreachable.
-func TestNormalizedKeysResolveToCommands(t *testing.T) {
+// The keys the decoder actually produces must resolve, looked up RAW with no
+// Normalize call here. keymap.Map owns that rule on both Bind and Lookup, so
+// testing it this way catches a regression in keymap at the layer a user
+// notices: C-SPC arrives as NUL and C-/ arrives as C-_, and if either stopped
+// resolving, set-mark and undo would be silently dead keys.
+func TestRawDecodedKeysResolveToCommands(t *testing.T) {
 	m := keymap.New()
 	if err := InstallDefaultBindings(m); err != nil {
 		t.Fatalf("install: %v", err)
 	}
-	for _, tc := range []struct{ spec, want string }{
-		{"C-SPC", "set-mark-command"},
-		{"C-/", "undo"},
-		{"C-_", "undo"},
-		{"C-f", "forward-char"},
-		{"RET", "newline"},
-		{"TAB", "indent-for-tab-command"},
-		{"M-<", "beginning-of-buffer"},
-		{"M->", "end-of-buffer"},
-		{"M-%", "query-replace"},
+	for _, tc := range []struct {
+		name string
+		key  keymap.Key
+		want string
+	}{
+		{"NUL is C-SPC", keymap.Key{Rune: 0, Ctrl: true}, "set-mark-command"},
+		{"C-/ arrives as C-_", keymap.Key{Rune: '_', Ctrl: true}, "undo"},
+		{"C-f", keymap.Key{Rune: 'f', Ctrl: true}, "forward-char"},
+		{"RET", keymap.Key{Special: keymap.KeyEnter}, "newline"},
+		{"TAB", keymap.Key{Special: keymap.KeyTab}, "indent-for-tab-command"},
+		{"M-<", keymap.Key{Rune: '<', Meta: true}, "beginning-of-buffer"},
+		{"M-%", keymap.Key{Rune: '%', Meta: true}, "query-replace"},
 	} {
-		seq, err := keymap.ParseSpec(tc.spec)
-		if err != nil {
-			t.Errorf("ParseSpec(%q): %v", tc.spec, err)
-			continue
-		}
-		for i := range seq {
-			seq[i] = keymap.Normalize(seq[i])
-		}
-		got := m.Lookup(seq)
-		if got.Kind != keymap.Found || got.Command != tc.want {
-			t.Errorf("%s: got kind=%v command=%q, want Found %q", tc.spec, got.Kind, got.Command, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			got := m.Lookup([]keymap.Key{tc.key})
+			if got.Kind != keymap.Found || got.Command != tc.want {
+				t.Errorf("got kind=%v command=%q, want Found %q", got.Kind, got.Command, tc.want)
+			}
+		})
 	}
 }
 
-// A prefix must report Pending so the event loop knows to wait for another key
-// rather than reporting the sequence undefined.
+// A prefix must report Pending so the event loop waits for another key rather
+// than reporting the sequence undefined. Looked up raw, for the same reason.
 func TestPrefixesReportPending(t *testing.T) {
 	m := keymap.New()
 	if err := InstallDefaultBindings(m); err != nil {
 		t.Fatalf("install: %v", err)
 	}
-	for _, spec := range []string{"C-x", "M-g", "<f1>"} {
-		seq, err := keymap.ParseSpec(spec)
-		if err != nil {
-			t.Fatalf("ParseSpec(%q): %v", spec, err)
-		}
-		for i := range seq {
-			seq[i] = keymap.Normalize(seq[i])
-		}
-		if got := m.Lookup(seq); got.Kind != keymap.Pending {
-			t.Errorf("%s: got %v, want Pending", spec, got.Kind)
-		}
+	for _, tc := range []struct {
+		name string
+		key  keymap.Key
+	}{
+		{"C-x", keymap.Key{Rune: 'x', Ctrl: true}},
+		{"M-g", keymap.Key{Rune: 'g', Meta: true}},
+		{"<f1>", keymap.Key{Special: keymap.KeyF1}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := m.Lookup([]keymap.Key{tc.key}); got.Kind != keymap.Pending {
+				t.Errorf("got %v, want Pending", got.Kind)
+			}
+		})
 	}
 }
 
