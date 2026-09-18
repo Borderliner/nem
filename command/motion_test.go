@@ -340,6 +340,41 @@ func TestBeginningAndEndOfBuffer(t *testing.T) {
 	wantPoint(t, f, 0, 0)
 }
 
+// TestBufferEndJumpsPushTheMark pins emacs's behaviour that a jump across the
+// whole buffer leaves a mark behind, so C-x C-x returns the reader to where they
+// were. Losing your place to M-< is noticed immediately.
+func TestBufferEndJumpsPushTheMark(t *testing.T) {
+	cases := []struct {
+		command  string
+		wantLine int
+		wantCol  text.RuneIdx
+	}{
+		{"beginning-of-buffer", 0, 0},
+		{"end-of-buffer", 2, 9},
+	}
+	for _, tc := range cases {
+		t.Run(tc.command, func(t *testing.T) {
+			f := newMotionFake(t, "first", "middle", "last line")
+			start := text.Pos{Line: 1, Col: 3}
+			f.SetPoint(start)
+			if f.Buf().HasMark() {
+				t.Fatal("test premise wrong: a fresh buffer should have no mark")
+			}
+
+			run(t, f, tc.command)
+			wantPoint(t, f, tc.wantLine, tc.wantCol)
+
+			if !f.Buf().HasMark() {
+				t.Fatalf("%s did not push a mark; C-x C-x could not return", tc.command)
+			}
+			if got := f.Buf().Mark(); !got.Equal(start) {
+				t.Fatalf("mark = {%d,%d}, want {%d,%d} where point was",
+					got.Line, got.Col, start.Line, start.Col)
+			}
+		})
+	}
+}
+
 // --- scrolling --------------------------------------------------------------
 
 func TestScrollUpMovesPointByScreenfulLessTwo(t *testing.T) {

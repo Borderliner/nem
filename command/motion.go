@@ -3,7 +3,6 @@ package command
 import (
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/hajianpour/nem/text"
 	"github.com/hajianpour/nem/view"
@@ -174,87 +173,29 @@ func backwardWord(e Env) error {
 	return nil
 }
 
-// moIsWordRune reports whether r is a word constituent: letters, digits and
-// combining marks. Marks count so a decomposed character such as e+U+0301 reads
-// as part of its word rather than terminating it. Underscore and hyphen do not,
-// matching emacs's fundamental mode.
+// wordForward advances to the end of the nth word ahead, stopping early if it
+// runs out of buffer.
 //
-// edit.go carries an equivalent edIsWordRune for the kill-word commands. The two
-// are deliberately separate only because they were written in parallel; they
-// should be collapsed into one shared helper, since forward-word and kill-word
-// disagreeing about where a word ends would be a real bug.
-func moIsWordRune(r rune) bool {
-	return unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsMark(r)
-}
-
-// wordForward advances to the end of the nth word ahead: skip whatever is not a
-// word, then consume the word itself. It stops early at the end of the buffer.
+// The scan itself lives in words.go, shared with the kill-word commands, so that
+// forward-word and kill-word cannot disagree about where a word ends.
 func wordForward(w *view.Window, n int) {
 	for ; n > 0; n-- {
-		if !moSkipForward(w, false) {
+		next := forwardWordPos(w.Buf, w.Pt)
+		if next.Equal(w.Pt) {
 			return
 		}
-		moSkipForward(w, true)
+		w.Pt = next
 	}
 }
 
 // wordBackward retreats to the start of the nth word behind.
 func wordBackward(w *view.Window, n int) {
 	for ; n > 0; n-- {
-		if !moSkipBackward(w, false) {
+		prev := backwardWordPos(w.Buf, w.Pt)
+		if prev.Equal(w.Pt) {
 			return
 		}
-		moSkipBackward(w, true)
-	}
-}
-
-// moSkipForward advances point while the rune after it is a word constituent
-// when want is true, or is not one when want is false. It reports false only
-// when it ran into the end of the buffer.
-//
-// A word never continues across a line boundary, so consuming word runes stops
-// at the end of a line; consuming non-word runes treats the boundary as one more
-// non-word rune and crosses it.
-func moSkipForward(w *view.Window, want bool) bool {
-	b := w.Buf
-	for {
-		rs := b.Line(w.Pt.Line).Runes()
-		for w.Pt.Col < text.RuneIdx(len(rs)) {
-			if moIsWordRune(rs[w.Pt.Col]) != want {
-				return true
-			}
-			w.Pt.Col++
-		}
-		if w.Pt.Line >= b.NumLines()-1 {
-			return false
-		}
-		if want {
-			return true
-		}
-		w.Pt.Line++
-		w.Pt.Col = 0
-	}
-}
-
-// moSkipBackward is moSkipForward's mirror, inspecting the rune before point.
-func moSkipBackward(w *view.Window, want bool) bool {
-	b := w.Buf
-	for {
-		rs := b.Line(w.Pt.Line).Runes()
-		for w.Pt.Col > 0 {
-			if moIsWordRune(rs[w.Pt.Col-1]) != want {
-				return true
-			}
-			w.Pt.Col--
-		}
-		if w.Pt.Line == 0 {
-			return false
-		}
-		if want {
-			return true
-		}
-		w.Pt.Line--
-		w.Pt.Col = b.Line(w.Pt.Line).Len()
+		w.Pt = prev
 	}
 }
 
@@ -292,8 +233,14 @@ func lineOffset(w *view.Window, n int) {
 	w.Pt.Line = target
 }
 
+// beginningOfBuffer and endOfBuffer push the mark before jumping, as emacs
+// does, so that C-x C-x takes the reader back to where they were. A jump across
+// a whole buffer is exactly the motion worth being able to undo, and losing your
+// place to it is immediately noticeable.
+
 func beginningOfBuffer(e Env) error {
 	w := e.Win()
+	w.Buf.SetMark(w.Pt)
 	w.Pt = text.Pos{}
 	clearGoal(w)
 	return nil
@@ -301,6 +248,7 @@ func beginningOfBuffer(e Env) error {
 
 func endOfBuffer(e Env) error {
 	w := e.Win()
+	w.Buf.SetMark(w.Pt)
 	w.Pt = w.Buf.End()
 	clearGoal(w)
 	return nil
