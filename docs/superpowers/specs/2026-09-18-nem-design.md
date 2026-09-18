@@ -528,3 +528,29 @@ instead of expanding it produces byte-identical output under `StyleDefault` — 
 stops being identical the moment the text area carries a background colour. The
 render tests assert the tab region carries `Theme.Text` precisely because that is
 the form the bug will take once syntax highlighting lands.
+
+## Search decisions (wave 4)
+
+**A search pattern containing a newline never matches.** `SearchForward` and
+`SearchBackward` reject it outright rather than silently misbehaving. This sits
+next to the truncate-don't-wrap decision as a v1 simplification: the buffer is a
+line array, so a multi-line pattern would need matching to span elements, and
+nothing in the v1 command set needs it. `query-replace` *replacements* may
+contain newlines and work correctly — only patterns are restricted.
+
+**Incremental search is an exported `Isearch` session**, not a closure inside the
+command. It carries `Update`/`Advance`/`Abandon`/`Pattern`, because the spec
+requires `editor`'s minibuffer keymap to advance the match on a repeated `C-s`
+— which is impossible if the session state is unreachable from `editor`. This
+seam was implied by the architecture and would otherwise have been discovered
+missing while writing the event loop.
+
+Every search runs from the origin captured at entry. That is what makes
+shortening the pattern with backspace walk point back toward the origin rather
+than leaving it stranded at a match that no longer applies.
+
+**`self-insert-command` needs the triggering key**, which no other command does.
+It is served by `Seq.LastRune`, set by the event loop before dispatch. The
+alternative — an exported `SelfInsert(e, r)` called directly by the loop — leaves
+`M-x self-insert-command` and any Lua binding to it broken, so the `Seq` field is
+the correct home.
