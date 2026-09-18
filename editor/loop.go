@@ -2,6 +2,7 @@ package editor
 
 import (
 	"errors"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/hajianpour/nem/command"
@@ -10,21 +11,55 @@ import (
 	"github.com/hajianpour/nem/view"
 )
 
-// Loop polls for events and dispatches commands until the session ends.
+// Loop reads events and dispatches commands until the session ends.
 //
 // It is not called Run because Env.Run invokes a command by name; this is the
 // event loop.
+//
+// It selects over a channel of events and a timer rather than blocking in
+// PollEvent, because prefix-key discovery needs to notice that a prefix has sat
+// pending for a while - a blocking read cannot express "or nothing happened for
+// 300ms". tcell fills the channel from its own goroutine, but there is still
+// exactly ONE consumer, which is what lets keymap.Map, command.KillRing and the
+// Lua interpreter stay lock-free. Nothing in here may be moved onto another
+// goroutine without revisiting that.
+//
+// The timer is rebuilt each iteration and stopped as soon as an event wins the
+// select, so a fluent user who never pauses arms and discards a timer per
+// keystroke and never sees a panel.
 func (e *Editor) Loop() error {
 	if e.scr == nil {
 		return errors.New("editor: no screen")
 	}
+
+	events := make(chan tcell.Event)
+	quit := make(chan struct{})
+	go e.scr.ChannelEvents(events, quit)
+	// Closing quit stops tcell's producer, so Loop cannot leave a goroutine
+	// behind however it returns.
+	defer close(quit)
+
 	e.Redraw()
 	for !e.quit {
-		ev := e.scr.PollEvent()
-		if ev == nil {
-			return nil // the screen finalized underneath us
+		var fire <-chan time.Time
+		var timer *time.Timer
+		if e.whichKeyArmed() {
+			timer = time.NewTimer(e.whichKeyDelay())
+			fire = timer.C
 		}
-		e.HandleEvent(ev)
+
+		select {
+		case ev, ok := <-events:
+			if timer != nil {
+				timer.Stop()
+			}
+			if !ok {
+				return nil // the screen finalized underneath us
+			}
+			e.HandleEvent(ev)
+		case <-fire:
+			e.fireWhichKey()
+		}
 		e.Redraw()
 	}
 	return nil
@@ -50,6 +85,12 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 
 // HandleKey resolves one decoded key and dispatches whatever it names.
 func (e *Editor) HandleKey(k keymap.Key) {
+	// Any key hides a which-key panel, and is then resolved normally. Dismissing
+	// here rather than in each branch below is what guarantees the keystroke that
+	// dismisses the panel is not also consumed by it - the feature must cost a
+	// fluent user nothing.
+	e.dismissWhichKey()
+
 	// C-g is handled before anything else, because in emacs it is never a
 	// no-op. Cancelling a half-typed C-x prefix or a half-typed argument must
 	// happen here: appending C-g to the pending sequence would look up "C-x
@@ -284,6 +325,12 @@ func (e *Editor) Redraw() {
 		f.MiniPt = e.mini.cursorCol()
 		f.MiniOn = true
 	}
+	// Panel sources append here. Which-key is one; a prompt rendering its
+	// completion list into a panel is another.
+	if p := e.whichKeyPanel(); p != nil {
+		f.Panels = append(f.Panels, *p)
+	}
+
 	ui.Render(e.scr, f, e.th)
 	e.scr.Show()
 }

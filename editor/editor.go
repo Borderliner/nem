@@ -81,6 +81,10 @@ type Editor struct {
 	// its second key.
 	pending []keymap.Key
 
+	// wk is prefix-key discovery: the delay, and the panel while it shows. See
+	// whichkey.go; it describes whatever pending holds.
+	wk whichKeyState
+
 	// mini is the innermost active prompt, or nil when none is. miniDepth
 	// counts nesting for the recursion guard.
 	mini      *miniState
@@ -95,6 +99,14 @@ type Editor struct {
 	// cross-command bookkeeping, so an outer one must not repeat it. See
 	// dispatch.
 	childDispatched bool
+
+	// safe holds the data-safety state: the backup store, which files have been
+	// backed up this session, the autosave clock, and what each file looked like
+	// on disk when nem last touched it. See safety.go.
+	safe safety
+
+	// clip mirrors kills to the system clipboard over OSC 52. See clipboard.go.
+	clip clipboard
 
 	before map[string][]func()
 	after  map[string][]func()
@@ -129,6 +141,7 @@ func New(scr tcell.Screen) (*Editor, error) {
 		ring:   command.NewKillRing(command.DefaultCapacity),
 		th:     th,
 		scr:    scr,
+		safe:   newSafety(),
 		before: map[string][]func(){},
 		after:  map[string][]func(){},
 	}
@@ -192,8 +205,11 @@ func (e *Editor) Arg() (int, bool) { return e.arg.value() }
 
 // --- the kill ring -------------------------------------------------------
 
-func (e *Editor) KillForward(s string)  { e.ring.KillForward(s) }
-func (e *Editor) KillBackward(s string) { e.ring.KillBackward(s) }
+// KillForward and KillBackward push onto the ring and mirror the resulting
+// entry to the system clipboard, so C-w and M-w reach other applications. See
+// noteKill for why the whole accumulated entry is sent rather than the fragment.
+func (e *Editor) KillForward(s string)  { e.noteKill(s, false) }
+func (e *Editor) KillBackward(s string) { e.noteKill(s, true) }
 func (e *Editor) Yank() (string, error) { return e.ring.Yank() }
 
 func (e *Editor) YankPop() (string, error) { return e.ring.YankPop() }
@@ -266,6 +282,18 @@ func (e *Editor) OpenFile(path string) (*text.Buffer, error) {
 	}
 	b.SetPath(abs)
 	e.adopt(b, e.uniqueName(filepath.Base(abs)))
+
+	// Remember what the file looked like, so a later save can tell whether
+	// anything else has touched it.
+	e.noteOnDisk(abs)
+
+	// An autosave newer than the file means a previous session died with unsaved
+	// work. Say so plainly and name the command that gets it back — a message
+	// the user cannot act on is no better than silence.
+	if newer, at := e.AutosaveAvailable(abs); newer {
+		e.Echo("Autosave from %s is newer than %s — M-x recover-file to restore it",
+			at.Format("15:04"), filepath.Base(abs))
+	}
 	return b, nil
 }
 
@@ -308,10 +336,41 @@ func (e *Editor) KillBuffer(b *text.Buffer) error {
 // before attempting the write, so a failed write would otherwise leave the
 // buffer claiming a file it was never written to — and the user would then
 // believe a later successful C-x C-s had saved somewhere it had not.
+// Two data-safety steps happen here, in this order and for these reasons. A
+// file something else has changed is not overwritten without asking, because
+// silently discarding an external edit is the worst thing this function could
+// do. And the file's previous contents are copied to the backup store before the
+// write, never after — a backup taken afterwards holds the new contents and
+// preserves nothing. See safety.go.
 func (e *Editor) SaveBuffer(b *text.Buffer, path string) error {
-	if path == "" {
-		return b.Save()
+	target := path
+	if target == "" {
+		target = b.Path()
 	}
+	if target == "" {
+		return text.ErrNoPath
+	}
+
+	if !e.confirmOverwrite(target) {
+		// Nothing written, nothing marked clean: the buffer keeps its changes
+		// and the file on disk keeps whatever the other writer put there.
+		e.Echo("%s left unchanged on disk", filepath.Base(target))
+		return nil
+	}
+
+	// A failed backup must not stop the save. The user asked to preserve their
+	// work; refusing because a copy could not be filed elsewhere would lose more
+	// than it protects.
+	e.backupBeforeWrite(target)
+
+	if path == "" {
+		if err := b.Save(); err != nil {
+			return err
+		}
+		e.afterSave(target)
+		return nil
+	}
+
 	// No path rollback here: text.SaveAs adopts the new path only after the
 	// write succeeds, so a failure leaves the buffer untouched.
 	if err := b.SaveAs(path); err != nil {
@@ -322,6 +381,7 @@ func (e *Editor) SaveBuffer(b *text.Buffer, path string) error {
 		e.names[b] = name
 		e.byName[name] = b
 	}
+	e.afterSave(target)
 	return nil
 }
 
