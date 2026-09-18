@@ -31,6 +31,9 @@ const (
 	miniComplete   = "minibuffer-complete"
 	miniSearchFwd  = "minibuffer-isearch-forward"
 	miniSearchBack = "minibuffer-isearch-backward"
+	miniNext       = "minibuffer-next-candidate"
+	miniPrev       = "minibuffer-previous-candidate"
+	miniAcceptText = "minibuffer-accept-literal"
 )
 
 // miniState is one active prompt.
@@ -44,6 +47,11 @@ type miniState struct {
 	// last is the contents as of the most recent OnChange, so a change can be
 	// detected however it was made — typed, backspaced, killed or yanked.
 	last string
+
+	// comp is the candidate list, or nil when the prompt has no completion.
+	// Its absence is what keeps an incremental search from growing a panel:
+	// C-s passes no Complete function, so there is nothing to show.
+	comp *completion
 
 	done  bool
 	abort bool
@@ -59,12 +67,38 @@ func miniKeymap() *keymap.Map {
 		{"TAB", miniComplete},
 		{"C-s", miniSearchFwd},
 		{"C-r", miniSearchBack},
+		{"C-n", miniNext},
+		{"<down>", miniNext},
+		{"C-p", miniPrev},
+		{"<up>", miniPrev},
+		{"M-RET", miniAcceptText},
 	} {
 		if err := bindSpec(m, b.spec, b.cmd); err != nil {
 			panic("editor: bad minibuffer binding: " + err.Error()) // a build-time constant is wrong
 		}
 	}
 	return m
+}
+
+// newMiniState builds a prompt's state.
+//
+// It is the single place that decides whether a prompt has a candidate list, so
+// that rule cannot be stated twice and drift: the absence of a Complete function
+// is what keeps an incremental search from growing a panel, and a second copy of
+// the test would be testing the copy rather than this.
+func newMiniState(opts command.ReadOpts, buf *text.Buffer, win *view.Window) *miniState {
+	ms := &miniState{
+		prompt: opts.Prompt,
+		buf:    buf,
+		win:    win,
+		opts:   opts,
+		keys:   miniKeymap(),
+		last:   buf.String(),
+	}
+	if opts.Complete != nil {
+		ms.comp = newCompletion(opts.Complete, ms.contents())
+	}
+	return ms
 }
 
 // line renders the prompt and its contents for the echo row.
@@ -112,14 +146,7 @@ func (e *Editor) ReadString(opts command.ReadOpts) (string, error) {
 	win := view.NewWindow(buf)
 	win.Pt = buf.End()
 
-	ms := &miniState{
-		prompt: opts.Prompt,
-		buf:    buf,
-		win:    win,
-		opts:   opts,
-		keys:   miniKeymap(),
-		last:   buf.String(),
-	}
+	ms := newMiniState(opts, buf, win)
 	// The echo area is deliberately NOT saved and restored. A prompt's own text
 	// lives in ms.line(), not in e.echo, so there is nothing of the prompt's to
 	// clean up — and a message the prompt produced, such as a failing
@@ -142,7 +169,7 @@ func (e *Editor) ReadString(opts command.ReadOpts) (string, error) {
 
 // readLoop is the nested event loop a prompt runs in.
 func (e *Editor) readLoop(ms *miniState) {
-	e.Redraw()
+	e.redrawPrompt()
 	for !ms.done && !e.quit {
 		ev := e.scr.PollEvent()
 		if ev == nil {
@@ -150,7 +177,7 @@ func (e *Editor) readLoop(ms *miniState) {
 			return
 		}
 		e.HandleEvent(ev)
-		e.Redraw()
+		e.redrawPrompt()
 	}
 }
 
@@ -158,7 +185,17 @@ func (e *Editor) readLoop(ms *miniState) {
 func (ms *miniState) control(e *Editor, name string) {
 	switch name {
 	case miniAccept:
-		ms.done = true
+		ms.accept(e)
+	case miniAcceptText:
+		ms.acceptLiteral(e)
+	case miniNext:
+		if ms.comp != nil {
+			ms.comp.move(1)
+		}
+	case miniPrev:
+		if ms.comp != nil {
+			ms.comp.move(-1)
+		}
 	case miniAbort:
 		ms.done, ms.abort = true, true
 		if ms.opts.Session != nil {
@@ -173,23 +210,76 @@ func (ms *miniState) control(e *Editor, name string) {
 	}
 }
 
-// complete extends the contents to the candidates' common prefix, and lists
-// them when that is ambiguous.
-func (ms *miniState) complete(e *Editor) {
-	if ms.opts.Complete == nil {
+// accept resolves what RET means for this prompt.
+//
+// The rule is emacs's completing-read rather than Vertico's always-take-the-
+// selection: with RequireMatch the answer must name something real, and without
+// it the answer is exactly what was typed. That asymmetry is the whole point.
+// Vertico's rule would make C-x C-f newfile.go impossible whenever the new name
+// happens to fuzzy-match an existing file, which it often does — the selection
+// would win and open the wrong thing.
+//
+// So TAB is how a candidate is chosen, and RET accepts the line. For a prompt
+// without RequireMatch that makes RET and M-RET agree, which is intended: the
+// literal gesture is available at every prompt rather than only some.
+func (ms *miniState) accept(e *Editor) {
+	c := ms.comp
+	if c == nil || !ms.opts.RequireMatch {
+		ms.done = true
 		return
 	}
+
 	cur := ms.contents()
-	cands := ms.opts.Complete(cur)
-	switch len(cands) {
-	case 0:
+	if c.isCandidate(cur) {
+		ms.done = true
+		return
+	}
+	if sel, ok := c.selected(); ok {
+		ms.replace(e, sel)
+		ms.done = true
+		return
+	}
+	// Nothing matches and nothing may be invented. Refusing keeps the prompt
+	// open with the text intact, so the user can edit rather than retype.
+	e.Echo("No match")
+}
+
+// acceptLiteral ends the prompt with exactly what was typed.
+//
+// It is refused where RequireMatch holds: the flag exists to stop a command name
+// being invented, and a second key that bypassed it would make it decorative.
+func (ms *miniState) acceptLiteral(e *Editor) {
+	if ms.opts.RequireMatch {
+		e.Echo("This prompt requires an existing match")
+		return
+	}
+	ms.done = true
+}
+
+// complete is TAB: take the selected candidate, or extend as far as every
+// candidate agrees.
+//
+// Taking the selection is what makes TAB useful under fuzzy matching, where the
+// candidates rarely share a prefix with what was typed and a common-prefix
+// extension would usually do nothing at all.
+func (ms *miniState) complete(e *Editor) {
+	c := ms.comp
+	if c == nil {
+		return
+	}
+	if c.count() == 0 {
 		e.Echo("No match")
 		return
-	case 1:
-		ms.replace(e, cands[0])
+	}
+	if sel, ok := c.selected(); ok {
+		ms.replace(e, sel)
 		return
 	}
-	if pre := commonPrefix(cands); len(pre) > len(cur) {
+	cands := make([]string, 0, c.count())
+	for _, r := range c.ranked {
+		cands = append(cands, r.Candidate)
+	}
+	if pre := commonPrefix(cands); len(pre) > len(ms.contents()) {
 		ms.replace(e, pre)
 		return
 	}
@@ -245,6 +335,12 @@ func (e *Editor) afterMiniEdit() {
 		return
 	}
 	ms.last = cur
+
+	// The candidate list is recomputed from the new contents before the hooks
+	// run, so anything they trigger sees a list that matches what is on screen.
+	if ms.comp != nil {
+		ms.comp.refresh(cur)
+	}
 
 	// Both hooks fire. They are independent: a caller may drive a search and
 	// also want to observe the pattern. Previously the session shadowed

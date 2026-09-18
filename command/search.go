@@ -385,24 +385,22 @@ func posAfter(p text.Pos, s string) text.Pos {
 
 // --- M-x -----------------------------------------------------------------
 
-// CompleteFrom returns a CompleteFunc offering the names that begin with the
-// prefix, preserving the order given.
+// CompleteFrom returns a CompleteFunc offering every one of names.
+//
+// It does not filter. The minibuffer ranks candidates with fuzzy matching, so
+// narrowing here would defeat it: typing "fwc" for forward-char has no prefix
+// match, and a pre-filtered list would come back empty.
 func CompleteFrom(names []string) CompleteFunc {
-	return func(prefix string) []string {
-		var out []string
-		for _, n := range names {
-			if strings.HasPrefix(n, prefix) {
-				out = append(out, n)
-			}
-		}
-		return out
+	return func(string) []string {
+		return append([]string(nil), names...)
 	}
 }
 
 func executeExtendedCommand(e Env) error {
 	name, err := e.ReadString(ReadOpts{
-		Prompt:   "M-x ",
-		Complete: CompleteFrom(e.CommandNames()),
+		Prompt:       "M-x ",
+		Complete:     CompleteFrom(e.CommandNames()),
+		RequireMatch: true,
 	})
 	if err != nil {
 		return err

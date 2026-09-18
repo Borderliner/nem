@@ -2,6 +2,7 @@ package command_test
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -672,31 +673,30 @@ func TestExecuteExtendedCommandUnknownEchoesNoMatch(t *testing.T) {
 	}
 }
 
-func TestCompleteFromFiltersByPrefix(t *testing.T) {
-	complete := command.CompleteFrom([]string{"isearch-backward", "isearch-forward", "kill-line"})
+func TestCompleteFromOffersEveryName(t *testing.T) {
+	names := []string{"isearch-backward", "isearch-forward", "kill-line"}
+	complete := command.CompleteFrom(names)
 
-	tests := []struct {
-		prefix string
-		want   []string
-	}{
-		{"", []string{"isearch-backward", "isearch-forward", "kill-line"}},
-		{"is", []string{"isearch-backward", "isearch-forward"}},
-		{"isearch-f", []string{"isearch-forward"}},
-		{"kill", []string{"kill-line"}},
-		{"zzz", nil},
+	// CompleteFrom deliberately does not filter. The minibuffer ranks candidates
+	// by fuzzy match, so narrowing here would defeat it: "fwc" reaches
+	// forward-char with no prefix match at all, and a pre-filtered list would
+	// come back empty.
+	for _, input := range []string{"", "is", "isearch-f", "kill", "zzz", "fwc"} {
+		got := complete(input)
+		if !slices.Equal(got, names) {
+			t.Errorf("complete(%q) = %q, want every name %q", input, got, names)
+		}
 	}
-	for _, tt := range tests {
-		got := complete(tt.prefix)
-		if len(got) != len(tt.want) {
-			t.Errorf("complete(%q) = %q, want %q", tt.prefix, got, tt.want)
-			continue
-		}
-		for i := range got {
-			if got[i] != tt.want[i] {
-				t.Errorf("complete(%q) = %q, want %q", tt.prefix, got, tt.want)
-				break
-			}
-		}
+}
+
+// The returned slice must be the caller's own, so a consumer that sorts or
+// truncates it cannot corrupt the command registry's names.
+func TestCompleteFromDoesNotShareItsBackingArray(t *testing.T) {
+	names := []string{"beta", "alpha"}
+	got := command.CompleteFrom(names)("")
+	got[0] = "MUTATED"
+	if names[0] != "beta" {
+		t.Errorf("mutating the result changed the source to %q", names)
 	}
 }
 

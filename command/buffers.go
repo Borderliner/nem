@@ -383,12 +383,10 @@ func anyModified(e Env) bool {
 
 // completeBufferName completes over the display names of live buffers.
 func completeBufferName(e Env) CompleteFunc {
-	return func(prefix string) []string {
+	return func(string) []string {
 		var out []string
 		for _, b := range e.Buffers() {
-			if name := e.BufferName(b); strings.HasPrefix(name, prefix) {
-				out = append(out, name)
-			}
+			out = append(out, e.BufferName(b))
 		}
 		sort.Strings(out)
 		return out
@@ -409,13 +407,13 @@ func completeFilename(prefix string) []string {
 	if err != nil {
 		return nil
 	}
+	// base is deliberately unused for filtering: the directory selects which
+	// candidates exist, and the minibuffer's fuzzy ranking narrows them. The
+	// split is still needed to know which directory to read.
+	_ = base
 	var out []string
 	for _, ent := range entries {
-		name := ent.Name()
-		if !strings.HasPrefix(name, base) {
-			continue
-		}
-		full := dir + name
+		full := dir + ent.Name()
 		if ent.IsDir() {
 			full += string(filepath.Separator)
 		}

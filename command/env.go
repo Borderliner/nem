@@ -105,8 +105,18 @@ type Seq struct {
 	LastRune rune
 }
 
-// CompleteFunc returns the candidate completions for a minibuffer prefix.
-type CompleteFunc func(prefix string) []string
+// CompleteFunc returns the candidates available for what has been typed so far.
+//
+// It supplies the candidate UNIVERSE, not a filtered result: the minibuffer
+// filters and ranks with fuzzy matching, so a CompleteFunc that pre-filtered by
+// prefix would defeat it. Typing "fwc" to reach forward-char returns no
+// prefix matches at all, and the list handed back would be empty.
+//
+// The argument is still the current contents, because for some completions it
+// selects which universe applies rather than narrowing one: a filename
+// completion reads the directory the input names, and then offers everything in
+// it rather than only the entries whose base matches.
+type CompleteFunc func(input string) []string
 
 // ReadOpts configures a minibuffer prompt.
 type ReadOpts struct {
@@ -116,8 +126,26 @@ type ReadOpts struct {
 	// Initial pre-fills the minibuffer with editable text.
 	Initial string
 
-	// Complete supplies TAB completion candidates. Nil means no completion.
+	// Complete supplies completion candidates. Nil means no completion at all:
+	// no candidate panel is built and TAB does nothing, which is what an
+	// incremental search prompt wants.
 	Complete CompleteFunc
+
+	// RequireMatch governs what RET accepts.
+	//
+	// When true, RET accepts only a candidate — the selected one, or an exact
+	// match for what was typed. Typed text that matches nothing is refused with
+	// a message rather than returned. execute-extended-command sets this,
+	// because inventing a command name is meaningless.
+	//
+	// When false, RET accepts exactly what was typed whenever it is not an exact
+	// candidate, so find-file and switch-to-buffer can still name something that
+	// does not exist yet. This is why the flag exists instead of Vertico's
+	// always-take-the-selection rule: without it, C-x C-f newfile.go could never
+	// create a file, because the selection would win and open an existing one.
+	//
+	// M-RET forces literal input where RequireMatch is false.
+	RequireMatch bool
 
 	// OnChange, when non-nil, is called with the full contents after every
 	// edit of the minibuffer — typed, backspaced, killed or yanked alike.

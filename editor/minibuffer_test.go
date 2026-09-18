@@ -27,10 +27,15 @@ func TestExecuteExtendedCommandCompletesOnTab(t *testing.T) {
 	wantPt(t, e, 0, 1)
 }
 
-// An unknown name reports rather than failing.
-func TestExecuteExtendedCommandUnknownName(t *testing.T) {
+// An unknown name is refused, and the prompt stays open with the text intact.
+//
+// M-x sets ReadOpts.RequireMatch, so RET will not accept a name that does not
+// exist - inventing a command is meaningless, and closing the prompt to report
+// the failure afterwards would throw away what the user typed. C-g is the way
+// out, exactly as in emacs with a completing-read that requires a match.
+func TestExecuteExtendedCommandUnknownNameIsRefused(t *testing.T) {
 	e, scr := newTestEditor(t, "abc")
-	feed(t, scr, txt("no-such-command-at-all"), key(t, "RET"))
+	feed(t, scr, txt("no-such-command-at-all"), key(t, "RET", "C-g"))
 	press(t, e, "M-x")
 	if e.Message() == "" {
 		t.Error("an unknown M-x name reported nothing")

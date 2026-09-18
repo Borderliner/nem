@@ -196,6 +196,10 @@ func TestFilenameCompletionListsMatchingEntries(t *testing.T) {
 	mustRun(t, e, "find-file")
 	complete := lastOpts(t, e).Complete
 
+	// The input selects the DIRECTORY; it does not narrow within it. Narrowing
+	// is the minibuffer's job now, by fuzzy rank, and a CompleteFunc that
+	// pre-filtered by prefix would defeat it - typing "al" to reach album.txt is
+	// a prefix match, but typing "abm" is not, and only fuzzy finds that.
 	got := complete(filepath.Join(dir, "al"))
 	want := []string{
 		filepath.Join(dir, "album.txt"),
@@ -203,14 +207,10 @@ func TestFilenameCompletionListsMatchingEntries(t *testing.T) {
 		// A directory keeps its separator so repeated completion can descend
 		// into it instead of stalling.
 		filepath.Join(dir, "alpine") + string(filepath.Separator),
+		filepath.Join(dir, "zeta.txt"),
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("completing %q gave\n  %q\nwant\n  %q", "al", got, want)
-	}
-	for _, g := range got {
-		if strings.Contains(g, "zeta") {
-			t.Errorf("completion returned a non-matching entry %q", g)
-		}
 	}
 	// A trailing separator means "everything in this directory".
 	if got := complete(dir + string(filepath.Separator)); len(got) != 4 {
@@ -620,13 +620,14 @@ func TestSwitchToBufferCompletesOverBufferNames(t *testing.T) {
 	if complete == nil {
 		t.Fatal("switch-to-buffer offers no completion")
 	}
-	got := complete("n")
-	want := []string{"nginx.conf", "notes.md"}
-	if !slices.Equal(got, want) {
-		t.Errorf("completing %q gave %q, want %q", "n", got, want)
+	// Every buffer, whatever has been typed: the minibuffer narrows by fuzzy
+	// rank, so narrowing here too would hide candidates fuzzy could have found.
+	want := []string{"*scratch*", "nginx.conf", "notes.md"}
+	if got := complete("n"); !slices.Equal(got, want) {
+		t.Errorf("completing %q gave %q, want every buffer %q", "n", got, want)
 	}
-	if all := complete(""); len(all) != 3 {
-		t.Errorf("empty prefix completed to %q, want all three buffers", all)
+	if got := complete(""); !slices.Equal(got, want) {
+		t.Errorf("completing %q gave %q, want every buffer %q", "", got, want)
 	}
 }
 
