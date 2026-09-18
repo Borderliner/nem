@@ -580,3 +580,52 @@ were saved, buffers not yet reached stay modified and untouched, and for
 ejected from the editor immediately after being told a file could not be written.
 Errors are wrapped as `saving <path>: %w`, naming the failing buffer while
 `errors.Is` still matches the cause.
+
+## The crash that shipped, and what it says about the design
+
+Two windows onto one buffer is the case this architecture exists for, and it is
+also where the only genuine crash lived.
+
+Point lives in the `view.Window`; a `text.Buffer` has no idea which windows are
+showing it. So an edit made through one window left another window's point past
+the end of the text, and `text.Buffer.Line` is an unguarded slice index — the
+next command run in that window panicked and took the editor down, losing
+unsaved work in every other buffer.
+
+It was found while chasing a narrower report (a Lua script shortening a buffer
+leaves non-active windows unclamped) and turned out to be reachable by ordinary
+editing: kill more lines than the other window's point sits above, switch to
+that window, press any motion key.
+
+Fixed by clamping every window's point in dispatch, alongside the kill run, the
+goal column and last-command — and for the same reason those live there: sixty
+commands cannot each be relied on to remember it. Deliberately outside the
+nested-dispatch guard, since clamping is idempotent and a nested dispatch that
+shortens a buffer must not be able to strand a window either.
+
+**The lesson worth keeping:** putting point in the window was the right call and
+is what makes independent viewports work, but it split one invariant across two
+types that cannot see each other. Every such split needs a single place that
+re-establishes it. Three other cross-command rules already lived in dispatch for
+exactly this reason; this was the fourth and nobody had noticed it was missing.
+
+### Still open
+
+`text.Buffer.Line(i)` remains an unguarded `&b.lines[i]`. Clamping at dispatch
+closes the reachable path, but the sharp edge is still there for any future
+caller. Making it return an error, or clamp, would be a broad signature change
+across `ui`, `command` and `editor`; recorded rather than done.
+
+A whole-buffer rewrite from Lua costs two undo steps, not one, because the undo
+log records one entry per `Insert`/`Delete` and has no grouping. `set_text`
+diffs line-by-line and rewrites only the differing span, which gets the common
+cases (trailing-whitespace trim, pure insertion, pure deletion) down to one step
+and avoids disturbing the mark and other windows' points. One step for the
+general case needs a `BeginUndoGroup`/`EndUndoGroup` API in `text`.
+
+An upstream gopher-lua bug nil-dereferences on a Go-backed function's result
+used inside a concatenation that is then a method receiver:
+`(nem.buf.text() .. "\n"):gmatch(...)`. Reproduced against a bare gopher-lua
+state with no nem code involved. Documented with the workaround (bind the
+concatenation to a local first) and pinned by a test that will fail loudly if
+upstream fixes it.
