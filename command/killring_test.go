@@ -2,6 +2,7 @@ package command
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -40,9 +41,9 @@ func TestEmptyRing(t *testing.T) {
 // lines as a single block.
 func TestConsecutiveKillsAccumulateIntoOneEntry(t *testing.T) {
 	k := NewKillRing(60)
-	k.Kill("line one\n")
-	k.Kill("line two\n")
-	k.Kill("line three\n")
+	k.KillForward("line one\n")
+	k.KillForward("line two\n")
+	k.KillForward("line three\n")
 
 	if got := k.Len(); got != 1 {
 		t.Fatalf("Len() = %d, want 1 — consecutive kills must accumulate, not push", got)
@@ -57,11 +58,11 @@ func TestConsecutiveKillsAccumulateIntoOneEntry(t *testing.T) {
 	}
 }
 
-func TestAppendAccumulatesLikeKill(t *testing.T) {
+func TestForwardKillsExtendRightward(t *testing.T) {
 	k := NewKillRing(60)
-	k.Kill("foo")
-	k.Append(" bar")
-	k.Append(" baz")
+	k.KillForward("foo")
+	k.KillForward(" bar")
+	k.KillForward(" baz")
 
 	if got := k.Len(); got != 1 {
 		t.Fatalf("Len() = %d, want 1", got)
@@ -71,9 +72,9 @@ func TestAppendAccumulatesLikeKill(t *testing.T) {
 	}
 }
 
-func TestAppendWithNoRunStartsNewEntry(t *testing.T) {
+func TestForwardKillWithNoRunStartsNewEntry(t *testing.T) {
 	k := NewKillRing(60)
-	k.Append("solo")
+	k.KillForward("solo")
 	if got := k.Len(); got != 1 {
 		t.Fatalf("Len() = %d, want 1", got)
 	}
@@ -86,11 +87,11 @@ func TestAppendWithNoRunStartsNewEntry(t *testing.T) {
 
 // Killing backward word-by-word over "foo bar" must yank back in reading
 // order. M-DEL kills "bar", then M-DEL kills "foo " — prepending yields
-// "foo bar", not "bar foo".
-func TestBackwardKillsPrependIntoReadingOrder(t *testing.T) {
+// leftward yields "foo bar", not "bar foo".
+func TestBackwardKillsExtendLeftIntoReadingOrder(t *testing.T) {
 	k := NewKillRing(60)
-	k.Prepend("bar")
-	k.Prepend("foo ")
+	k.KillBackward("bar")
+	k.KillBackward("foo ")
 
 	if got := k.Len(); got != 1 {
 		t.Fatalf("Len() = %d, want 1", got)
@@ -104,9 +105,9 @@ func TestBackwardKillsPrependIntoReadingOrder(t *testing.T) {
 	}
 }
 
-func TestPrependWithNoRunStartsNewEntry(t *testing.T) {
+func TestBackwardKillWithNoRunStartsNewEntry(t *testing.T) {
 	k := NewKillRing(60)
-	k.Prepend("solo")
+	k.KillBackward("solo")
 	if got, _ := k.Yank(); got != "solo" {
 		t.Errorf("Yank() = %q, want %q", got, "solo")
 	}
@@ -116,9 +117,9 @@ func TestPrependWithNoRunStartsNewEntry(t *testing.T) {
 // alternate C-k and M-DEL without an intervening command.
 func TestMixedDirectionRunGrowsBothEnds(t *testing.T) {
 	k := NewKillRing(60)
-	k.Kill("middle")
-	k.Append("-after")
-	k.Prepend("before-")
+	k.KillForward("middle")
+	k.KillForward("-after")
+	k.KillBackward("before-")
 
 	if got := k.Len(); got != 1 {
 		t.Fatalf("Len() = %d, want 1", got)
@@ -132,9 +133,9 @@ func TestMixedDirectionRunGrowsBothEnds(t *testing.T) {
 
 func TestBreakRunEndsAccumulation(t *testing.T) {
 	k := NewKillRing(60)
-	k.Kill("first")
+	k.KillForward("first")
 	k.BreakRun()
-	k.Kill("second")
+	k.KillForward("second")
 
 	if got := k.Len(); got != 2 {
 		t.Fatalf("Len() = %d, want 2 — BreakRun must end the run", got)
@@ -150,10 +151,10 @@ func TestBreakRunEndsAccumulation(t *testing.T) {
 
 func TestBreakRunIsIdempotent(t *testing.T) {
 	k := NewKillRing(60)
-	k.Kill("a")
+	k.KillForward("a")
 	k.BreakRun()
 	k.BreakRun()
-	k.Kill("b")
+	k.KillForward("b")
 	if got := k.Len(); got != 2 {
 		t.Errorf("Len() = %d, want 2", got)
 	}
@@ -171,11 +172,11 @@ func TestBreakRunOnEmptyRingDoesNotPanic(t *testing.T) {
 // rather than accumulating onto the entry that was just yanked.
 func TestYankEndsTheKillRun(t *testing.T) {
 	k := NewKillRing(60)
-	k.Kill("killed")
+	k.KillForward("killed")
 	if _, err := k.Yank(); err != nil {
 		t.Fatalf("Yank() err = %v", err)
 	}
-	k.Kill("after yank")
+	k.KillForward("after yank")
 
 	if got := k.Len(); got != 2 {
 		t.Fatalf("Len() = %d, want 2 — a kill after a yank must not accumulate", got)
@@ -189,9 +190,9 @@ func TestYankEndsTheKillRun(t *testing.T) {
 
 func TestYankPopRequiresPrecedingYank(t *testing.T) {
 	k := NewKillRing(60)
-	k.Kill("one")
+	k.KillForward("one")
 	k.BreakRun()
-	k.Kill("two")
+	k.KillForward("two")
 
 	if _, err := k.YankPop(); !errors.Is(err, ErrNotAfterYank) {
 		t.Errorf("YankPop() without a preceding Yank err = %v, want ErrNotAfterYank", err)
@@ -207,9 +208,9 @@ func TestYankPopOnFreshRingErrors(t *testing.T) {
 
 func TestBreakRunInvalidatesYankPop(t *testing.T) {
 	k := NewKillRing(60)
-	k.Kill("one")
+	k.KillForward("one")
 	k.BreakRun()
-	k.Kill("two")
+	k.KillForward("two")
 	k.BreakRun()
 	if _, err := k.Yank(); err != nil {
 		t.Fatalf("Yank() err = %v", err)
@@ -223,38 +224,38 @@ func TestBreakRunInvalidatesYankPop(t *testing.T) {
 
 func TestKillBetweenYankAndYankPopInvalidates(t *testing.T) {
 	k := NewKillRing(60)
-	k.Kill("one")
+	k.KillForward("one")
 	k.BreakRun()
-	k.Kill("two")
+	k.KillForward("two")
 	k.BreakRun()
 	if _, err := k.Yank(); err != nil {
 		t.Fatalf("Yank() err = %v", err)
 	}
-	k.Kill("interloper")
+	k.KillForward("interloper")
 
 	if _, err := k.YankPop(); !errors.Is(err, ErrNotAfterYank) {
 		t.Errorf("YankPop() after an intervening Kill err = %v, want ErrNotAfterYank", err)
 	}
 }
 
-func TestPrependBetweenYankAndYankPopInvalidates(t *testing.T) {
+func TestBackwardKillBetweenYankAndYankPopInvalidates(t *testing.T) {
 	k := NewKillRing(60)
-	k.Kill("one")
+	k.KillForward("one")
 	k.BreakRun()
 	if _, err := k.Yank(); err != nil {
 		t.Fatalf("Yank() err = %v", err)
 	}
-	k.Prepend("interloper")
+	k.KillBackward("interloper")
 
 	if _, err := k.YankPop(); !errors.Is(err, ErrNotAfterYank) {
-		t.Errorf("YankPop() after an intervening Prepend err = %v, want ErrNotAfterYank", err)
+		t.Errorf("YankPop() after an intervening backward kill err = %v, want ErrNotAfterYank", err)
 	}
 }
 
 func TestYankPopStaysValidAcrossRepeatedPops(t *testing.T) {
 	k := NewKillRing(60)
 	for _, s := range []string{"one", "two", "three"} {
-		k.Kill(s)
+		k.KillForward(s)
 		k.BreakRun()
 	}
 	if _, err := k.Yank(); err != nil {
@@ -272,7 +273,7 @@ func TestYankPopStaysValidAcrossRepeatedPops(t *testing.T) {
 func TestYankPopRotatesThroughRingAndWraps(t *testing.T) {
 	k := NewKillRing(60)
 	for _, s := range []string{"one", "two", "three"} {
-		k.Kill(s)
+		k.KillForward(s)
 		k.BreakRun()
 	}
 
@@ -300,9 +301,9 @@ func TestYankPopRotatesThroughRingAndWraps(t *testing.T) {
 // the previously yanked text for exactly what comes back.
 func TestYankPopReturnsFullReplacement(t *testing.T) {
 	k := NewKillRing(60)
-	k.Kill("short")
+	k.KillForward("short")
 	k.BreakRun()
-	k.Kill("a much longer entry")
+	k.KillForward("a much longer entry")
 	k.BreakRun()
 
 	if got, _ := k.Yank(); got != "a much longer entry" {
@@ -319,7 +320,7 @@ func TestYankPopReturnsFullReplacement(t *testing.T) {
 
 func TestYankPopWithSingleEntryReturnsItself(t *testing.T) {
 	k := NewKillRing(60)
-	k.Kill("only")
+	k.KillForward("only")
 	k.BreakRun()
 	if _, err := k.Yank(); err != nil {
 		t.Fatalf("Yank() err = %v", err)
@@ -338,7 +339,7 @@ func TestYankPopWithSingleEntryReturnsItself(t *testing.T) {
 func TestYankAfterYankPopUsesRotatedPointer(t *testing.T) {
 	k := NewKillRing(60)
 	for _, s := range []string{"one", "two", "three"} {
-		k.Kill(s)
+		k.KillForward(s)
 		k.BreakRun()
 	}
 	if _, err := k.Yank(); err != nil {
@@ -357,12 +358,61 @@ func TestYankAfterYankPopUsesRotatedPointer(t *testing.T) {
 	}
 }
 
+// A full rotation must have a cycle length of exactly N: after N calls to
+// YankPop over a ring of N entries the pointer is back where it started, and
+// every entry has been visited exactly once along the way. This is the property
+// that catches an off-by-one in the modular arithmetic — walking back and
+// wrapping can both look correct while the cycle is really N-1 or N+1 long.
+func TestYankPopCycleLengthEqualsRingSize(t *testing.T) {
+	for _, n := range []int{1, 2, 3, 5, 7} {
+		t.Run(fmt.Sprintf("n=%d", n), func(t *testing.T) {
+			k := NewKillRing(60)
+			for i := 0; i < n; i++ {
+				k.KillForward(fmt.Sprintf("entry-%d", i))
+				k.BreakRun()
+			}
+
+			start, err := k.Yank()
+			if err != nil {
+				t.Fatalf("Yank() err = %v", err)
+			}
+
+			seen := map[string]int{start: 1}
+			for i := 1; i <= n; i++ {
+				got, err := k.YankPop()
+				if err != nil {
+					t.Fatalf("YankPop() #%d err = %v", i, err)
+				}
+				if i < n {
+					if got == start {
+						t.Fatalf("YankPop() returned to the start after %d calls, want a cycle of exactly %d", i, n)
+					}
+					seen[got]++
+					continue
+				}
+				if got != start {
+					t.Errorf("YankPop() #%d = %q, want the cycle to close back on %q", i, got, start)
+				}
+			}
+
+			if len(seen) != n {
+				t.Errorf("visited %d distinct entries, want %d — a cycle must touch every entry", len(seen), n)
+			}
+			for entry, count := range seen {
+				if count != 1 {
+					t.Errorf("entry %q visited %d times in one cycle, want 1", entry, count)
+				}
+			}
+		})
+	}
+}
+
 // --- requirement 6: the ring evicts ---------------------------------------
 
 func TestRingEvictsOldestAtCapacity(t *testing.T) {
 	k := NewKillRing(3)
 	for _, s := range []string{"one", "two", "three", "four"} {
-		k.Kill(s)
+		k.KillForward(s)
 		k.BreakRun()
 	}
 
@@ -387,9 +437,9 @@ func TestRingEvictsOldestAtCapacity(t *testing.T) {
 
 func TestAccumulationDoesNotEvict(t *testing.T) {
 	k := NewKillRing(2)
-	k.Kill("a")
-	k.Kill("b")
-	k.Kill("c")
+	k.KillForward("a")
+	k.KillForward("b")
+	k.KillForward("c")
 	if got := k.Len(); got != 1 {
 		t.Errorf("Len() = %d, want 1", got)
 	}
@@ -399,9 +449,9 @@ func TestAccumulationDoesNotEvict(t *testing.T) {
 
 func TestEmptyKillIsNoOp(t *testing.T) {
 	k := NewKillRing(60)
-	k.Kill("")
-	k.Append("")
-	k.Prepend("")
+	k.KillForward("")
+	k.KillForward("")
+	k.KillBackward("")
 
 	if got := k.Len(); got != 0 {
 		t.Errorf("Len() = %d, want 0 — an empty kill must not create an entry", got)
@@ -415,14 +465,14 @@ func TestEmptyKillIsNoOp(t *testing.T) {
 // either — nothing happened, so nothing is invalidated.
 func TestEmptyKillDoesNotInvalidateYankPop(t *testing.T) {
 	k := NewKillRing(60)
-	k.Kill("one")
+	k.KillForward("one")
 	k.BreakRun()
-	k.Kill("two")
+	k.KillForward("two")
 	k.BreakRun()
 	if _, err := k.Yank(); err != nil {
 		t.Fatalf("Yank() err = %v", err)
 	}
-	k.Kill("")
+	k.KillForward("")
 
 	got, err := k.YankPop()
 	if err != nil {
@@ -435,9 +485,9 @@ func TestEmptyKillDoesNotInvalidateYankPop(t *testing.T) {
 
 func TestEmptyKillDoesNotBreakAccumulation(t *testing.T) {
 	k := NewKillRing(60)
-	k.Kill("foo")
-	k.Kill("")
-	k.Kill("bar")
+	k.KillForward("foo")
+	k.KillForward("")
+	k.KillForward("bar")
 	if got := k.Len(); got != 1 {
 		t.Fatalf("Len() = %d, want 1", got)
 	}
@@ -454,7 +504,7 @@ func TestLenTracksDistinctEntries(t *testing.T) {
 		t.Fatalf("Len() = %d, want 0", got)
 	}
 	for i, s := range []string{"a", "b", "c"} {
-		k.Kill(s)
+		k.KillForward(s)
 		k.BreakRun()
 		if got := k.Len(); got != i+1 {
 			t.Errorf("after %d kills Len() = %d, want %d", i+1, got, i+1)
@@ -464,7 +514,7 @@ func TestLenTracksDistinctEntries(t *testing.T) {
 
 func TestYankDoesNotConsume(t *testing.T) {
 	k := NewKillRing(60)
-	k.Kill("persistent")
+	k.KillForward("persistent")
 	k.BreakRun()
 	for i := 0; i < 3; i++ {
 		got, err := k.Yank()
@@ -484,7 +534,7 @@ func TestLargeAccumulationRun(t *testing.T) {
 	k := NewKillRing(60)
 	var want strings.Builder
 	for i := 0; i < 1000; i++ {
-		k.Kill("x")
+		k.KillForward("x")
 		want.WriteString("x")
 	}
 	if got := k.Len(); got != 1 {
@@ -503,7 +553,7 @@ func TestLargeAccumulationRun(t *testing.T) {
 // resulting entry count and what a yank produces.
 func TestStateMachineSequences(t *testing.T) {
 	type op struct {
-		kind string // kill, append, prepend, break, yank
+		kind string // forward, backward, break, yank
 		arg  string
 	}
 	tests := []struct {
@@ -514,37 +564,37 @@ func TestStateMachineSequences(t *testing.T) {
 	}{
 		{
 			name:     "single kill",
-			ops:      []op{{"kill", "a"}},
+			ops:      []op{{"forward", "a"}},
 			wantLen:  1,
 			wantYank: "a",
 		},
 		{
 			name:     "kill run then break then kill",
-			ops:      []op{{"kill", "a"}, {"kill", "b"}, {"break", ""}, {"kill", "c"}},
+			ops:      []op{{"forward", "a"}, {"forward", "b"}, {"break", ""}, {"forward", "c"}},
 			wantLen:  2,
 			wantYank: "c",
 		},
 		{
 			name:     "backward run",
-			ops:      []op{{"prepend", "c"}, {"prepend", "b"}, {"prepend", "a"}},
+			ops:      []op{{"backward", "c"}, {"backward", "b"}, {"backward", "a"}},
 			wantLen:  1,
 			wantYank: "abc",
 		},
 		{
 			name:     "break between every kill",
-			ops:      []op{{"kill", "a"}, {"break", ""}, {"kill", "b"}, {"break", ""}, {"kill", "c"}},
+			ops:      []op{{"forward", "a"}, {"break", ""}, {"forward", "b"}, {"break", ""}, {"forward", "c"}},
 			wantLen:  3,
 			wantYank: "c",
 		},
 		{
 			name:     "yank then kill starts new entry",
-			ops:      []op{{"kill", "a"}, {"yank", ""}, {"kill", "b"}},
+			ops:      []op{{"forward", "a"}, {"yank", ""}, {"forward", "b"}},
 			wantLen:  2,
 			wantYank: "b",
 		},
 		{
 			name:     "empty kills interleaved",
-			ops:      []op{{"kill", ""}, {"kill", "a"}, {"kill", ""}, {"append", "b"}},
+			ops:      []op{{"forward", ""}, {"forward", "a"}, {"forward", ""}, {"forward", "b"}},
 			wantLen:  1,
 			wantYank: "ab",
 		},
@@ -555,12 +605,10 @@ func TestStateMachineSequences(t *testing.T) {
 			k := NewKillRing(60)
 			for _, o := range tt.ops {
 				switch o.kind {
-				case "kill":
-					k.Kill(o.arg)
-				case "append":
-					k.Append(o.arg)
-				case "prepend":
-					k.Prepend(o.arg)
+				case "forward":
+					k.KillForward(o.arg)
+				case "backward":
+					k.KillBackward(o.arg)
 				case "break":
 					k.BreakRun()
 				case "yank":

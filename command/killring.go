@@ -30,6 +30,15 @@ var (
 //     persists after a yank run ends, so a later C-y yanks from wherever M-y
 //     left it, as emacs does. Pushing or extending an entry resets it.
 //
+// The run-awareness deliberately lives here rather than in the command layer,
+// and that is why this API is a KillForward/KillBackward pair rather than a
+// direct port of emacs's kill-new/kill-append. Emacs makes each command decide
+// whether it is starting a kill or extending one, which means every new kill
+// command is one forgotten check away from silently breaking C-k C-k C-y. Here
+// a command states only the direction it killed in and cannot get accumulation
+// wrong. Do not "simplify" this back into a push-only Kill plus a separate
+// Append: that reintroduces exactly the bug this shape prevents.
+//
 // KillRing is not safe for concurrent use; the editor drives it from the input
 // goroutine only.
 type KillRing struct {
@@ -56,19 +65,22 @@ func (k *KillRing) Capacity() int { return k.capacity }
 // Len reports the number of distinct entries held.
 func (k *KillRing) Len() int { return len(k.entries) }
 
-// Kill records killed text. During a kill run the text is appended to the
-// newest entry; otherwise it starts a new entry. Use it for kills with no
-// inherent direction, such as kill-region.
-func (k *KillRing) Kill(s string) { k.accumulate(s, false) }
+// KillForward records text killed forward of point — C-k, M-d, or a
+// direction-neutral kill such as kill-region.
+//
+// During a kill run it extends the newest entry on the right; otherwise it
+// pushes a new entry. Callers never decide which: they state the direction and
+// the ring handles accumulation.
+func (k *KillRing) KillForward(s string) { k.accumulate(s, false) }
 
-// Append records text killed forward of point, such as C-k or M-d. During a
-// kill run it extends the newest entry on the right.
-func (k *KillRing) Append(s string) { k.accumulate(s, false) }
-
-// Prepend records text killed backward of point, such as M-DEL. During a kill
-// run it extends the newest entry on the left, so killing backward word by
-// word yields text in reading order rather than reversed.
-func (k *KillRing) Prepend(s string) { k.accumulate(s, true) }
+// KillBackward records text killed backward of point — M-DEL, and anything
+// else that consumes text to the left.
+//
+// During a kill run it extends the newest entry on the left, so killing
+// backward word by word yields text in reading order rather than reversed;
+// otherwise it pushes a new entry. As with KillForward, the caller states only
+// the direction.
+func (k *KillRing) KillBackward(s string) { k.accumulate(s, true) }
 
 // accumulate is the single mutation path: it either extends the newest entry
 // or pushes a new one, and resets the yank state either way.
