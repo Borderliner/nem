@@ -204,6 +204,8 @@ func (e *Editor) dispatchReporting(name string) {
 //     so C-n only preserves a column across a run of C-n and C-p.
 //   - last-command. Recorded after the command runs, so a command sees the
 //     previous one, which is what yank-pop and recenter-top-bottom need.
+//   - Every window's point, clamped back inside its buffer. See
+//     clampWindowPoints: this one prevents a crash, not a misbehaviour.
 //
 // It is re-entrant: M-x and Lua's nem.run come through here too. Only the
 // innermost dispatch does the bookkeeping, so M-x kill-line leaves the kill run
@@ -220,6 +222,11 @@ func (e *Editor) dispatch(name string) error {
 	e.runHooks(e.before, name)
 	err := e.reg.Run(name, e)
 	e.runHooks(e.after, name)
+
+	// Outside the childDispatched guard on purpose: clamping is idempotent and
+	// costs one comparison per window, and a nested dispatch that shortens a
+	// buffer must not be able to leave a window stranded either.
+	e.clampWindowPoints()
 
 	if !e.childDispatched {
 		e.bookkeep(name)
@@ -244,6 +251,26 @@ func (e *Editor) bookkeep(name string) {
 		}
 	}
 	e.lastCmd = name
+}
+
+// clampWindowPoints brings every window's point back inside its buffer.
+//
+// Point lives in the window, and a buffer has no idea which windows are showing
+// it - so an edit made through one window can leave another window's point past
+// the end of the text. text.Buffer.Line is an unguarded slice index, so the next
+// command run in that window indexes out of range and takes the whole editor
+// down, losing unsaved work in every other buffer with it.
+//
+// Two windows onto one buffer is the case the architecture exists for, so this
+// is reachable by ordinary editing and not only by a script: kill more lines
+// than the other window's point sits above, switch to it, press any motion key.
+//
+// Centralised here for the same reason as the three rules above - sixty commands
+// cannot each be relied on to remember it.
+func (e *Editor) clampWindowPoints() {
+	for _, w := range e.tree.Windows() {
+		w.Pt = w.Buf.ClampPos(w.Pt)
+	}
 }
 
 // Redraw paints one frame. Exported so tests can assert on rendered output.
