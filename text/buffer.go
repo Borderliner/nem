@@ -238,7 +238,26 @@ func (b *Buffer) Redo() (Pos, bool) { return b.undo.redo(b) }
 
 // BreakUndo ends the current undo unit, so subsequent typing starts a new one.
 // The editor calls it on movement, on any non-inserting command, and on save.
-func (b *Buffer) BreakUndo() { b.undo.breakUnit() }
+//
+// It also abandons an undo group left open by a command that bailed out. That
+// bounds the damage to the one command: without it an unclosed group would keep
+// absorbing later edits until a single undo reverted the whole session.
+func (b *Buffer) BreakUndo() { b.undo.endUnit() }
+
+// BeginUndoGroup starts a group: every Insert and Delete until the matching
+// EndUndoGroup undoes and redoes as one unit.
+//
+// A command that composes several primitives needs this. Moving a line is a
+// delete plus an insert, so without grouping five presses of the move key would
+// cost ten presses of undo.
+//
+// Groups nest by depth, so a helper may group its own edits without splitting
+// its caller's group. Pair it with defer, or with EndUndoGroup on every path.
+func (b *Buffer) BeginUndoGroup() { b.undo.beginGroup() }
+
+// EndUndoGroup closes the outermost open group. Calling it with no group open is
+// a no-op, so a stray call cannot corrupt the history.
+func (b *Buffer) EndUndoGroup() { b.undo.endGroup() }
 
 // splitRuneLines splits rs on '\n'. The result always has at least one element,
 // and one more than the number of newlines present.
