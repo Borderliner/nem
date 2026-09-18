@@ -350,7 +350,11 @@ func TestPanelDegenerateAndOffscreenRectsDoNotPanic(t *testing.T) {
 
 // A rect too small to hold an interior draws the border alone, which is what
 // view.MinPanelWidth x MinPanelHeight produces.
-func TestPanelAtTheMinimumSizeDrawsBorderOnly(t *testing.T) {
+func TestPanelAtTheMinimumSizeShowsOneLine(t *testing.T) {
+	// view's minimums include the border a panel always draws, so the smallest
+	// placeable panel has a real interior: one content row, four columns. This
+	// is the invariant that keeps PlacePanel and drawPanel agreeing about what
+	// "usable" means - it previously drew a bare box at the minimum.
 	scr := panelOn(t, 20, 6, Panel{
 		Rect:  view.Rect{X: 0, Y: 0, W: view.MinPanelWidth, H: view.MinPanelHeight},
 		Lines: []PanelLine{{Text: "xyz"}},
@@ -358,8 +362,11 @@ func TestPanelAtTheMinimumSizeDrawsBorderOnly(t *testing.T) {
 	if got := rowText(t, scr, 0); !strings.Contains(got, string(panelTopLeft)) {
 		t.Errorf("row 0 = %q, want a border", got)
 	}
-	if got := rowText(t, scr, 1); strings.Contains(got, "xyz") {
-		t.Errorf("row 1 = %q, want no content - there is no interior", got)
+	if got := rowText(t, scr, 1); !strings.Contains(got, "xyz") {
+		t.Errorf("row 1 = %q, want the content row to show %q", got, "xyz")
+	}
+	if got := rowText(t, scr, view.MinPanelHeight-1); !strings.Contains(got, string(panelBottomLeft)) {
+		t.Errorf("last row = %q, want the bottom border", got)
 	}
 }
 
