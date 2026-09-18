@@ -300,7 +300,7 @@ func otherWindow(e Env) error {
 
 // --- session -------------------------------------------------------------
 
-// keyboardQuit abandons the current operation.
+// keyboardQuit abandons the current operation and deactivates the mark.
 //
 // C-g must never be silent — a quiet C-g leaves the user unsure whether the
 // editor noticed them at all — so this always reports.
@@ -308,13 +308,13 @@ func otherWindow(e Env) error {
 // Cancelling a half-typed prefix such as C-x, or an open minibuffer prompt,
 // happens in the editor's event loop: those states exist only there, and by
 // the time any command runs neither is pending. What remains for this command
-// is the buffer-level case.
+// is the buffer-level case, which is the mark.
 //
-// Deactivating the mark belongs here too, but no mark-active state exists yet:
-// text.Buffer has Mark and SetMark and no notion of whether the region is
-// live. Collapsing the mark onto point would destroy it rather than deactivate
-// it, so this is deliberately left until that state exists.
+// The mark is cleared rather than collapsed onto point: ClearMark deactivates
+// the region while leaving point exactly where the user left it, whereas
+// moving the mark would both destroy it and silently relocate the region.
 func keyboardQuit(e Env) error {
+	e.Buf().ClearMark()
 	e.Echo("Quit")
 	return nil
 }

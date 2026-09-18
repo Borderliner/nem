@@ -828,6 +828,65 @@ func TestKeyboardQuitAlwaysReports(t *testing.T) {
 	}
 }
 
+// C-g deactivates the region, and must do so without disturbing anything else.
+// A keyboard-quit that quietly moved point would be maddening to use and no
+// other test would catch it.
+func TestKeyboardQuitDeactivatesTheMarkAndTouchesNothingElse(t *testing.T) {
+	e := newEnv("first line", "second line", "third line")
+	e.SetPoint(text.Pos{Line: 1, Col: 4})
+	e.Buf().SetMark(text.Pos{Line: 2, Col: 2})
+	if !e.Buf().HasMark() {
+		t.Fatal("precondition: mark was not set")
+	}
+	textBefore := e.Text()
+	pointBefore := e.Point()
+
+	mustRun(t, e, "keyboard-quit")
+
+	if e.Buf().HasMark() {
+		t.Error("the mark is still active after C-g")
+	}
+	if got := e.Text(); got != textBefore {
+		t.Errorf("buffer text changed to %q, want %q", got, textBefore)
+	}
+	if got := e.Point(); got != pointBefore {
+		t.Errorf("point moved to %+v, want it left at %+v", got, pointBefore)
+	}
+}
+
+// A mark deliberately set at the origin is still a mark, so C-g must clear it.
+// This is the case a bare Mark() == Pos{} check gets wrong.
+func TestKeyboardQuitClearsAMarkAtTheOrigin(t *testing.T) {
+	e := newEnv("text")
+	e.Buf().SetMark(text.Pos{})
+	if !e.Buf().HasMark() {
+		t.Fatal("precondition: a mark at the origin should count as set")
+	}
+
+	mustRun(t, e, "keyboard-quit")
+
+	if e.Buf().HasMark() {
+		t.Error("a mark at the origin survived C-g")
+	}
+}
+
+// With no mark set, C-g is still not a no-op: it reports.
+func TestKeyboardQuitWithNoMarkStillReports(t *testing.T) {
+	e := newEnv("text")
+	if e.Buf().HasMark() {
+		t.Fatal("precondition: expected no mark on a fresh buffer")
+	}
+
+	mustRun(t, e, "keyboard-quit")
+
+	if e.Buf().HasMark() {
+		t.Error("C-g somehow created a mark")
+	}
+	if len(e.Echoes) == 0 {
+		t.Error("C-g reported nothing when there was no mark to clear")
+	}
+}
+
 func TestKillTerminalWithNothingModifiedQuitsAtOnce(t *testing.T) {
 	e := newEnv("clean")
 
