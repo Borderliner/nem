@@ -2,7 +2,11 @@ package command_test
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"slices"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/hajianpour/nem/command"
@@ -477,5 +481,243 @@ func TestFakeWhereFindsEveryBinding(t *testing.T) {
 	}
 	if got := f.Where("no-such-command"); got != nil {
 		t.Errorf("Where of unbound command = %v, want nil", got)
+	}
+}
+
+// --- SaveBuffer and full ReadOpts recording -----------------------------
+
+func TestFakeSaveBufferRecordsWhatWouldHitDisk(t *testing.T) {
+	f := commandtest.New("hello")
+	b := f.Buf()
+	b.SetPath("/notes.md")
+	if err := b.Insert(text.Pos{Line: 0, Col: 5}, []rune(" world")); err != nil {
+		t.Fatalf("Insert: %v", err)
+	}
+	if !b.Modified() {
+		t.Fatal("buffer not modified after Insert")
+	}
+
+	if err := f.SaveBuffer(b, ""); err != nil {
+		t.Fatalf("SaveBuffer: %v", err)
+	}
+	if len(f.Saves) != 1 {
+		t.Fatalf("Saves = %d, want 1", len(f.Saves))
+	}
+	got := f.Saves[0]
+	if got.Buf != b || got.Path != "" || got.Content != "hello world" {
+		t.Errorf("Saves[0] = %+v, want buf, empty path, %q", got, "hello world")
+	}
+	if b.Modified() {
+		t.Error("buffer still reports modified after a successful save")
+	}
+}
+
+func TestFakeSaveBufferWithPathAdoptsIt(t *testing.T) {
+	f := commandtest.New("contents")
+	b := f.Buf()
+
+	if err := f.SaveBuffer(b, "/tmp/adopted.txt"); err != nil {
+		t.Fatalf("SaveBuffer: %v", err)
+	}
+	if b.Path() != "/tmp/adopted.txt" {
+		t.Errorf("Path() = %q, want the adopted path (this is write-file)", b.Path())
+	}
+	if got := f.BufferName(b); got != "adopted.txt" {
+		t.Errorf("BufferName = %q, want adopted.txt", got)
+	}
+}
+
+func TestFakeSaveBufferWithoutAnyPathFails(t *testing.T) {
+	f := commandtest.New("unnamed")
+	if err := f.SaveBuffer(f.Buf(), ""); !errors.Is(err, text.ErrNoPath) {
+		t.Errorf("SaveBuffer of a path-less buffer = %v, want text.ErrNoPath", err)
+	}
+	// Even a failed save is recorded: a test asserting "no save was attempted"
+	// must be able to tell that apart from "a save was attempted and failed".
+	if len(f.Saves) != 1 {
+		t.Errorf("Saves = %d, want the attempt recorded", len(f.Saves))
+	}
+}
+
+func TestFakeSaveErrIsOneShot(t *testing.T) {
+	f := commandtest.New("data")
+	b := f.Buf()
+	b.SetPath("/x.txt")
+	if err := b.Insert(text.Pos{Line: 0, Col: 4}, []rune("!")); err != nil {
+		t.Fatalf("Insert: %v", err)
+	}
+	if !b.Modified() {
+		t.Fatal("precondition: buffer should be modified before the save")
+	}
+
+	boom := errors.New("disk full")
+	f.SaveErr = boom
+
+	if err := f.SaveBuffer(b, ""); !errors.Is(err, boom) {
+		t.Fatalf("first save = %v, want the injected error", err)
+	}
+	if !b.Modified() {
+		t.Error("buffer marked unmodified despite a failed save — that would lose the user's work silently")
+	}
+	// Cleared, so a command that retries can succeed.
+	if err := f.SaveBuffer(b, ""); err != nil {
+		t.Errorf("second save = %v, want nil (SaveErr must be one-shot)", err)
+	}
+}
+
+func TestFakeSaveNeverTouchesTheFileSystemAndStaysSelfConsistent(t *testing.T) {
+	f := commandtest.New("payload")
+	b := f.Buf()
+
+	// A path no test process could write to. A real save would fail here; the
+	// fake must not care, because it never goes near the disk.
+	const path = "/proc/definitely/not/writable/x.txt"
+	if err := f.SaveBuffer(b, path); err != nil {
+		t.Fatalf("SaveBuffer to an unwritable path = %v, want nil (fake must not touch disk)", err)
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Fatal("the fake created a real file")
+	}
+
+	// Saving then reopening the same path must agree.
+	reopened, err := f.OpenFile(path)
+	if err != nil {
+		t.Fatalf("OpenFile: %v", err)
+	}
+	if reopened.String() != "payload" {
+		t.Errorf("reopened content = %q, want %q", reopened.String(), "payload")
+	}
+}
+
+func TestFakeRecordsFullReadOptsIncludingCompletionCandidates(t *testing.T) {
+	// This is the case that drove recording ReadOpts rather than just the
+	// prompt: asserting that switch-to-buffer offers the right candidates.
+	f := commandtest.New("scratch")
+	f.AddBuffer("notes.md")
+	f.AddBuffer("nem.go")
+	f.Replies = []string{"notes.md"}
+
+	// A stand-in for switch-to-buffer's prompt.
+	err := f.Reg.Register(command.Command{
+		Name: "fake-switch-to-buffer",
+		Fn: func(e command.Env) error {
+			_, err := e.ReadString(command.ReadOpts{
+				Prompt:  "Switch to buffer: ",
+				Initial: "*scratch*",
+				Complete: func(prefix string) []string {
+					var out []string
+					for _, b := range e.Buffers() {
+						if name := e.BufferName(b); strings.HasPrefix(name, prefix) {
+							out = append(out, name)
+						}
+					}
+					sort.Strings(out)
+					return out
+				},
+			})
+			return err
+		},
+	})
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if err := f.Run("fake-switch-to-buffer"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if len(f.Reads) != 1 {
+		t.Fatalf("Reads = %d, want 1", len(f.Reads))
+	}
+	opts := f.Reads[0]
+	if opts.Prompt != "Switch to buffer: " {
+		t.Errorf("Prompt = %q", opts.Prompt)
+	}
+	if opts.Initial != "*scratch*" {
+		t.Errorf("Initial = %q, want *scratch* (pre-fill is now assertable)", opts.Initial)
+	}
+	if opts.Complete == nil {
+		t.Fatal("Complete was not recorded")
+	}
+	if got := opts.Complete("n"); !slices.Equal(got, []string{"nem.go", "notes.md"}) {
+		t.Errorf("candidates for %q = %v, want [nem.go notes.md]", "n", got)
+	}
+	if got := opts.Complete("notes"); !slices.Equal(got, []string{"notes.md"}) {
+		t.Errorf("candidates for %q = %v, want [notes.md]", "notes", got)
+	}
+	// The prompt-only recorder still works, since many tests only count.
+	if !slices.Equal(f.Prompts, []string{"Switch to buffer: "}) {
+		t.Errorf("Prompts = %v", f.Prompts)
+	}
+}
+
+// --- Seq.LastRune and the shared boundary conditions --------------------
+
+func TestFakeSeqLastRuneDrivesSelfInsert(t *testing.T) {
+	// self-insert-command is the one command whose behaviour depends on which
+	// key ran it. Seq.LastRune carries that, so it can be an ordinary
+	// registered command rather than something only the event loop can call.
+	f := commandtest.New("")
+
+	err := f.Reg.Register(command.Command{
+		Name:        "fake-self-insert",
+		Interactive: true,
+		Fn: func(e command.Env) error {
+			r := e.Seq().LastRune
+			if r == 0 {
+				return errors.New("no triggering rune")
+			}
+			n, _ := e.Arg()
+			w := e.Win()
+			for range n {
+				if err := w.Buf.Insert(w.Pt, []rune{r}); err != nil {
+					return err
+				}
+				w.Pt.Col++
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	// The event loop's job, emulated: set the rune, then dispatch.
+	f.Seq().LastRune = 'x'
+	f.ArgN = 3
+	if err := f.Run("fake-self-insert"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := f.Text(); got != "xxx" {
+		t.Errorf("Text() = %q, want %q (C-u 3 x)", got, "xxx")
+	}
+
+	// A different key next time inserts that key, not the previous one.
+	f.Seq().LastRune = 'y'
+	f.ArgN = 1
+	if err := f.Run("fake-self-insert"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := f.Text(); got != "xxxy" {
+		t.Errorf("Text() = %q, want %q", got, "xxxy")
+	}
+
+	// And it is reachable by name, which is the point: M-x and Lua can bind it.
+	if !slices.Contains(f.CommandNames(), "fake-self-insert") {
+		t.Error("a self-inserting command is not reachable from M-x")
+	}
+}
+
+func TestBoundaryConditionsAreDistinctAndMatchable(t *testing.T) {
+	// These exist so the dispatcher can tell a harmless boundary from a real
+	// failure via errors.Is, including through a wrap.
+	if errors.Is(command.ErrEndOfBuffer, command.ErrBeginningOfBuffer) {
+		t.Error("the two boundary conditions are not distinct")
+	}
+	wrapped := fmt.Errorf("next-line: %w", command.ErrEndOfBuffer)
+	if !errors.Is(wrapped, command.ErrEndOfBuffer) {
+		t.Error("ErrEndOfBuffer does not survive wrapping")
+	}
+	if errors.Is(wrapped, command.ErrQuit) {
+		t.Error("a boundary condition matched ErrQuit")
 	}
 }

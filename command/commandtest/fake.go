@@ -41,6 +41,14 @@ var (
 	ErrLastBuffer = errors.New("commandtest: cannot kill the last buffer")
 )
 
+// Save records one call to SaveBuffer: which buffer, the path requested, and
+// the content that would have reached disk.
+type Save struct {
+	Buf     *text.Buffer
+	Path    string // as passed to SaveBuffer; empty means the buffer's own path
+	Content string // the buffer's text at the moment of the save
+}
+
 // Fake is an in-memory command.Env.
 //
 // Fields fall into two groups: knobs a test sets before running a command, and
@@ -81,11 +89,28 @@ type Fake struct {
 	// Echoes holds every formatted message passed to Echo.
 	Echoes []string
 
-	// Prompts, CharPrompts and KeyPrompts hold the prompt strings each read
-	// method was called with, in order.
+	// Reads holds the full ReadOpts of every ReadString call, in order, so a
+	// test can assert on completion candidates and on Initial pre-fill rather
+	// than only on the prompt text. Without this every command test that cares
+	// about completion has to embed the Fake and override ReadString.
+	Reads []command.ReadOpts
+
+	// Prompts, CharPrompts and KeyPrompts hold just the prompt strings each
+	// read method was called with, in order. Prompts is redundant with Reads
+	// but kept because len(f.Prompts) reads better than len(f.Reads) in the
+	// many tests that only count prompts.
 	Prompts     []string
 	CharPrompts []string
 	KeyPrompts  []string
+
+	// Saves records every SaveBuffer call. Nothing reaches the real file
+	// system: a save updates Files so that a later OpenFile of the same path
+	// sees the saved content, which keeps the fake self-consistent.
+	Saves []Save
+
+	// SaveErr, when non-nil, is returned by the next SaveBuffer call and then
+	// cleared, so a test can fail exactly one save.
+	SaveErr error
 
 	// Splits records the vertical flag of each SplitWindow call.
 	Splits []bool
@@ -217,6 +242,7 @@ func (f *Fake) Seq() *command.Seq { return &f.seq }
 // reply — "f", "fo", "foo" — rather than once with the final value, so an
 // incremental-search command is exercised the way real typing would drive it.
 func (f *Fake) ReadString(opts command.ReadOpts) (string, error) {
+	f.Reads = append(f.Reads, opts)
 	f.Prompts = append(f.Prompts, opts.Prompt)
 	if len(f.Replies) == 0 {
 		return "", fmt.Errorf("%w: %q", ErrNoReply, opts.Prompt)
@@ -353,6 +379,32 @@ func (f *Fake) KillBuffer(b *text.Buffer) error {
 		}
 	}
 	return fmt.Errorf("commandtest: buffer not live")
+}
+
+// SaveBuffer records the save and emulates its effect without touching the
+// real file system: the buffer adopts a non-empty path, is marked unmodified,
+// and Files gains its content so a later OpenFile of that path agrees.
+func (f *Fake) SaveBuffer(b *text.Buffer, path string) error {
+	target := path
+	if target == "" {
+		target = b.Path()
+	}
+	f.Saves = append(f.Saves, Save{Buf: b, Path: path, Content: b.String()})
+
+	if err := f.SaveErr; err != nil {
+		f.SaveErr = nil
+		return err
+	}
+	if target == "" {
+		return text.ErrNoPath
+	}
+	if path != "" {
+		b.SetPath(path)
+		f.names[b] = basename(path)
+	}
+	f.Files[target] = b.String()
+	b.SetModified(false)
+	return nil
 }
 
 // --- command.Env: windows ---

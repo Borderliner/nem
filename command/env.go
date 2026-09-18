@@ -55,6 +55,17 @@ var (
 	// ErrUnknownCommand is returned by Env.Run and Registry.Run for a name
 	// that is not registered.
 	ErrUnknownCommand = errors.New("no such command")
+
+	// ErrBeginningOfBuffer and ErrEndOfBuffer report that point could not move
+	// because it already sits at a boundary.
+	//
+	// These are conditions rather than faults: a caller normally reports one
+	// through Echo and carries on rather than treating it as a failure. They
+	// are declared here, exported, rather than privately in whichever file
+	// raises them, so that the dispatcher can tell a harmless boundary from a
+	// genuine error with errors.Is across package boundaries.
+	ErrBeginningOfBuffer = errors.New("beginning of buffer")
+	ErrEndOfBuffer       = errors.New("end of buffer")
 )
 
 // Seq holds state that spans consecutive commands.
@@ -77,6 +88,21 @@ type Seq struct {
 	// RecenterCycle is recenter-top-bottom's position in its centre, top,
 	// bottom cycle across successive C-l presses.
 	RecenterCycle int
+
+	// LastRune is the rune of the key that triggered the current command. The
+	// event loop sets it immediately before dispatch.
+	//
+	// It is meaningful only for a command invoked by a self-inserting key, and
+	// self-insert-command is the one command that needs it: it must insert the
+	// character that was typed, and nothing else in Env reports which key ran
+	// the command. ReadKey would prompt the user, which is not the same thing
+	// at all.
+	//
+	// Carrying this here rather than as an Env method is what lets
+	// self-insert-command be an ordinary registered command, reachable from
+	// M-x and bindable from Lua, instead of a stub that only the event loop
+	// can call.
+	LastRune rune
 }
 
 // CompleteFunc returns the candidate completions for a minibuffer prefix.
@@ -197,6 +223,15 @@ type Env interface {
 	// KillBuffer removes a buffer from the live list. It is an error to kill
 	// the last remaining buffer.
 	KillBuffer(b *text.Buffer) error
+
+	// SaveBuffer writes b to disk. An empty path saves to b's own path; a
+	// non-empty path saves there and adopts it, which is write-file.
+	//
+	// Commands go through Env rather than calling text.Buffer.Save directly so
+	// that tests can intercept saves and inject failures. That matters more
+	// here than anywhere else in this interface: saving is the one operation
+	// where a bug costs the user the work they were trying to protect.
+	SaveBuffer(b *text.Buffer, path string) error
 
 	// --- windows ---------------------------------------------------------
 
