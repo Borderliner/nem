@@ -292,3 +292,28 @@ func TestUnsetAnchorIsRefused(t *testing.T) {
 		t.Error("PlacePanel with no Anchor returned ok; want refusal so a forgotten field is caught")
 	}
 }
+
+// A placement that reports ok must be big enough to draw something in. A panel
+// always draws a one-cell border, so the minimums have to include it - otherwise
+// PlacePanel succeeds for a rect whose interior is empty and the drawer renders
+// a bare box. Placement and drawing must agree about what "usable" means.
+func TestPlacedPanelCanHoldContent(t *testing.T) {
+	for _, frame := range []Rect{
+		{W: 6, H: 3}, {W: 7, H: 4}, {W: 10, H: 5}, {W: 80, H: 23}, {W: 200, H: 60},
+	} {
+		for _, a := range []Anchor{AnchorPoint, AnchorBottom, AnchorCenter} {
+			got, ok := PlacePanel(PanelReq{W: 1, H: 1, Anchor: a, Frame: frame})
+			if !ok {
+				continue
+			}
+			if interior := got.H - 2; interior < 1 {
+				t.Errorf("frame %v anchor %v: rect %v has %d content rows, want at least 1",
+					frame, a, got, interior)
+			}
+			if interior := got.W - 2; interior < 4 {
+				t.Errorf("frame %v anchor %v: rect %v has %d content columns, want at least 4",
+					frame, a, got, interior)
+			}
+		}
+	}
+}

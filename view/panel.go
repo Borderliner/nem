@@ -7,8 +7,13 @@ package view
 // worth drawing. Four columns is the least that can show a truncated candidate
 // and still read as a list rather than as noise.
 const (
-	MinPanelWidth  = 4
-	MinPanelHeight = 2
+	// Minimums include the one-cell border a panel always draws, so a placement
+	// that reports ok can show at least one line of content in at least four
+	// columns. Sizing these to the border alone would let PlacePanel succeed for
+	// a panel that structurally cannot display anything - placement and drawing
+	// would then disagree about what "usable" means.
+	MinPanelWidth  = 6 // 4 content columns
+	MinPanelHeight = 3 // 1 content row
 )
 
 // Anchor says where a panel wants to sit.
