@@ -1,0 +1,474 @@
+// Package editor wires nem together and owns the event loop.
+//
+// It is the only package that knows about every other one: it implements
+// command.Env so commands can act, drives keymap lookup over decoded tcell
+// events, arranges windows through view, and draws through ui. Nothing imports
+// it, which is what lets every other package stay testable without a terminal.
+//
+// Two responsibilities live here and nowhere else, both because putting them
+// anywhere else means someone eventually forgets one:
+//
+//   - Cross-command bookkeeping at dispatch. Breaking the kill run, resetting
+//     the goal column and recording the last command name all happen in one
+//     place, so no command has to remember them. See dispatch.
+//   - The minibuffer. A prompt is a real text.Buffer in a real view.Window, so
+//     C-a, C-e, C-k and the kill ring work inside prompts with no extra code.
+//     See minibuffer.go.
+package editor
+
+import (
+	"errors"
+	"fmt"
+	"path/filepath"
+	"sort"
+
+	"github.com/gdamore/tcell/v2"
+	"github.com/hajianpour/nem/command"
+	"github.com/hajianpour/nem/keymap"
+	"github.com/hajianpour/nem/lua"
+	"github.com/hajianpour/nem/text"
+	"github.com/hajianpour/nem/ui"
+	"github.com/hajianpour/nem/view"
+)
+
+// A drifting Env breaks the build here, loudly, rather than in whichever
+// command happens to be compiled first.
+var _ command.Env = (*Editor)(nil)
+
+// ErrTooDeep reports that minibuffer recursion hit its limit. It exists so a
+// runaway Lua hook that prompts from inside a prompt fails cleanly instead of
+// growing the Go stack until the process dies.
+var ErrTooDeep = errors.New("minibuffer recursion too deep")
+
+// maxMiniDepth caps nested prompts. Emacs allows recursive minibuffers and so
+// does nem; eight is far past any legitimate depth and well short of trouble.
+const maxMiniDepth = 8
+
+// Editor is one editing session: the buffers, the windows onto them, and the
+// machinery that turns keystrokes into commands.
+//
+// It is not safe for concurrent use, deliberately. Everything — command
+// dispatch, keymap mutation and Lua execution — runs on the goroutine that
+// polls for events, which is why keymap.Map and command.KillRing need no locks.
+type Editor struct {
+	reg  *command.Registry
+	keys *keymap.Map
+
+	// buffers is most-recently-visited first, which is the order C-x b offers.
+	// names and byName are two directions of the same mapping: display names
+	// are an editor concept, because a text.Buffer has only a path.
+	buffers []*text.Buffer
+	names   map[*text.Buffer]string
+	byName  map[string]*text.Buffer
+
+	tree   *view.Tree
+	active *view.Window
+
+	ring    *command.KillRing
+	seq     command.Seq
+	lastCmd string
+
+	echo string
+
+	scr tcell.Screen
+	th  ui.Theme
+
+	// arg collects the universal argument between C-u and the command it
+	// modifies.
+	arg argState
+
+	// pending holds the keys of a partially typed sequence, so C-x waits for
+	// its second key.
+	pending []keymap.Key
+
+	// mini is the innermost active prompt, or nil when none is. miniDepth
+	// counts nesting for the recursion guard.
+	mini      *miniState
+	miniDepth int
+
+	// miniTransparent makes Win report the text window even while a prompt is
+	// open. Only withTextWindow sets it, for search-as-you-type; see the note
+	// there.
+	miniTransparent bool
+
+	// childDispatched reports that a nested dispatch already did the
+	// cross-command bookkeeping, so an outer one must not repeat it. See
+	// dispatch.
+	childDispatched bool
+
+	// isearch is the session the minibuffer's C-s and C-r drive. See the note
+	// on ReadString about why the editor owns it.
+	isearch    *command.Isearch
+	wantSearch *bool // set by dispatch when an isearch command is running
+
+	before map[string][]func()
+	after  map[string][]func()
+
+	// host is the Lua interpreter, nil until LoadConfig runs.
+	host *lua.Host
+
+	quit bool
+}
+
+// New returns an editor with every built-in command registered, the default
+// bindings installed, and a single window on an empty *scratch* buffer.
+//
+// scr may be nil for tests that drive dispatch without drawing; Run requires a
+// real screen.
+func New(scr tcell.Screen) (*Editor, error) {
+	reg, err := command.NewDefaultRegistry()
+	if err != nil {
+		return nil, fmt.Errorf("registering commands: %w", err)
+	}
+	km := keymap.New()
+	if err := InstallDefaultBindings(km); err != nil {
+		return nil, fmt.Errorf("installing bindings: %w", err)
+	}
+
+	th := ui.DefaultTheme()
+	e := &Editor{
+		reg:    reg,
+		keys:   km,
+		names:  map[*text.Buffer]string{},
+		byName: map[string]*text.Buffer{},
+		ring:   command.NewKillRing(command.DefaultCapacity),
+		th:     th,
+		scr:    scr,
+		before: map[string][]func(){},
+		after:  map[string][]func(){},
+	}
+
+	scratch := e.NewBuffer(ui.ScratchName)
+	e.active = view.NewWindow(scratch)
+	e.tree = view.NewTree(e.active)
+	return e, nil
+}
+
+// Registry exposes the command table so the Lua layer can register commands
+// into the same table the built-ins live in.
+func (e *Editor) Registry() *command.Registry { return e.reg }
+
+// Keymap exposes the global keymap so the Lua layer can rebind keys. Mutating
+// it is safe only from the input goroutine, which is where config loading runs.
+func (e *Editor) Keymap() *keymap.Map { return e.keys }
+
+// --- the active view -----------------------------------------------------
+
+// Win returns the minibuffer's window while a prompt is active, and the active
+// text window otherwise.
+//
+// This one substitution is what makes editing commands work inside a prompt:
+// C-a, C-e, C-k and yank all act on whatever Win reports, so a prompt needs no
+// parallel implementation of any of them.
+func (e *Editor) Win() *view.Window {
+	if e.mini != nil && !e.miniTransparent {
+		return e.mini.win
+	}
+	return e.active
+}
+
+// Buf returns the active window's buffer.
+func (e *Editor) Buf() *text.Buffer { return e.Win().Buf }
+
+// TextHeight reports the rows of buffer text the active window shows. A prompt
+// is a single row.
+func (e *Editor) TextHeight() int {
+	if e.mini != nil && !e.miniTransparent {
+		return 1
+	}
+	if e.scr == nil {
+		return 24
+	}
+	w, h := e.scr.Size()
+	rect, ok := e.tree.Layout(w, h-1)[e.active]
+	if !ok {
+		return 1
+	}
+	if th := view.TextHeight(rect); th > 0 {
+		return th
+	}
+	return 1
+}
+
+// --- the universal argument ----------------------------------------------
+
+// Arg reports the prefix argument for the command being dispatched.
+func (e *Editor) Arg() (int, bool) { return e.arg.value() }
+
+// --- the kill ring -------------------------------------------------------
+
+func (e *Editor) KillForward(s string)  { e.ring.KillForward(s) }
+func (e *Editor) KillBackward(s string) { e.ring.KillBackward(s) }
+func (e *Editor) Yank() (string, error) { return e.ring.Yank() }
+
+func (e *Editor) YankPop() (string, error) { return e.ring.YankPop() }
+
+// Ring exposes the kill ring for tests and for the Lua layer.
+func (e *Editor) Ring() *command.KillRing { return e.ring }
+
+// --- command sequencing --------------------------------------------------
+
+func (e *Editor) LastCommand() string { return e.lastCmd }
+func (e *Editor) Seq() *command.Seq   { return &e.seq }
+
+// --- the echo area -------------------------------------------------------
+
+// Echo shows a message on the bottom row.
+func (e *Editor) Echo(format string, a ...any) {
+	e.echo = fmt.Sprintf(format, a...)
+}
+
+// Message returns the current echo-area text, for tests.
+func (e *Editor) Message() string { return e.echo }
+
+// --- buffers -------------------------------------------------------------
+
+// Buffers lists live buffers, most recently visited first.
+func (e *Editor) Buffers() []*text.Buffer {
+	out := make([]*text.Buffer, len(e.buffers))
+	copy(out, e.buffers)
+	return out
+}
+
+// BufferName returns b's display name.
+func (e *Editor) BufferName(b *text.Buffer) string { return e.names[b] }
+
+// BufferByName finds a buffer by display name.
+func (e *Editor) BufferByName(name string) (*text.Buffer, bool) {
+	b, ok := e.byName[name]
+	return b, ok
+}
+
+// NewBuffer creates a file-less buffer under name, or returns the existing one
+// if that name is taken — so list-buffers reuses its buffer instead of piling
+// up a new one per invocation.
+func (e *Editor) NewBuffer(name string) *text.Buffer {
+	if b, ok := e.byName[name]; ok {
+		return b
+	}
+	b := text.NewBuffer()
+	e.adopt(b, name)
+	return b
+}
+
+// OpenFile returns the buffer visiting path, reading it if it is not open yet.
+// A path that does not exist yields an empty buffer carrying it, which is how
+// find-file creates a new file.
+func (e *Editor) OpenFile(path string) (*text.Buffer, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		abs = path
+	}
+	for _, b := range e.buffers {
+		if b.Path() == abs {
+			e.touch(b)
+			return b, nil
+		}
+	}
+	b, err := text.LoadFile(abs)
+	if err != nil {
+		return nil, err
+	}
+	b.SetPath(abs)
+	e.adopt(b, e.uniqueName(filepath.Base(abs)))
+	return b, nil
+}
+
+// KillBuffer removes b from the live list, refusing to remove the last one.
+//
+// Any window showing b is moved to another buffer first: leaving a window
+// pointing at a dead buffer would be a nil-buffer panic on the next redraw.
+func (e *Editor) KillBuffer(b *text.Buffer) error {
+	if len(e.buffers) <= 1 {
+		return errors.New("cannot kill the last buffer")
+	}
+	var repl *text.Buffer
+	for _, c := range e.buffers {
+		if c != b {
+			repl = c
+			break
+		}
+	}
+	for _, w := range e.tree.Windows() {
+		if w.Buf == b {
+			w.Visit(repl)
+		}
+	}
+	delete(e.byName, e.names[b])
+	delete(e.names, b)
+	for i, c := range e.buffers {
+		if c == b {
+			e.buffers = append(e.buffers[:i], e.buffers[i+1:]...)
+			break
+		}
+	}
+	return nil
+}
+
+// SaveBuffer writes b to disk. An empty path saves to b's own path; a non-empty
+// path saves there and adopts it.
+//
+// On failure the buffer must come out exactly as it went in: still modified,
+// and still pointing at its old path. text.Buffer.SaveAs assigns the path
+// before attempting the write, so a failed write would otherwise leave the
+// buffer claiming a file it was never written to — and the user would then
+// believe a later successful C-x C-s had saved somewhere it had not.
+func (e *Editor) SaveBuffer(b *text.Buffer, path string) error {
+	if path == "" {
+		return b.Save()
+	}
+	old := b.Path()
+	if err := b.SaveAs(path); err != nil {
+		b.SetPath(old)
+		return err
+	}
+	if name := e.uniqueNameFor(b, filepath.Base(path)); name != "" {
+		delete(e.byName, e.names[b])
+		e.names[b] = name
+		e.byName[name] = b
+	}
+	return nil
+}
+
+// adopt registers b as a live buffer under name, most recently visited first.
+func (e *Editor) adopt(b *text.Buffer, name string) {
+	e.buffers = append([]*text.Buffer{b}, e.buffers...)
+	e.names[b] = name
+	e.byName[name] = b
+}
+
+// touch moves b to the front of the visited order.
+func (e *Editor) touch(b *text.Buffer) {
+	for i, c := range e.buffers {
+		if c == b {
+			e.buffers = append([]*text.Buffer{b}, append(e.buffers[:i:i], e.buffers[i+1:]...)...)
+			return
+		}
+	}
+}
+
+// uniqueName disambiguates a display name the way emacs does, so two files
+// with the same basename in different directories remain distinguishable.
+func (e *Editor) uniqueName(base string) string {
+	if base == "" {
+		base = ui.ScratchName
+	}
+	if _, taken := e.byName[base]; !taken {
+		return base
+	}
+	for n := 2; ; n++ {
+		cand := fmt.Sprintf("%s<%d>", base, n)
+		if _, taken := e.byName[cand]; !taken {
+			return cand
+		}
+	}
+}
+
+// uniqueNameFor is uniqueName, except that b keeping its current name is not a
+// collision with itself. It returns "" when no rename is needed.
+func (e *Editor) uniqueNameFor(b *text.Buffer, base string) string {
+	if cur, ok := e.names[b]; ok && cur == base {
+		return ""
+	}
+	if holder, taken := e.byName[base]; taken && holder == b {
+		return ""
+	}
+	return e.uniqueName(base)
+}
+
+// --- windows -------------------------------------------------------------
+
+// SplitWindow splits the active window and selects the new half.
+func (e *Editor) SplitWindow(vertical bool) error {
+	w, err := e.tree.Split(e.active, vertical)
+	if err != nil {
+		return err
+	}
+	e.active = w
+	return nil
+}
+
+// OtherWindow moves the selection n windows along the cycle, wrapping.
+func (e *Editor) OtherWindow(n int) {
+	ws := e.tree.Windows()
+	if len(ws) < 2 {
+		return
+	}
+	cur := 0
+	for i, w := range ws {
+		if w == e.active {
+			cur = i
+			break
+		}
+	}
+	i := (cur + n) % len(ws)
+	if i < 0 {
+		i += len(ws)
+	}
+	e.active = ws[i]
+}
+
+// DeleteWindow removes the active window, refusing to remove the sole one.
+func (e *Editor) DeleteWindow() error {
+	if err := e.tree.Delete(e.active); err != nil {
+		return err
+	}
+	e.active = e.tree.Windows()[0]
+	return nil
+}
+
+// DeleteOtherWindows makes the active window fill the frame.
+func (e *Editor) DeleteOtherWindows() { e.tree.DeleteOthers(e.active) }
+
+// Tree exposes the window tree for tests.
+func (e *Editor) Tree() *view.Tree { return e.tree }
+
+// Active returns the selected window.
+func (e *Editor) Active() *view.Window { return e.active }
+
+// --- commands and bindings -----------------------------------------------
+
+// Run invokes another command by name. This is M-x's mechanism and Lua's
+// nem.run.
+//
+// It routes through dispatch so the invoked command gets the same bookkeeping
+// as a keystroke would — otherwise M-x kill-line would leave the kill run open
+// and fuse with the next kill.
+func (e *Editor) Run(name string) error {
+	if _, ok := e.reg.Lookup(name); !ok {
+		return fmt.Errorf("%w: %q", command.ErrUnknownCommand, name)
+	}
+	return e.dispatch(name)
+}
+
+// CommandNames lists interactive command names, sorted, for M-x completion.
+func (e *Editor) CommandNames() []string { return e.reg.Names() }
+
+// Bindings maps key sequences to command names, for describe-bindings.
+func (e *Editor) Bindings() map[string]string { return e.keys.Bindings() }
+
+// Where lists the sequences bound to a command, for describe-key.
+func (e *Editor) Where(cmd string) []string { return e.keys.Where(cmd) }
+
+// --- session -------------------------------------------------------------
+
+// Quit ends the session, refusing without force while any buffer is modified.
+func (e *Editor) Quit(force bool) error {
+	if !force {
+		var dirty []string
+		for _, b := range e.buffers {
+			if b.Modified() {
+				dirty = append(dirty, e.names[b])
+			}
+		}
+		if len(dirty) > 0 {
+			sort.Strings(dirty)
+			return fmt.Errorf("unsaved changes in %v", dirty)
+		}
+	}
+	e.quit = true
+	return nil
+}
+
+// Quitting reports whether the session has been asked to end, for tests.
+func (e *Editor) Quitting() bool { return e.quit }
