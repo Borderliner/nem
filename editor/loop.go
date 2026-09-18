@@ -39,6 +39,16 @@ func (e *Editor) Loop() error {
 	// behind however it returns.
 	defer close(quit)
 
+	// Autosave is driven from here rather than from a goroutine: the editor's
+	// state is touched by exactly one consumer and that invariant is what keeps
+	// keymap, the kill ring and Lua lock-free.
+	var tick <-chan time.Time
+	if e.safe.idle > 0 {
+		t := time.NewTicker(e.safe.idle)
+		defer t.Stop()
+		tick = t.C
+	}
+
 	e.Redraw()
 	for !e.quit {
 		var fire <-chan time.Time
@@ -56,9 +66,16 @@ func (e *Editor) Loop() error {
 			if !ok {
 				return nil // the screen finalized underneath us
 			}
+			e.NoteInput(time.Now())
 			e.HandleEvent(ev)
 		case <-fire:
 			e.fireWhichKey()
+		case now := <-tick:
+			// Reported through the echo area by RunAutosave itself; a failure
+			// must not stop the loop.
+			if e.AutosaveDue(now) {
+				_ = e.RunAutosave(now)
+			}
 		}
 		e.Redraw()
 	}
@@ -75,6 +92,11 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 			return // nothing could name this key; ignore it
 		}
 		e.HandleKey(k)
+	case *tcell.EventClipboard:
+		// The terminal's answer to GetClipboard. Routed here rather than in the
+		// loop because ReadChar and ReadKey forward non-key events to
+		// HandleEvent, so a reply arriving during a prompt is not lost.
+		e.SetClipboardReply(ev.Data())
 	case *tcell.EventResize:
 		// Nothing to recompute: layout is derived from the screen size on every
 		// frame, so a resize is just a redraw. A degenerate size is handled by
@@ -315,22 +337,31 @@ func (e *Editor) clampWindowPoints() {
 }
 
 // Redraw paints one frame. Exported so tests can assert on rendered output.
-func (e *Editor) Redraw() {
-	if e.scr == nil {
-		return
-	}
+// frame builds the frame for the current state. It is the single place a frame
+// is constructed, so what a test asserts on and what Redraw paints cannot drift
+// apart - a prompt used to build its own frame separately and that duplication
+// was already diverging.
+func (e *Editor) frame() ui.Frame {
 	f := ui.Frame{Tree: e.tree, Active: e.active, Echo: e.echo}
 	if e.mini != nil {
 		f.Echo = e.mini.line()
 		f.MiniPt = e.mini.cursorCol()
 		f.MiniOn = true
 	}
-	// Panel sources append here. Which-key is one; a prompt rendering its
-	// completion list into a panel is another.
+	// Panel sources append here. A prompt rendering its completion list is one;
+	// which-key is another. They are mutually exclusive in practice, since
+	// which-key does not arm while a prompt is open.
+	e.decorateWithCompletion(&f)
 	if p := e.whichKeyPanel(); p != nil {
 		f.Panels = append(f.Panels, *p)
 	}
+	return f
+}
 
-	ui.Render(e.scr, f, e.th)
+func (e *Editor) Redraw() {
+	if e.scr == nil {
+		return
+	}
+	ui.Render(e.scr, e.frame(), e.th)
 	e.scr.Show()
 }

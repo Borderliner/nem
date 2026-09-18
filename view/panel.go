@@ -2,7 +2,7 @@ package view
 
 // Minimum usable panel size.
 //
-// Two rows is the least that can show a prompt plus one candidate; a one-row
+// Three rows is the least that can show a prompt plus one candidate; a one-row
 // panel says nothing the echo row does not already say better, so it is never
 // worth drawing. Four columns is the least that can show a truncated candidate
 // and still read as a list rather than as noise.

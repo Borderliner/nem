@@ -85,6 +85,11 @@ type Editor struct {
 	// whichkey.go; it describes whatever pending holds.
 	wk whichKeyState
 
+	// comp holds completion preferences from the config. They are applied when a
+	// panel is built rather than when a session starts, so a reload takes effect
+	// on the next frame instead of needing an open prompt to be rebuilt.
+	comp completionPrefs
+
 	// mini is the innermost active prompt, or nil when none is. miniDepth
 	// counts nesting for the recursion guard.
 	mini      *miniState
@@ -142,8 +147,22 @@ func New(scr tcell.Screen) (*Editor, error) {
 		th:     th,
 		scr:    scr,
 		safe:   newSafety(),
+		comp:   defaultCompletionPrefs(),
 		before: map[string][]func(){},
 		after:  map[string][]func(){},
+	}
+
+	// recover-file closes over the editor rather than going through Env. It is
+	// the only command that needs editor-specific state (the autosave store), and
+	// adding a 31st Env method to serve one command would widen an interface that
+	// sixty other commands share.
+	if err := reg.Register(command.Command{
+		Name:        "recover-file",
+		Doc:         "Replace this buffer with its autosaved contents.",
+		Interactive: true,
+		Fn:          func(command.Env) error { return e.RecoverFile(e.Buf()) },
+	}); err != nil {
+		return nil, fmt.Errorf("registering recover-file: %w", err)
 	}
 
 	scratch := e.NewBuffer(ui.ScratchName)

@@ -169,7 +169,7 @@ func (e *Editor) ReadString(opts command.ReadOpts) (string, error) {
 
 // readLoop is the nested event loop a prompt runs in.
 func (e *Editor) readLoop(ms *miniState) {
-	e.redrawPrompt()
+	e.Redraw()
 	for !ms.done && !e.quit {
 		ev := e.scr.PollEvent()
 		if ev == nil {
@@ -177,7 +177,7 @@ func (e *Editor) readLoop(ms *miniState) {
 			return
 		}
 		e.HandleEvent(ev)
-		e.redrawPrompt()
+		e.Redraw()
 	}
 }
 

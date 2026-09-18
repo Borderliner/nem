@@ -31,6 +31,11 @@ func newTestEditor(t *testing.T, lines ...string) (*Editor, tcell.SimulationScre
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	// New builds a backup store at the real $XDG_STATE_HOME/nem, so without this
+	// any test that saves over an existing file would write into the developer's
+	// home directory.
+	e.SetBackupRoot(t.TempDir())
+
 	if len(lines) > 0 {
 		b := e.Buf()
 		if err := b.Insert(text.Pos{}, []rune(strings.Join(lines, "\n"))); err != nil {

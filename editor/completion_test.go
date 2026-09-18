@@ -275,7 +275,7 @@ func TestTinyFrameFallsBackToTheEchoRow(t *testing.T) {
 	}
 
 	// And the frame the renderer receives must still carry the prompt.
-	f := e.promptFrame()
+	f := e.frame()
 	if !f.MiniOn {
 		t.Error("frame does not show the prompt on the echo row")
 	}
@@ -298,7 +298,7 @@ func TestIsearchPromptHasNoPanel(t *testing.T) {
 	if _, _, _, ok := e.panelFor(ms); ok {
 		t.Error("panelFor built a panel for a prompt with no candidates")
 	}
-	f := e.promptFrame()
+	f := e.frame()
 	if len(f.Panels) != 0 {
 		t.Errorf("%d panels for a search prompt, want none", len(f.Panels))
 	}

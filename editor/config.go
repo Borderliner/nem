@@ -100,6 +100,19 @@ func (e *Editor) applySettings(s lua.Settings) {
 	}
 	// UndoStyle has one legal value, already validated by the host, so there is
 	// nothing to apply until a second model exists.
+
+	e.SetCompletionStyle(s.CompletionStyle)
+	e.SetCompletionRows(s.CompletionRows)
+	// Zero disables each of these, which is why they are passed through
+	// unconditionally rather than guarded by a > 0 check.
+	e.SetWhichKeyDelay(time.Duration(s.WhichKeyDelay) * time.Millisecond)
+	e.SetAutosaveIdle(time.Duration(s.AutosaveIdle) * time.Second)
+	e.SetBackupEnabled(s.Backup)
+	if s.Clipboard == "off" {
+		e.SetClipboardMode(ClipboardOff)
+	} else {
+		e.SetClipboardMode(ClipboardOSC52)
+	}
 }
 
 // wireHooks connects the script's hooks to command dispatch.

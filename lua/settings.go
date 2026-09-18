@@ -25,12 +25,41 @@ type Settings struct {
 	// because the setting is documented, so an unknown value must be rejected
 	// with a useful message rather than silently accepted.
 	UndoStyle string
+
+	// CompletionStyle is "popup" (a centred panel) or "bottom" (emacs-shaped
+	// rows above the echo line). Same prompt state either way; only the
+	// renderer differs.
+	CompletionStyle string
+
+	// CompletionRows is how many candidates a completion panel shows at once.
+	CompletionRows int
+
+	// WhichKeyDelay is how long a prefix must stay pending before the
+	// continuation panel appears, in milliseconds. Zero disables it.
+	WhichKeyDelay int
+
+	// AutosaveIdle is how many seconds of idleness trigger an autosave of every
+	// modified buffer. Zero disables it.
+	AutosaveIdle int
+
+	// Backup says whether to keep a copy of a file's previous contents the first
+	// time it is saved in a session.
+	Backup bool
+
+	// Clipboard is "osc52" or "off". When on, kills also reach the system
+	// clipboard.
+	Clipboard string
 }
 
 // DefaultSettings returns the built-in defaults, which are what the editor uses
 // when there is no config file or when the config failed to load.
 func DefaultSettings() Settings {
-	return Settings{TabWidth: 8, ScrollMargin: 2, UndoStyle: "linear"}
+	return Settings{
+		TabWidth: 8, ScrollMargin: 2, UndoStyle: "linear",
+		CompletionStyle: "popup", CompletionRows: 10,
+		WhichKeyDelay: 300, AutosaveIdle: 30,
+		Backup: true, Clipboard: "osc52",
+	}
 }
 
 // settingLimits bounds each numeric setting. A value outside the range is a
@@ -39,13 +68,19 @@ func DefaultSettings() Settings {
 const (
 	minTabWidth, maxTabWidth       = 1, 64
 	minScrollMargin, maxScrollMrgn = 0, 1000
+	minCompRows, maxCompRows       = 1, 200
+	minWhichKey, maxWhichKey       = 0, 10000 // ms; 0 disables
+	minAutosave, maxAutosave       = 0, 3600  // seconds; 0 disables
 )
 
 // knownSettings lists every recognised key, so nem.set can name the valid ones
 // when a script misspells something. A silently ignored setting is the worst
 // outcome here: the user reads their config, sees the line, and cannot work out
 // why it has no effect.
-var knownSettings = []string{"scroll-margin", "tab-width", "undo-style"}
+var knownSettings = []string{
+	"autosave-idle", "backup", "clipboard", "completion-rows", "completion-style",
+	"scroll-margin", "tab-width", "undo-style", "which-key-delay",
+}
 
 // set validates one key/value pair and stores it.
 func (s *Settings) set(key string, v glua.LValue) error {
@@ -77,6 +112,42 @@ func (s *Settings) set(key string, v glua.LValue) error {
 			return fmt.Errorf("undo-style must be \"linear\", got %q", string(str))
 		}
 		s.UndoStyle = string(str)
+	case "completion-style":
+		str, err := checkEnum(key, v, "popup", "bottom")
+		if err != nil {
+			return err
+		}
+		s.CompletionStyle = str
+	case "completion-rows":
+		n, err := checkRange(key, v, minCompRows, maxCompRows)
+		if err != nil {
+			return err
+		}
+		s.CompletionRows = n
+	case "which-key-delay":
+		n, err := checkRange(key, v, minWhichKey, maxWhichKey)
+		if err != nil {
+			return err
+		}
+		s.WhichKeyDelay = n
+	case "autosave-idle":
+		n, err := checkRange(key, v, minAutosave, maxAutosave)
+		if err != nil {
+			return err
+		}
+		s.AutosaveIdle = n
+	case "backup":
+		b, ok := v.(glua.LBool)
+		if !ok {
+			return fmt.Errorf("backup must be true or false, got %s", v.Type())
+		}
+		s.Backup = bool(b)
+	case "clipboard":
+		str, err := checkEnum(key, v, "osc52", "off")
+		if err != nil {
+			return err
+		}
+		s.Clipboard = str
 	default:
 		return fmt.Errorf("unknown setting %q; known settings are %v", key, knownSettings)
 	}
@@ -95,4 +166,32 @@ func checkInt(key string, v glua.LValue) (int, error) {
 		return 0, fmt.Errorf("%s must be a whole number, got %v", key, float64(n))
 	}
 	return int(n), nil
+}
+
+// checkRange accepts a whole Lua number within an inclusive range. Out of range
+// is a config bug, and naming the bounds beats leaving a user to guess.
+func checkRange(key string, v glua.LValue, lo, hi int) (int, error) {
+	n, err := checkInt(key, v)
+	if err != nil {
+		return 0, err
+	}
+	if n < lo || n > hi {
+		return 0, fmt.Errorf("%s must be between %d and %d, got %d", key, lo, hi, n)
+	}
+	return n, nil
+}
+
+// checkEnum accepts one of a fixed set of strings, listing them on rejection so
+// a typo is self-correcting.
+func checkEnum(key string, v glua.LValue, allowed ...string) (string, error) {
+	str, ok := v.(glua.LString)
+	if !ok {
+		return "", fmt.Errorf("%s must be a string, got %s", key, v.Type())
+	}
+	for _, a := range allowed {
+		if string(str) == a {
+			return a, nil
+		}
+	}
+	return "", fmt.Errorf("%s must be one of %v, got %q", key, allowed, string(str))
 }

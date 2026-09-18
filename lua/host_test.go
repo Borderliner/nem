@@ -104,7 +104,11 @@ func TestSettingsReachTheirDestination(t *testing.T) {
 	`)
 	mustLoad(t, h)
 	got := h.Settings()
-	want := nemlua.Settings{TabWidth: 4, ScrollMargin: 3, UndoStyle: "linear"}
+	// Built from the defaults with only what the script set overridden, so
+	// adding a setting does not break this test and a setting that silently
+	// fails to apply still does.
+	want := nemlua.DefaultSettings()
+	want.TabWidth, want.ScrollMargin, want.UndoStyle = 4, 3, "linear"
 	if got != want {
 		t.Errorf("Settings() = %+v, want %+v", got, want)
 	}
@@ -844,6 +848,57 @@ func TestBoundKeysMatchWhatTheDecoderProduces(t *testing.T) {
 			if got.Kind != keymap.Found || got.Command != tc.want {
 				t.Errorf("Lookup(%#v) = kind=%v command=%q, want Found %q",
 					tc.key, got.Kind, got.Command, tc.want)
+			}
+		})
+	}
+}
+
+// Every new setting must validate, apply, and reject bad input. A silently
+// ignored setting is the worst outcome: the user reads their config, sees the
+// line, and cannot work out why it does nothing.
+func TestV2SettingsApplyAndValidate(t *testing.T) {
+	h, _, _ := newHost(t, `
+		nem.set("completion-style", "bottom")
+		nem.set("completion-rows", 15)
+		nem.set("which-key-delay", 0)
+		nem.set("autosave-idle", 60)
+		nem.set("backup", false)
+		nem.set("clipboard", "off")
+	`)
+	mustLoad(t, h)
+	got := h.Settings()
+	for _, c := range []struct {
+		name string
+		got  any
+		want any
+	}{
+		{"completion-style", got.CompletionStyle, "bottom"},
+		{"completion-rows", got.CompletionRows, 15},
+		{"which-key-delay", got.WhichKeyDelay, 0},
+		{"autosave-idle", got.AutosaveIdle, 60},
+		{"backup", got.Backup, false},
+		{"clipboard", got.Clipboard, "off"},
+	} {
+		if c.got != c.want {
+			t.Errorf("%s = %v, want %v", c.name, c.got, c.want)
+		}
+	}
+}
+
+func TestV2SettingsRejectBadValues(t *testing.T) {
+	for _, script := range []string{
+		`nem.set("completion-style", "floating")`,
+		`nem.set("completion-rows", 0)`,
+		`nem.set("completion-rows", "ten")`,
+		`nem.set("which-key-delay", -1)`,
+		`nem.set("autosave-idle", 99999)`,
+		`nem.set("backup", "yes")`,
+		`nem.set("clipboard", "xclip")`,
+	} {
+		t.Run(script, func(t *testing.T) {
+			h, _, _ := newHost(t, script)
+			if err := h.LoadConfig(); err == nil {
+				t.Errorf("%s was accepted; a bad value must be reported, not ignored", script)
 			}
 		})
 	}

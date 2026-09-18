@@ -234,11 +234,44 @@ func displayWidth(s string) int {
 //
 // This is the one line Redraw needs, and it is separated from the redraw itself
 // precisely so that it can be: see redrawPrompt.
+// completionPrefs is the config-settable part of completion.
+type completionPrefs struct {
+	style completionStyle
+	rows  int
+}
+
+func defaultCompletionPrefs() completionPrefs {
+	return completionPrefs{style: completionPopup, rows: completionRows}
+}
+
+// SetCompletionStyle selects the popup or the emacs-shaped bottom rendering.
+// The value has already been validated by the config host; an unrecognised one
+// here is a programming error rather than a user's typo, so it is ignored rather
+// than reported to someone who cannot act on it.
+func (e *Editor) SetCompletionStyle(name string) {
+	switch name {
+	case "popup":
+		e.comp.style = completionPopup
+	case "bottom":
+		e.comp.style = completionBottom
+	}
+}
+
+// SetCompletionRows sets how many candidates a panel shows at once.
+func (e *Editor) SetCompletionRows(n int) {
+	if n > 0 {
+		e.comp.rows = n
+	}
+}
+
 func (e *Editor) decorateWithCompletion(f *ui.Frame) {
 	ms := e.mini
 	if ms == nil || ms.comp == nil {
 		return
 	}
+	// Preferences are the editor's, not the session's: a session built before a
+	// config reload must still honour the new setting.
+	ms.comp.style, ms.comp.rows = e.comp.style, e.comp.rows
 	p, cx, cy, ok := e.panelFor(ms)
 	if !ok {
 		// The frame is too small for a readable panel. The prompt still works:
@@ -247,35 +280,4 @@ func (e *Editor) decorateWithCompletion(f *ui.Frame) {
 	}
 	f.Panels = append(f.Panels, p)
 	f.CursorX, f.CursorY, f.CursorSet = cx, cy, true
-}
-
-// promptFrame is the frame a prompt renders into.
-//
-// Split out from redrawPrompt so a test can assert on the frame without driving
-// the nested event loop: whether a panel was placed, and where the cursor went,
-// are the two things worth checking and both are decided here.
-func (e *Editor) promptFrame() ui.Frame {
-	f := ui.Frame{Tree: e.tree, Active: e.active, Echo: e.echo}
-	if e.mini != nil {
-		f.Echo = e.mini.line()
-		f.MiniPt = e.mini.cursorCol()
-		f.MiniOn = true
-		e.decorateWithCompletion(&f)
-	}
-	return f
-}
-
-// redrawPrompt paints one frame while a prompt is open.
-//
-// TEMPORARY BRIDGE. It exists only because editor/loop.go was being edited
-// concurrently and could not take the one line it needs. Collapse it: add
-// e.decorateWithCompletion(&f) to Redraw, then delete this and promptFrame and
-// have readLoop call Redraw again. Until then these duplicate Redraw's frame
-// construction, which is exactly the drift this project avoids elsewhere.
-func (e *Editor) redrawPrompt() {
-	if e.scr == nil {
-		return
-	}
-	ui.Render(e.scr, e.promptFrame(), e.th)
-	e.scr.Show()
 }
