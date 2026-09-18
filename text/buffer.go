@@ -12,10 +12,11 @@ var ErrOutOfRange = errors.New("text: position out of range")
 // each with its own cursor. Buffer keeps only savePt, the point restored when
 // a window next visits it.
 type Buffer struct {
-	lines  []Line
-	mark   Pos
-	savePt Pos
-	undo   *UndoLog
+	lines   []Line
+	mark    Pos
+	hasMark bool
+	savePt  Pos
+	undo    *UndoLog
 
 	path    string
 	crlf    bool // file used \r\n line endings
@@ -45,8 +46,19 @@ func (b *Buffer) SetPath(p string) { b.path = p }
 // Mark returns the buffer's mark, the far end of the region.
 func (b *Buffer) Mark() Pos { return b.mark }
 
-// SetMark sets the buffer's mark.
-func (b *Buffer) SetMark(p Pos) { b.mark = p }
+// SetMark sets the buffer's mark and records that a mark now exists.
+func (b *Buffer) SetMark(p Pos) { b.mark, b.hasMark = p, true }
+
+// HasMark reports whether a mark has been set in this buffer.
+//
+// The zero Pos is a legitimate mark position, so a flag is the only way to tell
+// "mark at the buffer start" from "no mark at all". Region commands must check
+// this: emacs refuses to act on a region in a buffer with no mark, and without
+// the distinction C-w would silently kill from the buffer start to point.
+func (b *Buffer) HasMark() bool { return b.hasMark }
+
+// ClearMark forgets the mark, as C-g does when it deactivates the region.
+func (b *Buffer) ClearMark() { b.mark, b.hasMark = Pos{}, false }
 
 // SavePoint returns the point stored for when a window next visits this buffer.
 func (b *Buffer) SavePoint() Pos { return b.savePt }
