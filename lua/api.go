@@ -30,13 +30,23 @@ func (h *Host) installAPI() {
 
 	buf := h.l.NewTable()
 	for name, fn := range map[string]glua.LGFunction{
+		// Where point is.
 		"line":         h.bufLine,
 		"replace_line": h.bufReplaceLine,
 		"point":        h.bufPoint,
 		"set_point":    h.bufSetPoint,
-		"path":         h.bufPath,
-		"modified":     h.bufModified,
-		"text":         h.bufText,
+		// Addressed by line number, all 1-based. See buffer.go.
+		"line_count":  h.bufLineCount,
+		"get_line":    h.bufGetLine,
+		"set_line":    h.bufSetLine,
+		"insert_line": h.bufInsertLine,
+		"remove_line": h.bufRemoveLine,
+		// The whole buffer.
+		"text":     h.bufText,
+		"set_text": h.bufSetText,
+		// About the buffer.
+		"path":     h.bufPath,
+		"modified": h.bufModified,
 	} {
 		buf.RawSetString(name, h.l.NewFunction(fn))
 	}
@@ -190,26 +200,13 @@ func (h *Host) bufLine(L *glua.LState) int {
 
 func (h *Host) bufReplaceLine(L *glua.LState) int {
 	s := L.CheckString(1)
-	if strings.ContainsRune(s, '\n') {
-		L.RaiseError("nem.buf.replace_line: text must not contain a newline")
-	}
+	checkNoNewline(L, s, "nem.buf.replace_line")
 	b, n := h.curLine(L)
-
-	// Take the length before editing: Buffer.Line returns a pointer into the
-	// line slice, which any edit invalidates.
-	end := text.Pos{Line: n, Col: b.Line(n).Len()}
-	start := text.Pos{Line: n}
-	if err := b.Delete(start, end); err != nil {
+	if err := replaceLineContent(b, n, s); err != nil {
 		L.RaiseError("nem.buf.replace_line: %v", err)
 	}
-	if s != "" {
-		if err := b.Insert(start, []rune(s)); err != nil {
-			L.RaiseError("nem.buf.replace_line: %v", err)
-		}
-	}
 	// The old point may now sit past the end of a shorter line.
-	w := h.env.Win()
-	w.Pt = b.ClampPos(w.Pt)
+	h.clampPoint(b)
 	return 0
 }
 
