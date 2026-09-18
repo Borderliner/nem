@@ -301,3 +301,89 @@ feed `C-k C-k C-y`, assert both killed lines came back as one block. Feed
 
 Syntax highlighting · mouse support · line wrapping · undo tree · rope buffer ·
 plugin ecosystem and sandboxing · language-aware indentation
+
+## Implementation findings
+
+Recorded as the leaf packages landed. These are constraints, not suggestions —
+each one was discovered by building or verifying, and each is invisible enough
+that it would otherwise be rediscovered the hard way.
+
+### Verified, load-bearing
+
+**All three layers agree on grapheme width by construction.** `x/ansi`,
+`cellbuf` and tcell itself all segment with `rivo/uniseg` — tcell 2.13 calls
+`uniseg.FirstGraphemeClusterInString` at `cell.go:76`. The entire class of
+emoji/CJK off-by-one corruption the blitter spike existed to find cannot occur.
+
+**tcell resolves ESC-vs-Meta itself.** `input.go` sets a 50ms expiry with a 60ms
+`AfterFunc` and rewrites an ESC-prefixed key as `ModAlt` (line 108). `decodeKey`
+therefore maps `ModAlt → Meta` and no timing logic belongs in our code. This was
+the one place the clean `keymap` boundary looked like it would cost us; it does
+not. It is also a concrete reason tcell beat the raw-ANSI fallback, which would
+have required writing this timer by hand.
+
+**`uniseg.StringWidth("\t")` is 0.** Tab-stop advancement is implemented in
+`text`, not inherited from the segmenter.
+
+### Required calls and invariants
+
+**`blit.SyncLipglossProfile(scr)` must be called once after `Screen.Init`, and
+again after any screen reinitialisation (suspend/resume).** Lip Gloss decides
+how much colour to emit by probing `os.Stdout`, which is meaningless once tcell
+owns the terminal — without this the chrome renders unstyled in a way that looks
+exactly like a blitter bug. The profile is derived from `scr.Colors()`, since
+tcell has already done real terminfo negotiation.
+
+**The text area calls `scr.SetContent` directly and never goes through `blit`.**
+Serialising buffer text to ANSI only to parse it back is waste. `blit` earns its
+place only where Lip Gloss does real layout work: borders, joins, padding.
+
+**Single-goroutine rule: all Lua execution and all `keymap.Map` mutation happen
+on the input goroutine.** `Map` is not safe for concurrent use, and a Lua config
+reload racing the input loop would corrupt it silently. Resolved by rule rather
+than by lock; `editor` must not move Lua onto another goroutine without also
+introducing an atomic Map swap.
+
+**`text.Buffer.Line(i)` returns a pointer into the line slice.** Any edit that
+splices lines invalidates it. `ui` must not hold one across an edit.
+
+**`Shift` is only meaningful for special keys.** For rune keys the rune carries
+case, so `keymap.Normalize` clears `Shift` when `Special == SpecialNone`. This
+makes the round-trip property total rather than conventional.
+
+### Spec corrections made during implementation
+
+**`Modified()` is derived, not stored.** A `bool` cannot clear itself when you
+undo back to the saved state. `UndoLog.savedAt` holds the saved position and
+`Modified()` is `pos != savedAt`; saving then undoing past the save sets
+`savedAt = -1`, correctly reporting permanently-modified because the saved state
+has become unreachable.
+
+**A newline breaks undo coalescing**, so typing a paragraph does not collapse
+into a single undo unit.
+
+**`keymap.Map.Where(command) []string`** was added alongside `Bindings()`.
+`Bindings()` is keyed by spec, which suits `describe-bindings` but forces every
+other caller to invert it; `M-x` and help need command → sequences, and a
+command legitimately has several (`undo` is both `C-_` and `C-x u`).
+
+**`C-X` folds to `C-x` for all letters.** Ctrl+Shift+letter is indistinguishable
+from Ctrl+letter on every VT-lineage terminal.
+
+### Known lossy behaviour
+
+Loading replaces invalid UTF-8 with U+FFFD, so **saving does not preserve the
+original bytes**, and a file with mixed line endings normalises to whichever
+style appeared first. Both follow from the design, but they can corrupt a binary
+file opened by accident. `editor` should gain a binary-file guard before this is
+used on anything that matters.
+
+ANSI features that cannot round-trip into tcell cells: **conceal (SGR 8)** —
+approximated as fg=bg; **OSC 8 hyperlinks** — dropped, tcell has no per-cell
+link concept, worth knowing if clickable paths in a compile buffer ever appeal.
+
+### For the Lua config documentation
+
+**`DEL` means backspace, not forward-delete.** Forward-delete is `<delete>`.
+This is emacs-faithful and a guaranteed first-time mistake in a user config, so
+it belongs in the user-facing docs rather than only in a code comment.
