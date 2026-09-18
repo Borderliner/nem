@@ -18,15 +18,14 @@ import (
 // disturbing the kill ring, and only the kill commands record anything, so
 // delete-char must not be "a kill of one character".
 
+// errEditNoTranspose stays private: it has a single caller, and a boundary the
+// dispatcher needs to recognise is a different thing from a local failure.
 var (
-	errEditEndOfBuffer       = errors.New("end of buffer")
-	errEditBeginningOfBuffer = errors.New("beginning of buffer")
-	errEditNoTranspose       = errors.New("nothing to transpose")
+	errEditNoTranspose = errors.New("nothing to transpose")
 
-	// errEditNoSelfInsertKey reports that self-insert-command was invoked
-	// through the registry, which cannot work: see SelfInsert.
-	errEditNoSelfInsertKey = errors.New(
-		"self-insert-command needs the key that triggered it; the editor must call command.SelfInsert")
+	// errEditNoSelfInsertKey reports that self-insert-command ran without the
+	// event loop having recorded which key triggered it.
+	errEditNoSelfInsertKey = errors.New("no self-inserting key recorded")
 )
 
 // RegisterEdit adds the editing commands to r.
@@ -45,10 +44,7 @@ func RegisterEdit(r *Registry) error {
 		{Name: "upcase-word", Doc: "Convert the following word to upper case.", Fn: upcaseWord, Interactive: true},
 		{Name: "downcase-word", Doc: "Convert the following word to lower case.", Fn: downcaseWord, Interactive: true},
 		{Name: "capitalize-word", Doc: "Capitalize the following word.", Fn: capitalizeWord, Interactive: true},
-
-		// Not interactive: the event loop dispatches it with the key that
-		// triggered it, and M-x has no key to offer.
-		{Name: "self-insert-command", Doc: "Insert the character just typed.", Fn: selfInsertViaRegistry},
+		{Name: "self-insert-command", Doc: "Insert the character just typed.", Fn: selfInsert, Interactive: true},
 	}
 	for _, c := range cmds {
 		if err := r.Register(c); err != nil {
@@ -138,94 +134,20 @@ func edBackwardGraphemes(b *text.Buffer, p text.Pos, n int) text.Pos {
 
 // --- word helpers ----------------------------------------------------------
 
-// edIsWordRune reports whether r is a word constituent.
+// Word scanning itself lives in words.go and is shared with the motion
+// commands, so M-f and M-d can never disagree about where a word ends.
 //
-// Combining marks count, so that a decomposed character such as e+U+0301 is one
-// word rather than a word followed by a mark.
-func edIsWordRune(r rune) bool {
-	return unicode.IsLetter(r) || unicode.IsDigit(r) ||
-		unicode.In(r, unicode.Mn, unicode.Mc, unicode.Me)
-}
-
-// edForwardWord returns the position after the next word, skipping any
-// non-word runes before it. Newlines are non-word, so scanning crosses lines.
-func edForwardWord(b *text.Buffer, p text.Pos) text.Pos {
-	line, col := p.Line, p.Col
-	rs := b.Line(line).Runes()
-	inWord := false
-	for {
-		if col >= text.RuneIdx(len(rs)) {
-			if inWord || line+1 >= b.NumLines() {
-				return text.Pos{Line: line, Col: col}
-			}
-			line++
-			col = 0
-			rs = b.Line(line).Runes()
-			continue
-		}
-		if edIsWordRune(rs[col]) {
-			inWord = true
-			col++
-			continue
-		}
-		if inWord {
-			return text.Pos{Line: line, Col: col}
-		}
-		col++
+// edSkipNonWord is the one thing the shared scanners cannot express: the case
+// commands act on the word from point onward, so from mid-word they need point
+// itself rather than the start of the whole word. Composing the shared pair as
+// backwardWordPos(forwardWordPos(p)) would return the word's start and turn
+// "heLlo" into "Hello".
+func edSkipNonWord(b *text.Buffer, p text.Pos) text.Pos {
+	end := b.End()
+	for p.Before(end) && !isWordRune(runeAt(b, p)) {
+		p = nextRune(b, p)
 	}
-}
-
-// edBackwardWord returns the position at the start of the previous word,
-// skipping any non-word runes before it.
-func edBackwardWord(b *text.Buffer, p text.Pos) text.Pos {
-	line, col := p.Line, p.Col
-	rs := b.Line(line).Runes()
-	if col > text.RuneIdx(len(rs)) {
-		col = text.RuneIdx(len(rs))
-	}
-	inWord := false
-	for {
-		if col <= 0 {
-			if inWord || line == 0 {
-				return text.Pos{Line: line, Col: 0}
-			}
-			line--
-			rs = b.Line(line).Runes()
-			col = text.RuneIdx(len(rs))
-			continue
-		}
-		if edIsWordRune(rs[col-1]) {
-			inWord = true
-			col--
-			continue
-		}
-		if inWord {
-			return text.Pos{Line: line, Col: col}
-		}
-		col--
-	}
-}
-
-// edWordStart returns the start of the next word at or after p, skipping
-// non-word runes.
-func edWordStart(b *text.Buffer, p text.Pos) text.Pos {
-	line, col := p.Line, p.Col
-	rs := b.Line(line).Runes()
-	for {
-		if col >= text.RuneIdx(len(rs)) {
-			if line+1 >= b.NumLines() {
-				return text.Pos{Line: line, Col: col}
-			}
-			line++
-			col = 0
-			rs = b.Line(line).Runes()
-			continue
-		}
-		if edIsWordRune(rs[col]) {
-			return text.Pos{Line: line, Col: col}
-		}
-		col++
-	}
+	return p
 }
 
 // --- deletion --------------------------------------------------------------
@@ -250,7 +172,7 @@ func edDeleteForward(e Env, n int) error {
 	b, p := e.Buf(), e.Win().Pt
 	to := edForwardGraphemes(b, p, n)
 	if to.Equal(p) {
-		return errEditEndOfBuffer
+		return ErrEndOfBuffer
 	}
 	if err := b.Delete(p, to); err != nil {
 		return err
@@ -263,7 +185,7 @@ func edDeleteBackward(e Env, n int) error {
 	b, p := e.Buf(), e.Win().Pt
 	from := edBackwardGraphemes(b, p, n)
 	if from.Equal(p) {
-		return errEditBeginningOfBuffer
+		return ErrBeginningOfBuffer
 	}
 	if err := b.Delete(from, p); err != nil {
 		return err
@@ -298,10 +220,10 @@ func edKillWordsForward(e Env, n int) error {
 	b, p := e.Buf(), e.Win().Pt
 	to := p
 	for i := 0; i < n; i++ {
-		to = edForwardWord(b, to)
+		to = forwardWordPos(b, to)
 	}
 	if to.Equal(p) {
-		return errEditEndOfBuffer
+		return ErrEndOfBuffer
 	}
 	killed := string(b.Text(p, to))
 	if err := b.Delete(p, to); err != nil {
@@ -316,10 +238,10 @@ func edKillWordsBackward(e Env, n int) error {
 	b, p := e.Buf(), e.Win().Pt
 	from := p
 	for i := 0; i < n; i++ {
-		from = edBackwardWord(b, from)
+		from = backwardWordPos(b, from)
 	}
 	if from.Equal(p) {
-		return errEditBeginningOfBuffer
+		return ErrBeginningOfBuffer
 	}
 	killed := string(b.Text(from, p))
 	if err := b.Delete(from, p); err != nil {
@@ -349,7 +271,7 @@ func killLine(e Env) error {
 			from = text.Pos{Line: 0, Col: 0}
 		}
 		if from.Equal(p) {
-			return errEditBeginningOfBuffer
+			return ErrBeginningOfBuffer
 		}
 		killed := string(b.Text(from, p))
 		if err := b.Delete(from, p); err != nil {
@@ -376,12 +298,12 @@ func killLine(e Env) error {
 		case p.Line+1 < b.NumLines():
 			to = text.Pos{Line: p.Line + 1, Col: 0}
 		default:
-			return errEditEndOfBuffer
+			return ErrEndOfBuffer
 		}
 	}
 
 	if to.Equal(p) {
-		return errEditEndOfBuffer
+		return ErrEndOfBuffer
 	}
 	killed := string(b.Text(p, to))
 	if err := b.Delete(p, to); err != nil {
@@ -464,13 +386,18 @@ func indentForTab(e Env) error {
 	return nil
 }
 
-// SelfInsert inserts r at point, n times, where n is the prefix argument.
+// selfInsert inserts the key that triggered the command, as many times as the
+// prefix argument says.
 //
-// It is exported and takes the rune explicitly because Env has no way to report
-// the key that triggered a command: self-insert-command is the one command
-// whose behaviour depends on which key ran it. The event loop calls this
-// directly rather than dispatching "self-insert-command" through the registry.
-func SelfInsert(e Env, r rune) error {
+// The rune comes from Seq().LastRune, which the event loop records before
+// dispatch. That is what lets this be an ordinary registered command — bindable
+// from Lua and reachable from M-x — rather than a stub only the event loop can
+// reach.
+func selfInsert(e Env) error {
+	r := e.Seq().LastRune
+	if r == 0 {
+		return errEditNoSelfInsertKey
+	}
 	n, _ := e.Arg()
 	if n < 1 {
 		n = 1
@@ -489,8 +416,6 @@ func SelfInsert(e Env, r rune) error {
 	edSetPoint(e, edAdvance(p, ins))
 	return nil
 }
-
-func selfInsertViaRegistry(Env) error { return errEditNoSelfInsertKey }
 
 // --- transposition ---------------------------------------------------------
 
@@ -543,10 +468,10 @@ func transposeChars(e Env) error {
 func transposeWords(e Env) error {
 	b, p := e.Buf(), e.Win().Pt
 
-	secondEnd := edForwardWord(b, p)
-	secondStart := edBackwardWord(b, secondEnd)
-	firstStart := edBackwardWord(b, secondStart)
-	firstEnd := edForwardWord(b, firstStart)
+	secondEnd := forwardWordPos(b, p)
+	secondStart := backwardWordPos(b, secondEnd)
+	firstStart := backwardWordPos(b, secondStart)
+	firstEnd := forwardWordPos(b, firstStart)
 
 	if firstStart.Equal(secondStart) || firstEnd.After(secondStart) {
 		return errEditNoTranspose
@@ -608,8 +533,8 @@ func edCaseWords(e Env, fn func(string) string) error {
 	if n < 0 {
 		cur := e.Win().Pt
 		for i := 0; i < -n; i++ {
-			start := edBackwardWord(b, cur)
-			end := edForwardWord(b, start)
+			start := backwardWordPos(b, cur)
+			end := forwardWordPos(b, start)
 			if end.After(cur) {
 				end = cur
 			}
@@ -627,8 +552,8 @@ func edCaseWords(e Env, fn func(string) string) error {
 
 	cur := e.Win().Pt
 	for i := 0; i < n; i++ {
-		start := edWordStart(b, cur)
-		end := edForwardWord(b, cur)
+		start := edSkipNonWord(b, cur)
+		end := forwardWordPos(b, cur)
 		if start.Equal(end) {
 			break
 		}

@@ -66,6 +66,14 @@ func edWantYank(t *testing.T, f *commandtest.Fake, want string) {
 	}
 }
 
+// edType drives self-insert-command the way the event loop does: record the
+// rune that triggered the command, then dispatch by name.
+func edType(t *testing.T, f *commandtest.Fake, r rune) {
+	t.Helper()
+	f.Seq().LastRune = r
+	edMustRun(t, f, "self-insert-command")
+}
+
 // arg sets the prefix argument as C-u would.
 func edArg(f *commandtest.Fake, n int) {
 	f.ArgN = n
@@ -88,12 +96,17 @@ func TestRegisterEditRegistersEveryCommand(t *testing.T) {
 	}
 }
 
-func TestSelfInsertIsNotInteractive(t *testing.T) {
-	// M-x has no key to hand it, so it must not appear in completion.
+func TestSelfInsertIsInteractive(t *testing.T) {
+	// It reads its rune from Seq, so it is an ordinary command rather than a
+	// stub only the event loop can reach.
+	var found bool
 	for _, name := range editReg(t).Names() {
 		if name == "self-insert-command" {
-			t.Error("self-insert-command appears in M-x completion")
+			found = true
 		}
+	}
+	if !found {
+		t.Error("self-insert-command is missing from M-x completion")
 	}
 }
 
@@ -155,8 +168,8 @@ func TestKillLineWithZeroArgKillsToStartOfLine(t *testing.T) {
 
 func TestKillLineAtEndOfBufferErrors(t *testing.T) {
 	f := commandtest.New("")
-	if err := edRun(t, f, "kill-line"); err == nil {
-		t.Error("kill-line at end of buffer: want an error, got nil")
+	if err := edRun(t, f, "kill-line"); !errors.Is(err, command.ErrEndOfBuffer) {
+		t.Errorf("kill-line at end of buffer: error = %v, want ErrEndOfBuffer", err)
 	}
 }
 
@@ -249,8 +262,8 @@ func TestKillWordWithNegativeArgKillsBackward(t *testing.T) {
 
 func TestBackwardKillWordAtBufferStartErrors(t *testing.T) {
 	f := commandtest.New("foo")
-	if err := edRun(t, f, "backward-kill-word"); err == nil {
-		t.Error("backward-kill-word at buffer start: want an error, got nil")
+	if err := edRun(t, f, "backward-kill-word"); !errors.Is(err, command.ErrBeginningOfBuffer) {
+		t.Errorf("backward-kill-word at buffer start: error = %v, want ErrBeginningOfBuffer", err)
 	}
 }
 
@@ -315,16 +328,18 @@ func TestDeleteCharJoinsLines(t *testing.T) {
 }
 
 func TestDeleteCharAtEndOfBufferErrors(t *testing.T) {
+	// Reported as the exported sentinel, so the dispatcher can tell a harmless
+	// boundary from a genuine failure via errors.Is.
 	f := commandtest.New("")
-	if err := edRun(t, f, "delete-char"); err == nil {
-		t.Error("delete-char at end of buffer: want an error, got nil")
+	if err := edRun(t, f, "delete-char"); !errors.Is(err, command.ErrEndOfBuffer) {
+		t.Errorf("delete-char at end of buffer: error = %v, want ErrEndOfBuffer", err)
 	}
 }
 
 func TestDeleteBackwardCharAtBufferStartErrors(t *testing.T) {
 	f := commandtest.New("abc")
-	if err := edRun(t, f, "delete-backward-char"); err == nil {
-		t.Error("delete-backward-char at buffer start: want an error, got nil")
+	if err := edRun(t, f, "delete-backward-char"); !errors.Is(err, command.ErrBeginningOfBuffer) {
+		t.Errorf("delete-backward-char at buffer start: error = %v, want ErrBeginningOfBuffer", err)
 	}
 }
 
@@ -389,30 +404,41 @@ func TestNewlineWithArgInsertsSeveral(t *testing.T) {
 
 // --- self-insert-command --------------------------------------------------
 
-func TestSelfInsertViaRegistryIsAnError(t *testing.T) {
-	// It needs the key that triggered it, which Env cannot report.
+func TestSelfInsertDispatchesThroughTheRegistry(t *testing.T) {
+	f := commandtest.New("")
+	edType(t, f, 'x')
+	edWantText(t, f, "x")
+	edWantPoint(t, f, edAt(0, 1))
+}
+
+func TestSelfInsertWithoutARecordedRuneIsAnError(t *testing.T) {
+	// Seq().LastRune is zero, so no key triggered this: inserting NUL would be
+	// worse than refusing.
 	f := commandtest.New("")
 	if err := edRun(t, f, "self-insert-command"); err == nil {
-		t.Error("self-insert-command via registry: want an error, got nil")
+		t.Error("self-insert-command with no recorded rune: want an error, got nil")
 	}
+	edWantText(t, f, "")
 }
 
 func TestSelfInsertHonoursArg(t *testing.T) {
 	f := commandtest.New("")
-	edArg(f, 40)
-	if err := command.SelfInsert(f, '-'); err != nil {
-		t.Fatalf("SelfInsert: %v", err)
-	}
-	edWantText(t, f, strings.Repeat("-", 40))
-	edWantPoint(t, f, edAt(0, 40))
+	edArg(f, 3)
+	edType(t, f, 'z')
+	edWantText(t, f, "zzz")
+	edWantPoint(t, f, edAt(0, 3))
+
+	g := commandtest.New("")
+	edArg(g, 40)
+	edType(t, g, '-')
+	edWantText(t, g, strings.Repeat("-", 40))
+	edWantPoint(t, g, edAt(0, 40))
 }
 
 func TestSelfInsertWithArgIsOneUndoUnit(t *testing.T) {
 	f := commandtest.New("")
 	edArg(f, 40)
-	if err := command.SelfInsert(f, '-'); err != nil {
-		t.Fatalf("SelfInsert: %v", err)
-	}
+	edType(t, f, '-')
 	if _, ok := f.Buf().Undo(); !ok {
 		t.Fatal("Undo reported nothing to undo")
 	}
@@ -422,9 +448,7 @@ func TestSelfInsertWithArgIsOneUndoUnit(t *testing.T) {
 func TestSelfInsertCoalescesTypingIntoOneUndoUnit(t *testing.T) {
 	f := commandtest.New("")
 	for _, r := range "hello" {
-		if err := command.SelfInsert(f, r); err != nil {
-			t.Fatalf("SelfInsert(%q): %v", r, err)
-		}
+		edType(t, f, r)
 	}
 	edWantText(t, f, "hello")
 	if _, ok := f.Buf().Undo(); !ok {
@@ -436,9 +460,7 @@ func TestSelfInsertCoalescesTypingIntoOneUndoUnit(t *testing.T) {
 func TestSelfInsertNewlineBreaksTheUndoRun(t *testing.T) {
 	f := commandtest.New("")
 	for _, r := range "a\nb" {
-		if err := command.SelfInsert(f, r); err != nil {
-			t.Fatalf("SelfInsert(%q): %v", r, err)
-		}
+		edType(t, f, r)
 	}
 	edWantText(t, f, "a\nb")
 	if _, ok := f.Buf().Undo(); !ok {
@@ -450,9 +472,7 @@ func TestSelfInsertNewlineBreaksTheUndoRun(t *testing.T) {
 
 func TestSelfInsertWideRune(t *testing.T) {
 	f := commandtest.New("")
-	if err := command.SelfInsert(f, '日'); err != nil {
-		t.Fatalf("SelfInsert: %v", err)
-	}
+	edType(t, f, '日')
 	edWantText(t, f, "日")
 	edWantPoint(t, f, edAt(0, 1)) // one rune, whatever its display width
 }
@@ -749,8 +769,8 @@ func TestKillLineWithNegativeArgKillsBackward(t *testing.T) {
 func TestKillLineWithZeroArgAtLineStartErrors(t *testing.T) {
 	f := commandtest.New("hello")
 	edArg(f, 0)
-	if err := edRun(t, f, "kill-line"); err == nil {
-		t.Error("kill-line with zero arg at line start: want an error, got nil")
+	if err := edRun(t, f, "kill-line"); !errors.Is(err, command.ErrBeginningOfBuffer) {
+		t.Errorf("kill-line with zero arg at line start: error = %v, want ErrBeginningOfBuffer", err)
 	}
 }
 
@@ -776,9 +796,7 @@ func TestNonPositiveArgsBehaveAsOne(t *testing.T) {
 func TestSelfInsertWithNonPositiveArgInsertsOnce(t *testing.T) {
 	f := commandtest.New("")
 	edArg(f, 0)
-	if err := command.SelfInsert(f, 'x'); err != nil {
-		t.Fatalf("SelfInsert: %v", err)
-	}
+	edType(t, f, 'x')
 	edWantText(t, f, "x")
 }
 
