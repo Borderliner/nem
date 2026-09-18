@@ -1,0 +1,128 @@
+package editor
+
+import (
+	"fmt"
+
+	"github.com/hajianpour/nem/keymap"
+)
+
+// defaultBindings is the built-in keymap, as documented in
+// docs/superpowers/specs/2026-09-18-nem-commands.md. Each entry maps an emacs
+// key sequence to a command name; the names are resolved against the command
+// registry at dispatch, so this table has no compile-time dependency on the
+// command package.
+//
+// C-u is deliberately absent: the universal argument is handled by the event
+// loop before keymap lookup, not as an ordinary command.
+var defaultBindings = []struct{ Spec, Command string }{
+	// Motion.
+	{"C-f", "forward-char"}, {"<right>", "forward-char"},
+	{"C-b", "backward-char"}, {"<left>", "backward-char"},
+	{"C-n", "next-line"}, {"<down>", "next-line"},
+	{"C-p", "previous-line"}, {"<up>", "previous-line"},
+	{"M-f", "forward-word"},
+	{"M-b", "backward-word"},
+	{"C-a", "move-beginning-of-line"}, {"<home>", "move-beginning-of-line"},
+	{"C-e", "move-end-of-line"}, {"<end>", "move-end-of-line"},
+	{"M-<", "beginning-of-buffer"},
+	{"M->", "end-of-buffer"},
+	{"C-v", "scroll-up-command"}, {"<pgdn>", "scroll-up-command"},
+	{"M-v", "scroll-down-command"}, {"<pgup>", "scroll-down-command"},
+	{"M-g M-g", "goto-line"},
+	{"C-l", "recenter-top-bottom"},
+
+	// Editing.
+	{"C-d", "delete-char"}, {"<delete>", "delete-char"},
+	{"<backspace>", "delete-backward-char"},
+	{"M-d", "kill-word"},
+	{"M-<backspace>", "backward-kill-word"},
+	{"C-k", "kill-line"},
+	{"C-o", "open-line"},
+	{"C-t", "transpose-chars"},
+	{"M-t", "transpose-words"},
+	{"RET", "newline"},
+	{"TAB", "indent-for-tab-command"},
+	{"M-u", "upcase-word"},
+	{"M-l", "downcase-word"},
+	{"M-c", "capitalize-word"},
+
+	// Mark, region, kill ring.
+	{"C-SPC", "set-mark-command"},
+	{"C-x C-x", "exchange-point-and-mark"},
+	{"C-w", "kill-region"},
+	{"M-w", "kill-ring-save"},
+	{"C-y", "yank"},
+	{"M-y", "yank-pop"},
+
+	// Undo. C-/ arrives as C-_ on most terminals; both are listed because the
+	// binding is stored normalized, so they collapse to the same entry.
+	{"C-_", "undo"},
+	{"C-/", "undo"},
+	{"C-x u", "undo"},
+	{"M-_", "redo"},
+
+	// Search and replace.
+	{"C-s", "isearch-forward"},
+	{"C-r", "isearch-backward"},
+	{"M-%", "query-replace"},
+
+	// Files.
+	{"C-x C-f", "find-file"},
+	{"C-x C-s", "save-buffer"},
+	{"C-x C-w", "write-file"},
+	{"C-x s", "save-some-buffers"},
+
+	// Buffers.
+	{"C-x b", "switch-to-buffer"},
+	{"C-x k", "kill-buffer"},
+	{"C-x C-b", "list-buffers"},
+
+	// Windows.
+	{"C-x 2", "split-window-below"},
+	{"C-x 3", "split-window-right"},
+	{"C-x 1", "delete-other-windows"},
+	{"C-x 0", "delete-window"},
+	{"C-x o", "other-window"},
+
+	// Session.
+	{"C-g", "keyboard-quit"},
+	{"C-x C-c", "save-buffers-kill-terminal"},
+	{"M-x", "execute-extended-command"},
+
+	// Help. <f1> is the primary prefix, not C-h: tcell's legacy input path
+	// cannot distinguish C-h from Backspace, so C-h works only on terminals
+	// that negotiate CSI-u. See the spec's "C-h is not reliably available".
+	{"<f1> b", "describe-bindings"},
+	{"<f1> k", "describe-key"},
+	{"C-h b", "describe-bindings"},
+	{"C-h k", "describe-key"},
+}
+
+// bindSpec parses an emacs key spec and binds it normalized, so that a binding
+// matches however the terminal happens to encode the keystroke. Binding the
+// unnormalized form would leave C-SPC (which arrives as NUL) and C-/ (which
+// arrives as C-_) unreachable.
+func bindSpec(m *keymap.Map, spec, command string) error {
+	seq, err := keymap.ParseSpec(spec)
+	if err != nil {
+		return fmt.Errorf("binding %q to %s: %w", spec, command, err)
+	}
+	for i := range seq {
+		seq[i] = keymap.Normalize(seq[i])
+	}
+	if err := m.Bind(seq, command); err != nil {
+		return fmt.Errorf("binding %q to %s: %w", spec, command, err)
+	}
+	return nil
+}
+
+// InstallDefaultBindings populates m with nem's built-in keymap. It is called
+// before the Lua config loads, so user bindings override these.
+func InstallDefaultBindings(m *keymap.Map) error {
+	for _, b := range defaultBindings {
+		if err := bindSpec(m, b.Spec, b.Command); err != nil {
+			return err
+		}
+	}
+	return nil
+}
