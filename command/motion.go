@@ -1,0 +1,427 @@
+package command
+
+import (
+	"strconv"
+	"strings"
+	"unicode"
+
+	"github.com/hajianpour/nem/text"
+	"github.com/hajianpour/nem/view"
+)
+
+// RegisterMotion adds nem's motion commands to r.
+//
+// Two rules govern this file and are easy to break by accident:
+//
+// Character motion moves by grapheme cluster, never by rune. A combining
+// sequence or a ZWJ emoji is one cursor stop however many runes it holds, so
+// forward-char and backward-char go through text.Line's grapheme helpers rather
+// than incrementing a rune index.
+//
+// Vertical motion preserves the goal column and every other command clears it.
+// The goal column is the display column the cursor is trying to keep, so that
+// descending through a short line and out the other side returns to the
+// original column rather than to the short line's end. It is established on the
+// first vertical move of a run, preserved by later ones, and cleared by
+// everything else — which is why a new command added here must call clearGoal
+// unless it is itself vertical motion.
+func RegisterMotion(r *Registry) error {
+	for _, c := range []Command{
+		{Name: "forward-char", Doc: "Move point one grapheme forward.", Fn: forwardChar, Interactive: true},
+		{Name: "backward-char", Doc: "Move point one grapheme backward.", Fn: backwardChar, Interactive: true},
+		{Name: "next-line", Doc: "Move point down one line, keeping the goal column.", Fn: nextLine, Interactive: true},
+		{Name: "previous-line", Doc: "Move point up one line, keeping the goal column.", Fn: previousLine, Interactive: true},
+		{Name: "forward-word", Doc: "Move point to the end of the next word.", Fn: forwardWord, Interactive: true},
+		{Name: "backward-word", Doc: "Move point to the start of the previous word.", Fn: backwardWord, Interactive: true},
+		{Name: "move-beginning-of-line", Doc: "Move point to the start of the line.", Fn: moveBeginningOfLine, Interactive: true},
+		{Name: "move-end-of-line", Doc: "Move point to the end of the line.", Fn: moveEndOfLine, Interactive: true},
+		{Name: "beginning-of-buffer", Doc: "Move point to the start of the buffer.", Fn: beginningOfBuffer, Interactive: true},
+		{Name: "end-of-buffer", Doc: "Move point to the end of the buffer.", Fn: endOfBuffer, Interactive: true},
+		{Name: "scroll-up-command", Doc: "Move forward one screenful.", Fn: scrollUpCommand, Interactive: true},
+		{Name: "scroll-down-command", Doc: "Move backward one screenful.", Fn: scrollDownCommand, Interactive: true},
+		{Name: "goto-line", Doc: "Move point to the start of a numbered line.", Fn: gotoLine, Interactive: true},
+		{Name: "recenter-top-bottom", Doc: "Scroll point to the centre, then the top, then the bottom.", Fn: recenterTopBottom, Interactive: true},
+	} {
+		if err := r.Register(c); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// clearGoal drops the goal column so that the next vertical motion establishes
+// a fresh one from wherever point now is.
+func clearGoal(w *view.Window) { w.GoalCol = view.GoalColUnset }
+
+// --- character motion -------------------------------------------------------
+
+func forwardChar(e Env) error {
+	n, _ := e.Arg()
+	w := e.Win()
+	if n < 0 {
+		charBackward(w, -n)
+	} else {
+		charForward(w, n)
+	}
+	clearGoal(w)
+	return nil
+}
+
+func backwardChar(e Env) error {
+	n, _ := e.Arg()
+	w := e.Win()
+	if n < 0 {
+		charForward(w, -n)
+	} else {
+		charBackward(w, n)
+	}
+	clearGoal(w)
+	return nil
+}
+
+// charForward advances point n grapheme clusters, crossing line boundaries and
+// stopping silently at the end of the buffer. Running off the end is ordinary
+// use, not an error.
+func charForward(w *view.Window, n int) {
+	b := w.Buf
+	for ; n > 0; n-- {
+		ln := b.Line(w.Pt.Line)
+		if w.Pt.Col < ln.Len() {
+			w.Pt.Col = ln.NextGrapheme(w.Pt.Col)
+			continue
+		}
+		if w.Pt.Line >= b.NumLines()-1 {
+			return
+		}
+		w.Pt.Line++
+		w.Pt.Col = 0
+	}
+}
+
+// charBackward retreats point n grapheme clusters, stopping at the origin.
+func charBackward(w *view.Window, n int) {
+	b := w.Buf
+	for ; n > 0; n-- {
+		if w.Pt.Col > 0 {
+			w.Pt.Col = b.Line(w.Pt.Line).PrevGrapheme(w.Pt.Col)
+			continue
+		}
+		if w.Pt.Line == 0 {
+			return
+		}
+		w.Pt.Line--
+		w.Pt.Col = b.Line(w.Pt.Line).Len()
+	}
+}
+
+// --- vertical motion --------------------------------------------------------
+
+func nextLine(e Env) error {
+	n, _ := e.Arg()
+	lineDelta(e.Win(), n)
+	return nil
+}
+
+func previousLine(e Env) error {
+	n, _ := e.Arg()
+	lineDelta(e.Win(), -n)
+	return nil
+}
+
+// lineDelta moves point n lines while holding the goal column, establishing it
+// first if this is the start of a vertical run. RuneAt clamps a goal past the
+// end of a short line to that line's end without losing the goal itself, which
+// is what makes the descend-and-return case work.
+func lineDelta(w *view.Window, n int) {
+	b := w.Buf
+	if w.GoalCol == view.GoalColUnset {
+		w.GoalCol = b.Line(w.Pt.Line).DisplayCol(w.Pt.Col)
+	}
+	target := w.Pt.Line + n
+	if target < 0 {
+		target = 0
+	}
+	if last := b.NumLines() - 1; target > last {
+		target = last
+	}
+	w.Pt.Line = target
+	w.Pt.Col = b.Line(target).RuneAt(w.GoalCol)
+}
+
+// --- word motion ------------------------------------------------------------
+
+func forwardWord(e Env) error {
+	n, _ := e.Arg()
+	w := e.Win()
+	if n < 0 {
+		wordBackward(w, -n)
+	} else {
+		wordForward(w, n)
+	}
+	clearGoal(w)
+	return nil
+}
+
+func backwardWord(e Env) error {
+	n, _ := e.Arg()
+	w := e.Win()
+	if n < 0 {
+		wordForward(w, -n)
+	} else {
+		wordBackward(w, n)
+	}
+	clearGoal(w)
+	return nil
+}
+
+// moIsWordRune reports whether r is a word constituent: letters, digits and
+// combining marks. Marks count so a decomposed character such as e+U+0301 reads
+// as part of its word rather than terminating it. Underscore and hyphen do not,
+// matching emacs's fundamental mode.
+//
+// edit.go carries an equivalent edIsWordRune for the kill-word commands. The two
+// are deliberately separate only because they were written in parallel; they
+// should be collapsed into one shared helper, since forward-word and kill-word
+// disagreeing about where a word ends would be a real bug.
+func moIsWordRune(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsMark(r)
+}
+
+// wordForward advances to the end of the nth word ahead: skip whatever is not a
+// word, then consume the word itself. It stops early at the end of the buffer.
+func wordForward(w *view.Window, n int) {
+	for ; n > 0; n-- {
+		if !moSkipForward(w, false) {
+			return
+		}
+		moSkipForward(w, true)
+	}
+}
+
+// wordBackward retreats to the start of the nth word behind.
+func wordBackward(w *view.Window, n int) {
+	for ; n > 0; n-- {
+		if !moSkipBackward(w, false) {
+			return
+		}
+		moSkipBackward(w, true)
+	}
+}
+
+// moSkipForward advances point while the rune after it is a word constituent
+// when want is true, or is not one when want is false. It reports false only
+// when it ran into the end of the buffer.
+//
+// A word never continues across a line boundary, so consuming word runes stops
+// at the end of a line; consuming non-word runes treats the boundary as one more
+// non-word rune and crosses it.
+func moSkipForward(w *view.Window, want bool) bool {
+	b := w.Buf
+	for {
+		rs := b.Line(w.Pt.Line).Runes()
+		for w.Pt.Col < text.RuneIdx(len(rs)) {
+			if moIsWordRune(rs[w.Pt.Col]) != want {
+				return true
+			}
+			w.Pt.Col++
+		}
+		if w.Pt.Line >= b.NumLines()-1 {
+			return false
+		}
+		if want {
+			return true
+		}
+		w.Pt.Line++
+		w.Pt.Col = 0
+	}
+}
+
+// moSkipBackward is moSkipForward's mirror, inspecting the rune before point.
+func moSkipBackward(w *view.Window, want bool) bool {
+	b := w.Buf
+	for {
+		rs := b.Line(w.Pt.Line).Runes()
+		for w.Pt.Col > 0 {
+			if moIsWordRune(rs[w.Pt.Col-1]) != want {
+				return true
+			}
+			w.Pt.Col--
+		}
+		if w.Pt.Line == 0 {
+			return false
+		}
+		if want {
+			return true
+		}
+		w.Pt.Line--
+		w.Pt.Col = b.Line(w.Pt.Line).Len()
+	}
+}
+
+// --- line and buffer ends ---------------------------------------------------
+
+func moveBeginningOfLine(e Env) error {
+	w := e.Win()
+	n, _ := e.Arg()
+	lineOffset(w, n)
+	w.Pt.Col = 0
+	clearGoal(w)
+	return nil
+}
+
+func moveEndOfLine(e Env) error {
+	w := e.Win()
+	n, _ := e.Arg()
+	lineOffset(w, n)
+	w.Pt.Col = w.Buf.Line(w.Pt.Line).Len()
+	clearGoal(w)
+	return nil
+}
+
+// lineOffset moves point n-1 lines, so that an argument of 1 — or none at all —
+// leaves it on the current line. This is how emacs's C-a and C-e read an
+// argument: C-u 3 C-a goes to the start of the line two below.
+func lineOffset(w *view.Window, n int) {
+	target := w.Pt.Line + n - 1
+	if target < 0 {
+		target = 0
+	}
+	if last := w.Buf.NumLines() - 1; target > last {
+		target = last
+	}
+	w.Pt.Line = target
+}
+
+func beginningOfBuffer(e Env) error {
+	w := e.Win()
+	w.Pt = text.Pos{}
+	clearGoal(w)
+	return nil
+}
+
+func endOfBuffer(e Env) error {
+	w := e.Win()
+	w.Pt = w.Buf.End()
+	clearGoal(w)
+	return nil
+}
+
+// --- scrolling --------------------------------------------------------------
+
+func scrollUpCommand(e Env) error   { return scrollBy(e, 1) }
+func scrollDownCommand(e Env) error { return scrollBy(e, -1) }
+
+// scrollBy moves point and the viewport one screenful in direction dir, keeping
+// two lines of overlap so the reader has context across the jump. An explicit
+// argument scrolls that many lines instead of a screenful.
+func scrollBy(e Env, dir int) error {
+	n, explicit := e.Arg()
+	lines := e.TextHeight() - 2
+	if lines < 1 {
+		lines = 1
+	}
+	if explicit {
+		lines = n
+	}
+	lines *= dir
+
+	w := e.Win()
+	b := w.Buf
+	last := b.NumLines() - 1
+
+	target := w.Pt.Line + lines
+	if target < 0 {
+		target = 0
+	}
+	if target > last {
+		target = last
+	}
+	w.Pt.Line = target
+	w.Pt = b.ClampPos(w.Pt)
+
+	// Move the viewport with point so its position on screen is roughly
+	// preserved; the render pass reconciles anything left inconsistent.
+	top := w.Top + lines
+	if top < 0 {
+		top = 0
+	}
+	if top > last {
+		top = last
+	}
+	w.Top = top
+
+	clearGoal(w)
+	return nil
+}
+
+// --- goto-line --------------------------------------------------------------
+
+// gotoLine jumps to a line by its one-based number, prompting unless an
+// argument supplied it. Out-of-range numbers clamp into the buffer, and
+// unparseable input is reported in the echo area rather than returned as an
+// error: a typo is not a failure worth unwinding.
+func gotoLine(e Env) error {
+	n, explicit := e.Arg()
+	if !explicit {
+		s, err := e.ReadString(ReadOpts{Prompt: "Goto line: "})
+		if err != nil {
+			return err
+		}
+		v, convErr := strconv.Atoi(strings.TrimSpace(s))
+		if convErr != nil {
+			e.Echo("Not a number: %s", s)
+			return nil
+		}
+		n = v
+	}
+
+	w := e.Win()
+	target := n - 1
+	if target < 0 {
+		target = 0
+	}
+	if last := w.Buf.NumLines() - 1; target > last {
+		target = last
+	}
+	w.Pt = text.Pos{Line: target}
+	clearGoal(w)
+	return nil
+}
+
+// --- recentring -------------------------------------------------------------
+
+// recenterTopBottom scrolls the window so point sits at the centre, then the
+// top, then the bottom on successive presses, as emacs's C-l does. Any other
+// command in between restarts the cycle at the centre, which is why it consults
+// LastCommand rather than only its own stored position.
+func recenterTopBottom(e Env) error {
+	w := e.Win()
+	seq := e.Seq()
+	if e.LastCommand() == "recenter-top-bottom" {
+		seq.RecenterCycle = (seq.RecenterCycle + 1) % 3
+	} else {
+		seq.RecenterCycle = 0
+	}
+
+	h := e.TextHeight()
+	if h < 1 {
+		h = 1
+	}
+
+	var top int
+	switch seq.RecenterCycle {
+	case 0:
+		top = w.Pt.Line - (h-1)/2
+	case 1:
+		top = w.Pt.Line
+	default:
+		top = w.Pt.Line - h + 1
+	}
+	if top < 0 {
+		top = 0
+	}
+	w.Top = top
+
+	clearGoal(w)
+	return nil
+}
