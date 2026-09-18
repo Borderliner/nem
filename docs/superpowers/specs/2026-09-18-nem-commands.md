@@ -65,6 +65,32 @@ breaks the run. `C-k C-k C-k` then `C-y` restores three lines as one block —
 this is the single most-cited kill-ring behaviour and the integration harness
 tests it directly.
 
+Run-awareness lives **in the ring**, not in the commands: `KillForward` and
+`KillBackward` decide for themselves whether to extend the newest entry or push
+a new one. This deliberately differs from emacs, where `kill-region` inspects
+`last-command` to choose between `kill-new` and `kill-append` — putting it in
+the ring means an individual command cannot get it wrong.
+
+Backward kills (`M-<backspace>`) extend the entry on the **left**, so killing
+backward word by word yields reading order: `M-DEL M-DEL` over "foo bar" yanks
+back as `"foo bar"`, not `"bar foo"`. Getting this backwards fails silently,
+which is why it has a named regression test.
+
+**The yank pointer survives a broken run.** After `M-y` leaves the pointer
+mid-ring, a *later* `C-y` yanks from there rather than from the front — real
+emacs computes `(mod (- n (length kill-ring-yank-pointer)) (length kill-ring))`
+and only a fresh kill resets the pointer. This is faithful, non-obvious, and
+looks like a bug in a year's time, so it is pinned by test.
+
+`Kill("")` is a complete no-op: no entry, no run started or broken, no pending
+yank-pop invalidated. Emacs's `kill-new ""` does push an empty entry; we
+diverge deliberately, since an empty entry is pure noise in the rotation.
+
+**`BreakRun` belongs in the central dispatch path**, called for every command
+that is neither a kill nor a yank. Scattered across individual commands it will
+be forgotten in exactly one of them, and the symptom — two kills fusing into
+one entry — will look like a ring bug.
+
 ## Undo
 
 | Binding | Command | Notes |
