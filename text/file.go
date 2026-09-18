@@ -93,6 +93,18 @@ func (b *Buffer) Save() error {
 
 // SaveAs writes the buffer to path and adopts it as the buffer's file.
 func (b *Buffer) SaveAs(path string) error {
+	if path == "" {
+		return ErrNoPath
+	}
+	// Write first and adopt the path only on success. Assigning the path up
+	// front and then delegating to Save leaves a failed write with the buffer
+	// claiming a file it was never written to, so a later C-x C-s would
+	// silently write somewhere the user never asked for.
+	if err := os.WriteFile(path, b.bytes(), 0o644); err != nil {
+		return err
+	}
 	b.path = path
-	return b.Save()
+	b.SetModified(false)
+	b.BreakUndo()
+	return nil
 }
