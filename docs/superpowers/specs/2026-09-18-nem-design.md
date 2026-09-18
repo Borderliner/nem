@@ -445,3 +445,42 @@ therefore deliberately asymmetric between the two directions.
 `Layout`, and permits anything before the first `Layout` (the startup case), so
 its behaviour depends on call order. The check gates only the dimension being
 divided: stacking panes cannot worsen a pre-existing narrowness.
+
+## Boundary rulings (wave 3)
+
+Decided while building the `command` contract. Each is a boundary someone will
+otherwise try to cross, so they are recorded as rulings rather than notes.
+
+**`Env` grew from 16 to 30 methods, and that was correct.** Walking the v1
+command inventory against the original interface found eight commands that could
+not be written at all. The notable one: `M-y` must delete the text the previous
+yank inserted, so it needs that extent — sequencing state is not optional.
+Additions covered screenful height (`C-v`/`M-v`/`C-l`), char and key prompts
+(`M-%`, `C-x s`, `describe-key`), buffer naming and lifecycle (`C-x b`/`k`/`C-x
+C-b`, `*scratch*`), command invocation and completion (`M-x`, and Lua's
+`nem.run`), and binding introspection (`describe-bindings`/`describe-key`).
+
+**Cross-command state is a typed `Seq` struct, never an untyped `any`.** `Env`
+exposes `Seq() *Seq` returning a mutable pointer. A failed type assertion in an
+editor means a panic, and a panic means data loss; a struct field is checked at
+compile time and a future sequencing need costs a field rather than an interface
+method.
+
+**Lua hooks fire in `editor`, around dispatch, keyed on command name.** There is
+no `RunHook` on `Env`. Commands stay ignorant that a scripting layer exists,
+which is what keeps `command` free of `lua`.
+
+**`show-paren` is computed by `ui` from point at render time, not by a command.**
+`Env` cannot reach the screen by design, so bracket matching has nowhere to
+report to — correctly. Nothing highlight-related belongs on `Env`.
+
+**Buffer names live in `editor`, not `text`.** `text.Buffer` has only `Path()`.
+`editor` owns the name↔buffer map, which is why `*scratch*` and `*Buffer List*`
+are editor concepts rather than text ones.
+
+**`commandtest.Fake` holds real `text.Buffer`, `view.Window` and `KillRing`
+instances, not stubs**, so kill-run accumulation and yank behaviour are genuine
+in tests. It invokes `OnChange` once per successive prefix (`f`, `fo`, `foo`) so
+incremental-search commands are driven the way real typing drives them, and
+exhausting its canned replies returns `ErrNoReply` rather than `ErrQuit` — a test
+bug must never masquerade as the user pressing `C-g`.
