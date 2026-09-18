@@ -107,6 +107,25 @@ type Theme struct {
 	// everywhere, and is the only palette-independent way to mark a span.
 	Region tcell.Style
 
+	// Panels - the completion list and prefix-key discovery - are drawn cell by
+	// cell rather than through Lip Gloss, because they need to emphasise
+	// individual runes inside a row and to clip a wide glyph at the border.
+	//
+	// PanelBorder is the same hairline as the modeline rule and the pane divider,
+	// so all of nem's chrome reads as one system rather than three.
+	//
+	// PanelSelected marks the row the user is on, and is reverse for exactly the
+	// reason Region is: it is a selection, and swapping foreground and background
+	// adapts to the terminal's palette instead of guessing at it.
+	//
+	// PanelMatch emphasises the runes a fuzzy query matched. Weight alone,
+	// deliberately: it composes with PanelSelected's inversion instead of
+	// fighting it, it needs no colour so it cannot clash with a palette, and it
+	// leaves the single accent spent where it belongs - on unsaved changes.
+	PanelBorder   tcell.Style
+	PanelSelected tcell.Style
+	PanelMatch    tcell.Style
+
 	// Chrome, rendered through Lip Gloss and blitted in. The modeline is built
 	// from four separately styled segments rather than one flat bar, which is
 	// what lets focus read as weight instead of as a block of colour.
@@ -146,6 +165,10 @@ func DefaultTheme() Theme {
 		ParenMatch:    tcell.StyleDefault.Bold(true).Underline(true),
 		ParenMismatch: tcell.StyleDefault.Bold(true).Foreground(tcell.GetColor(colourMark)),
 		Region:        tcell.StyleDefault.Reverse(true),
+
+		PanelBorder:   tcell.StyleDefault.Foreground(tcell.GetColor(colourRule)),
+		PanelSelected: tcell.StyleDefault.Reverse(true),
+		PanelMatch:    tcell.StyleDefault.Bold(true),
 
 		ModelineName:    lipgloss.NewStyle().Bold(true),
 		ModelineNameOff: lipgloss.NewStyle().Foreground(quiet),

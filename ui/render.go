@@ -26,6 +26,20 @@ type Frame struct {
 	// MiniOn reports whether a minibuffer prompt is active, which is what moves
 	// the cursor to the echo row.
 	MiniOn bool
+	// Panels are drawn over the tiled frame, in slice order, so a later panel
+	// overlaps an earlier one. They are not part of the split tree and so cannot
+	// disturb its layout; view.PlacePanel decides where each one sits.
+	Panels []Panel
+	// CursorSet moves the cursor to CursorX, CursorY in absolute screen
+	// coordinates, overriding both the active window and the echo row.
+	//
+	// It exists because a prompt can render inside a panel, and neither of the
+	// other two can express that: MiniPt addresses a column of the echo row, and
+	// the window path derives its position from point in a buffer. The caller
+	// that drew the prompt into a panel already knows the exact cell, so it says
+	// so rather than the renderer inferring it.
+	CursorX, CursorY int
+	CursorSet        bool
 }
 
 // Render draws f onto scr using th. It does not call Show; the caller decides
@@ -64,6 +78,14 @@ func Render(scr tcell.Screen, f Frame, th Theme) {
 	}
 
 	drawEcho(scr, echoY, w, f, th)
+
+	// Panels last, over everything the tree drew, and before the cursor is
+	// placed: a prompt rendered inside a panel needs the hardware cursor to land
+	// on it, which means the panel has to exist on screen first.
+	for _, p := range f.Panels {
+		drawPanel(scr, p, th)
+	}
+
 	placeCursor(scr, w, h, echoY, rects, f)
 }
 
@@ -216,6 +238,13 @@ func drawEcho(scr tcell.Screen, y, width int, f Frame, th Theme) {
 // owns the screen: a styled cell pretending to be a cursor is visibly wrong to
 // look at all day, and it is invisible to an IME and to a screen reader.
 func placeCursor(scr tcell.Screen, w, h, echoY int, rects map[*view.Window]view.Rect, f Frame) {
+	// An explicit override wins over everything, including an active prompt: when
+	// completion renders the prompt inside a panel, MiniOn is still set but the
+	// echo row is not where the user is typing.
+	if f.CursorSet {
+		scr.ShowCursor(clampInt(f.CursorX, 0, w-1), clampInt(f.CursorY, 0, h-1))
+		return
+	}
 	if f.MiniOn {
 		x := int(f.MiniPt)
 		if x < 0 {
