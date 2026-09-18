@@ -151,8 +151,16 @@ that drove the whole architecture.
 | `C-x C-c` | `save-buffers-kill-terminal` | Prompts on unsaved buffers. |
 | `M-x` | `execute-extended-command` | Completes over `Registry.Names()`. |
 | `C-u` | `universal-argument` | Handled in the event loop, not as an ordinary command. |
-| `C-h b` | `describe-bindings` | Renders `Map.Bindings()`. |
-| `C-h k` | `describe-key` | Reads one key sequence, reports its command. |
+| `<f1> b` | `describe-bindings` | Renders `Map.Bindings()`. |
+| `<f1> k` | `describe-key` | Reads one key sequence, reports its command. |
+| `C-h b` / `C-h k` | same | Bound alongside `<f1>`, but only reachable on terminals that negotiate CSI-u. |
+
+**`<f1>` is the primary help prefix, not `C-h`.** tcell's legacy input path
+cannot distinguish `C-h` from Backspace — `input.go:445` is `case '\b', '\x7F':`
+and `key.go:296` folds `KeyBackspace2` into `KeyBackspace`. tcell does request
+the advanced keyboard protocols on `XTermLike` terminals, so `C-h` works on a
+modern terminal and silently does not on an old one. F1 is `help-command` in
+emacs as well, so binding both is faithful rather than a workaround.
 
 ## Self-insert
 

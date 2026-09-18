@@ -387,3 +387,61 @@ link concept, worth knowing if clickable paths in a compile buffer ever appeal.
 **`DEL` means backspace, not forward-delete.** Forward-delete is `<delete>`.
 This is emacs-faithful and a guaranteed first-time mistake in a user config, so
 it belongs in the user-facing docs rather than only in a code comment.
+
+## Corrections from wave 2
+
+### `Env` is an interface, not a struct
+
+Section 2 wrote `func (e *Env) Win() ...`, implying a struct holding editor
+state. That cannot work: the state lives in `editor`, so a struct `Env` in
+`command` would force `command` to import `editor`, which imports `command`.
+
+**`Env` is an interface declared in `command` and implemented by `editor`.**
+`Func` becomes `func(Env) error`. This also makes Section 4's "headless fake
+Env" testing strategy actually possible — commands become pure functions over
+an interface, and `command/commandtest` supplies the double.
+
+### tcell's key space: my brief was wrong
+
+I told the decoder agent that `KeyCtrlI == KeyTab`, `KeyCtrlM == KeyEnter` and
+similar. **No such collisions exist.** `KeyCtrlSpace = iota + 64` numbers Ctrl'd
+keys 64–95 — the ASCII codes of `@`, `A`–`Z`, `[`–`_` — a space entirely
+separate from the C0 codes. `KeyCtrlH` is 72; `KeyBackspace` is 8. Verified at
+runtime. The only genuine identity is `KeyBackspace2 == KeyDEL == 127`.
+
+Consequence: for constants 64–95 the constant *is* the rune, and the emacs folds
+still happen, in `keymap.Normalize` rather than by numeric accident.
+
+**For raw C0 bytes, use `byte | 0x40`, never tcell's `ch + 0x60`.** The latter is
+correct only for the 26 letters: at `0x1F` it yields `0x7F` (DEL) where
+`byte | 0x40` yields `_`. Since **`C-_` is undo**, tcell's formula silently
+breaks it.
+
+### `C-h` is not reliably available, so help lives on `<f1>`
+
+tcell destroys the `C-h` / Backspace distinction in two independent places on the
+legacy input path: `input.go:445` is `case '\b', '\x7F':`, and `key.go:296`
+folds `KeyBackspace2` into `KeyBackspace`.
+
+tcell *does* request the advanced keyboard protocols when the terminfo entry is
+`XTermLike` (`tscreen.go:332` sends modifyOtherKeys + kitty CSI-u +
+win32-input-mode), so `C-h` is recoverable on a modern terminal — but not on a
+legacy one, and nem cannot depend on it.
+
+**Resolution: `<f1>` is the primary help prefix, with `C-h` bound alongside it.**
+F1 is `help-command` in emacs too, so this is faithful rather than a compromise,
+and users whose terminals negotiate CSI-u get the muscle memory anyway.
+
+### Layout: dividers occupy real columns
+
+The brief asked for children summing to the parent rect *and* a divider between
+them; those contradict. Resolved: the divider lives inside the parent, so the
+invariant is `A.W + 1 + B.W == parent.W`, and exact tiling means windows **plus
+dividers** cover every cell exactly once. Horizontal splits carry no divider —
+the upper window's modeline already separates the panes, as in emacs. Tiling is
+therefore deliberately asymmetric between the two directions.
+
+`Tree.Split` validates minimum sizes against the frame size recorded by the last
+`Layout`, and permits anything before the first `Layout` (the startup case), so
+its behaviour depends on call order. The check gates only the dimension being
+divided: stacking panes cannot worsen a pre-existing narrowness.
