@@ -31,16 +31,23 @@ nem/
   cmd/nem/main.go      flag parsing, terminal setup/teardown, panic recovery
   text/                buffer, lines, positions, edit ops, undo log
   keymap/              key parsing, prefix tree, binding resolution
+  view/                Window (buffer + point + viewport), split tree, layout maths
   command/             named command registry + Env
-  ui/                  tcell screen, window tree, render, Lip Gloss blitter
+  ui/                  tcell screen, render, Lip Gloss blitter
   lua/                 gopher-lua host: config loading, API surface
   editor/              wires it all together, owns the event loop
 ```
 
 Dependency direction is strictly one-way: `text` and `keymap` import nothing of
-ours, `command` imports `text` + `keymap`, `ui` imports `text`, `lua` imports
-`command`, `editor` imports everything, and nothing imports `editor`. That is
-what keeps the terminal out of the testable parts.
+ours, `view` imports `text`, `command` imports `text` + `keymap` + `view`, `ui`
+imports `text` + `view`, `lua` imports `command`, `editor` imports everything,
+and nothing imports `editor`. That is what keeps the terminal out of the
+testable parts.
+
+`view` exists so that `command` can reach the active window without importing
+the renderer. A `Window` is buffer + point + viewport and the split tree is
+pure geometry — neither knows what a terminal is, so both stay unit-testable
+and `ui` is left holding only tcell and drawing.
 
 ### Three coordinate spaces
 
@@ -129,7 +136,7 @@ table, so `M-x` finds them with no special casing.
 ### Env — what a command may touch
 
 ```go
-func (e *Env) Win() *Window          // active window (point lives here)
+func (e *Env) Win() *view.Window     // active window (point lives here)
 func (e *Env) Buf() *text.Buffer     // active buffer
 func (e *Env) Arg() (int, bool)      // universal argument
 func (e *Env) Kill(s string)         // push onto the kill ring
@@ -197,7 +204,8 @@ the chrome is affected.
 
 ### Window tree
 
-A binary tree of splits; leaves hold windows.
+A binary tree of splits; leaves hold windows. Lives in `view`, not `ui` — it is
+geometry, and computing rects needs no terminal.
 
 ```go
 type Node interface{ isNode() }
@@ -282,11 +290,12 @@ feed `C-k C-k C-y`, assert both killed lines came back as one block. Feed
 ## Build order
 
 1. `text`, `keymap`, `ui/blit` — no dependencies on our other code. **Parallel.**
-2. `command` registry + Env + the movement/edit command set.
-3. `ui` window tree, layout, render.
-4. `editor` event loop, keymap stack, `decodeKey`, recursive minibuffer edit.
-5. `lua` host and config loading.
-6. Auto-indent, bracket matching, integration harness.
+2. `view` — Window, split tree, layout rects. Depends only on `text`.
+3. `command` registry + Env + the movement/edit command set.
+4. `ui` render pass over the layout rects.
+5. `editor` event loop, keymap stack, `decodeKey`, recursive minibuffer edit.
+6. `lua` host and config loading.
+7. Auto-indent, bracket matching, integration harness.
 
 ## Deferred, by explicit decision
 
