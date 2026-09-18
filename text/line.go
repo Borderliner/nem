@@ -27,6 +27,12 @@ type segment struct {
 
 // Line is a single line of text plus a cached grapheme/column layout.
 // The cache is built lazily and invalidated on edit.
+//
+// Guaranteed: DisplayCol(Len()) == Width(). Renderers rely on it to size the
+// last grapheme of a line, computing a cluster's width as the difference
+// between its own start column and the next boundary's - and for the final
+// cluster that next boundary is Len(). Anything changing DisplayCol must keep
+// this true; text/guarantee_test.go pins it across every width class.
 type Line struct {
 	runes []rune
 	segs  []segment
@@ -103,7 +109,9 @@ func (l *Line) Width() ColIdx {
 }
 
 // DisplayCol returns the screen column at which the grapheme containing rune
-// index i begins. Out-of-range indices clamp to the ends of the line.
+// index i begins. Out-of-range indices clamp to the ends of the line, so
+// DisplayCol(Len()) is the line's Width - a guarantee callers depend on to
+// measure the final cluster without a special case.
 func (l *Line) DisplayCol(i RuneIdx) ColIdx {
 	l.build()
 	if i <= 0 {
