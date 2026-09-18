@@ -15,9 +15,14 @@ const (
 type Anchor int
 
 const (
+	// AnchorUnset is the zero value and is not a placement. PlacePanel refuses
+	// it, so a caller that forgets to set Anchor gets no panel and a failing
+	// test rather than a silently point-anchored one positioned at 0,0 because
+	// PtX and PtY were also left unset.
+	AnchorUnset Anchor = iota
 	// AnchorPoint opens the panel next to point, which is where the eye already
 	// is. Used by completion and by prefix-key discovery.
-	AnchorPoint Anchor = iota
+	AnchorPoint
 	// AnchorBottom sits the panel flush to the bottom of the frame, which is the
 	// emacs-shaped rendering selected by completion-style = "bottom".
 	AnchorBottom
@@ -57,6 +62,10 @@ type PanelReq struct {
 // size. The caller is then expected to render some other way rather than draw a
 // box too small to read.
 func PlacePanel(req PanelReq) (Rect, bool) {
+	if req.Anchor == AnchorUnset {
+		return Rect{}, false
+	}
+
 	f := req.Frame
 	if f.W < MinPanelWidth || f.H < MinPanelHeight {
 		return Rect{}, false

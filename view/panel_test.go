@@ -55,7 +55,7 @@ func TestTinyFrameIsRefused(t *testing.T) {
 	for _, frame := range []Rect{
 		{W: 0, H: 0}, {W: 1, H: 1}, {W: 3, H: 5}, {W: 40, H: 1}, {W: -4, H: -4},
 	} {
-		if got, ok := PlacePanel(PanelReq{W: 10, H: 4, Frame: frame}); ok {
+		if got, ok := PlacePanel(PanelReq{W: 10, H: 4, Frame: frame, Anchor: AnchorCenter}); ok {
 			t.Errorf("frame %+v accepted, returned %+v; want refusal", frame, got)
 		}
 	}
@@ -63,7 +63,7 @@ func TestTinyFrameIsRefused(t *testing.T) {
 
 func TestFrameExactlyAtTheMinimumIsAccepted(t *testing.T) {
 	frame := Rect{W: MinPanelWidth, H: MinPanelHeight}
-	got, ok := PlacePanel(PanelReq{W: 10, H: 10, Frame: frame})
+	got, ok := PlacePanel(PanelReq{W: 10, H: 10, Frame: frame, Anchor: AnchorCenter})
 	if !ok {
 		t.Fatalf("frame at exactly the minimum was refused")
 	}
@@ -277,5 +277,18 @@ func TestPointOutsideTheFrameIsClamped(t *testing.T) {
 				t.Errorf("got %+v escapes frame %+v", got, frame)
 			}
 		})
+	}
+}
+
+// A zero PanelReq must produce no panel. AnchorPoint used to be the zero value,
+// so forgetting to set Anchor silently point-anchored at 0,0 - a panel in the
+// top-left corner that looked like a placement bug rather than a missing field.
+// Refusing the zero value turns that into a failing test at the call site.
+func TestUnsetAnchorIsRefused(t *testing.T) {
+	if _, ok := PlacePanel(PanelReq{
+		W: 30, H: 8,
+		Frame: Rect{X: 0, Y: 0, W: 80, H: 23},
+	}); ok {
+		t.Error("PlacePanel with no Anchor returned ok; want refusal so a forgotten field is caught")
 	}
 }
