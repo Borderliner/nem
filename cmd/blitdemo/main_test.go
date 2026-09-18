@@ -137,7 +137,7 @@ func TestModelineSpansPaneWidth(t *testing.T) {
 
 	// The left modeline should carry the modified flag near its start.
 	row := dump(scr)[modeRow]
-	if !strings.Contains(row, "**") {
+	if !strings.Contains(row, "▍") {
 		t.Errorf("modeline row missing modified flag: %q", row)
 	}
 	if !strings.Contains(row, "buffer.go") {

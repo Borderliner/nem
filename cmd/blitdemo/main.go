@@ -21,18 +21,13 @@ import (
 	"github.com/hajianpour/nem/ui/blit"
 )
 
-// A small palette, kept in one place so the active and inactive treatments stay
-// deliberate rather than accumulating ad hoc colours.
+// The palette mirrors ui.DefaultTheme so this mock previews the real chrome
+// rather than drifting into a look nem does not have. Three colours, no
+// background ever painted: the editor sits inside the terminal's own palette.
 var (
-	colText       = lipgloss.Color("252")
-	colDim        = lipgloss.Color("244")
-	colDivider    = lipgloss.Color("238")
-	colAccent     = lipgloss.Color("170")
-	colModeBgOn   = lipgloss.Color("53")
-	colModeBgOff  = lipgloss.Color("236")
-	colModeFgOn   = lipgloss.Color("225")
-	colModeFgOff  = lipgloss.Color("245")
-	colMiniPrompt = lipgloss.Color("178")
+	colQuiet = lipgloss.Color("#8a857c") // secondary text, inactive names
+	colRule  = lipgloss.Color("#6b655b") // modeline hairline, pane divider
+	colMark  = lipgloss.Color("#b4543a") // the one accent: unsaved changes
 )
 
 type pane struct {
@@ -146,8 +141,8 @@ func drawPane(scr tcell.Screen, x, y, w, h int, p pane, isActive bool) {
 	}
 	textH := h - 1
 
-	body := lipgloss.NewStyle().Foreground(colText)
-	gutter := lipgloss.NewStyle().Foreground(colDim)
+	body := lipgloss.NewStyle() // terminal's own foreground
+	gutter := lipgloss.NewStyle().Foreground(colQuiet)
 
 	for i := 0; i < textH; i++ {
 		var row string
@@ -163,40 +158,41 @@ func drawPane(scr tcell.Screen, x, y, w, h int, p pane, isActive bool) {
 	blit.Draw(scr, x, y+textH, w, 1, modeline(p, w, isActive))
 }
 
-// modeline builds the status bar for a pane, padded to exactly w cells.
+// modeline builds the status line for a pane, padded to exactly w cells.
+//
+// A hairline rule with the buffer name set into it: the modified mark and name
+// on the left, position flush right, rule filling the span between. Focus reads
+// as weight, not as a bar of colour.
 func modeline(p pane, w int, isActive bool) string {
-	fg, bg := colModeFgOff, colModeBgOff
-	if isActive {
-		fg, bg = colModeFgOn, colModeBgOn
-	}
-
-	flag := "--"
+	mark := " "
 	if p.modified {
-		flag = "**"
+		mark = lipgloss.NewStyle().Foreground(colMark).Bold(true).Render("▍")
 	}
 
-	left := fmt.Sprintf(" %s  %s", flag, p.name)
-	right := fmt.Sprintf("%d:%d ", p.line, p.col)
-
-	// Pad the middle so the position sits flush right. Width is measured in
-	// cells, not runes, which is the whole point of the exercise.
-	gap := w - lipgloss.Width(left) - lipgloss.Width(right)
-	if gap < 1 {
-		gap = 1
-	}
-
-	content := left + strings.Repeat(" ", gap) + right
-	style := lipgloss.NewStyle().Foreground(fg).Background(bg)
+	nameStyle := lipgloss.NewStyle().Foreground(colQuiet)
 	if isActive {
-		style = style.Bold(true)
+		nameStyle = lipgloss.NewStyle().Bold(true)
 	}
-	// MaxWidth guards against a pane too narrow for the content.
-	return style.MaxWidth(w).Render(content)
+	pos := fmt.Sprintf("%d:%d", p.line, p.col)
+
+	// Width is measured in cells, not runes, which is the whole point of the
+	// exercise: a miscount here bleeds into the divider column.
+	nameW, posW := lipgloss.Width(p.name), lipgloss.Width(pos)
+	if gap := w - 4 - nameW - posW; gap >= 1 {
+		return mark + nameStyle.Render(p.name) + " " +
+			lipgloss.NewStyle().Foreground(colRule).Render(strings.Repeat("─", gap)) + " " +
+			lipgloss.NewStyle().Foreground(colQuiet).Render(pos) + " "
+	}
+	if pad := w - 2 - nameW - posW; pad >= 1 {
+		return mark + nameStyle.Render(p.name) + strings.Repeat(" ", pad) +
+			lipgloss.NewStyle().Foreground(colQuiet).Render(pos) + " "
+	}
+	return lipgloss.NewStyle().MaxWidth(w).Render(mark + p.name)
 }
 
 // drawDivider draws the vertical rule between the two panes.
 func drawDivider(scr tcell.Screen, x, y, h int) {
-	rule := lipgloss.NewStyle().Foreground(colDivider).Render("│")
+	rule := lipgloss.NewStyle().Foreground(colRule).Render("│")
 	for i := 0; i < h; i++ {
 		blit.Draw(scr, x, y+i, 1, 1, rule)
 	}
@@ -204,9 +200,9 @@ func drawDivider(scr tcell.Screen, x, y, h int) {
 
 // drawMinibuffer draws the bottom line: a nano-style key hint strip.
 func drawMinibuffer(scr tcell.Screen, x, y, w int) {
-	key := lipgloss.NewStyle().Foreground(colAccent).Bold(true)
-	desc := lipgloss.NewStyle().Foreground(colDim)
-	prompt := lipgloss.NewStyle().Foreground(colMiniPrompt)
+	key := lipgloss.NewStyle().Bold(true)
+	desc := lipgloss.NewStyle().Foreground(colQuiet)
+	prompt := lipgloss.NewStyle().Foreground(colMark)
 
 	hints := []struct{ k, d string }{
 		{"C-x C-s", "save"},
