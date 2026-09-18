@@ -63,19 +63,27 @@ undo unit; a new edit after undoing discards the redo branch.
 nem.set("tab-width", 4)
 nem.bind("<f5>", "save-buffer")
 
-nem.command("reverse-line", "Reverse the current line.", function()
-  nem.buf.replace_line(nem.buf.line():reverse())
-end)
-nem.bind("C-c r", "reverse-line")
+nem.command("strip-trailing-space", "Remove trailing whitespace everywhere.",
+  function()
+    for i = 1, nem.buf.line_count() do
+      nem.buf.set_line(i, (nem.buf.get_line(i):gsub("%s+$", "")))
+    end
+  end)
+nem.bind("C-c w", "strip-trailing-space")
 
 nem.hook("before-save", function(buf)
-  if buf.path:match("%.go$") then nem.run("gofmt-buffer") end
+  if buf.path:match("%.go$") then nem.run("strip-trailing-space") end
 end)
 ```
 
 Commands you define are registered alongside the built-ins, so `M-x` finds them
-and `<f1> k` describes them. A broken config never takes the editor down — the
+and `<f1> k` describes them. Line numbers are 1-based, and anything a script
+changes is undoable with `C-/`. A broken config never takes the editor down — the
 error lands in the echo area and nem carries on with defaults.
+
+Scripts get `string`, `table` and `math`, but not `io` or `os`, so a hook cannot
+shell out to an external formatter. A formatter written in Lua against `nem.buf`
+works.
 
 See [docs/config.md](docs/config.md).
 

@@ -84,18 +84,94 @@ A command you define this way is registered in exactly the same table as the
 built-ins, so it appears in `M-x`, it is bindable, and `<f1> k` describes it.
 There is no second-class citizenship for Lua commands.
 
+## Reading and changing the buffer
+
+Inside a command or a hook, `nem.buf` reaches the current buffer. Outside one
+there is no buffer to act on, and these raise an error rather than guessing.
+
+**Line numbers are 1-based**, everywhere and without exception — matching Lua's
+own convention, the `line:col` the modeline shows, and `M-x goto-line`. Line 1 is
+the first line. Asking for a line that does not exist is an error, not a silently
+empty string.
+
+Where point is:
+
+| Call | Does |
+|---|---|
+| `nem.buf.line()` | the text of the line point is on |
+| `nem.buf.replace_line(s)` | rewrite that line |
+| `nem.buf.point()` | returns line, column |
+| `nem.buf.set_point(line, col)` | move point |
+
+Addressed by line number:
+
+| Call | Does |
+|---|---|
+| `nem.buf.line_count()` | how many lines the buffer has |
+| `nem.buf.get_line(n)` | the text of line `n` |
+| `nem.buf.set_line(n, s)` | rewrite line `n` |
+| `nem.buf.insert_line(n, s)` | insert a line, which becomes line `n` |
+| `nem.buf.remove_line(n)` | delete line `n` |
+
+`insert_line` accepts `line_count() + 1` to append, the same range
+`table.insert` takes.
+
+The whole buffer, and facts about it:
+
+| Call | Does |
+|---|---|
+| `nem.buf.text()` | the entire buffer as one string |
+| `nem.buf.set_text(s)` | replace the entire buffer |
+| `nem.buf.path()` | the file path, or `""` |
+| `nem.buf.modified()` | whether there are unsaved changes |
+
+`set_text` compares what you give it against what is there and rewrites only the
+lines that actually differ. So reading the buffer, transforming the string, and
+writing it back does not disturb your mark, other windows' cursors, or your undo
+history any more than the real change requires. Writing back identical text does
+nothing at all.
+
+Every change goes through the same edit machinery the built-in commands use, so
+anything a script does is undoable with `C-/`.
+
 ## Hooks
 
 ```lua
+-- Strip trailing whitespace from every line before saving.
 nem.hook("before-save", function(buf)
-  if buf.path:match("%.go$") then
-    nem.run("gofmt-buffer")
+  for i = 1, nem.buf.line_count() do
+    nem.buf.set_line(i, (nem.buf.get_line(i):gsub("%s+$", "")))
   end
 end)
 ```
 
 Hooks fire around command dispatch and are keyed on command name, so a hook
 never needs to know how the editor is wired.
+
+### Shelling out is not possible
+
+A hook cannot run `gofmt` or any other external program. Scripts do not get Lua's
+`io` or `os` libraries, so there is no way to spawn a process or read a file —
+see [What scripts can reach](#what-scripts-can-reach). A formatter written in Lua
+against `nem.buf` works; a formatter that calls out to a binary does not, yet.
+
+### One Lua idiom to avoid
+
+Do not call a method directly on a concatenation involving a `nem.` function:
+
+```lua
+-- Crashes: the interpreter faults on this shape.
+for line in (nem.buf.text() .. "\n"):gmatch("([^\n]*)\n") do end
+
+-- Fine: land the string in a local first.
+local src = nem.buf.text() .. "\n"
+for line in src:gmatch("([^\n]*)\n") do end
+```
+
+This is a defect in the Lua interpreter nem embeds, not in your config. It is
+caught safely — you get an error in the echo area rather than a lost buffer — but
+the error is unhelpful, so it is worth recognising. Iterating with
+`for i = 1, nem.buf.line_count()` avoids the shape entirely.
 
 ## When your config has a bug
 
@@ -106,8 +182,19 @@ can fix the file and restart without having lost anything.
 
 ## What scripts can reach
 
-Scripts get the `nem` table and nothing else — no filesystem handles into the
-editor's internals, no direct access to buffers other than through the documented
-API. That boundary exists so the scripting surface can stay stable even as the
-internals move, and so a future sandboxed runtime could be swapped in without
-breaking the scripts you have written.
+Scripts get the `nem` table plus the pure-computation half of Lua's standard
+library: `string`, `table`, `math`, and the base functions.
+
+They do **not** get `io`, `os`, `debug`, or `package`, and `dofile`, `loadfile`
+and `require` are removed. So a config cannot open a file, spawn a process, read
+an environment variable, or load more Lua from disk. It also has no route to the
+screen or to the editor's internals except through the documented `nem` calls.
+
+Two reasons for starting this tight. Relaxing a capability boundary later is
+harmless, while tightening one breaks configs people have already written. And
+keeping the surface small is what lets the internals move without breaking your
+config, and would let a sandboxed runtime be swapped in later if scripts ever
+come from anyone but you.
+
+`nem.api_version` is the version of this surface, so a config written against a
+future incompatible one can say so instead of failing in pieces.
