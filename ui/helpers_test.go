@@ -2,6 +2,7 @@ package ui
 
 import (
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -58,7 +59,7 @@ func sim(t *testing.T, w, h int) tcell.SimulationScreen {
 func draw(t *testing.T, w, h int, f Frame) tcell.SimulationScreen {
 	t.Helper()
 	scr := sim(t, w, h)
-	NewRenderer(DefaultTheme()).Render(scr, f)
+	Render(scr, f, DefaultTheme())
 	scr.Show()
 	return scr
 }
@@ -105,6 +106,15 @@ func colText(t *testing.T, scr tcell.SimulationScreen, x int) string {
 		b.WriteString(string(rs))
 	}
 	return b.String()
+}
+
+// linesOf returns n lines named line0..line(n-1).
+func linesOf(n int) []string {
+	out := make([]string, n)
+	for i := range out {
+		out[i] = "line" + strconv.Itoa(i)
+	}
+	return out
 }
 
 // singleFrame returns a frame with one window over the given lines.

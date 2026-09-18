@@ -314,7 +314,7 @@ func TestDegenerateFramesDoNotPanic(t *testing.T) {
 				}
 			}()
 			scr := sim(t, w, h)
-			NewRenderer(DefaultTheme()).Render(scr, f)
+			Render(scr, f, DefaultTheme())
 			scr.Show()
 		})
 	}
@@ -333,7 +333,7 @@ func TestDegenerateSplitFrameDoesNotPanic(t *testing.T) {
 			}
 		}()
 		scr := sim(t, size[0], size[1])
-		NewRenderer(DefaultTheme()).Render(scr, Frame{Tree: tree, Active: a})
+		Render(scr, Frame{Tree: tree, Active: a}, DefaultTheme())
 		scr.Show()
 	}
 }
@@ -353,50 +353,55 @@ func TestRenderIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestScrollStateIsForgottenWhenAWindowCloses(t *testing.T) {
-	a := view.NewWindow(bufferOf(t, strings.Repeat("x", 200)))
+// Two windows onto the same buffer scroll independently on both axes.
+//
+// This used to require a map in the renderer keyed by window, which leaked an
+// entry per closed window. Horizontal scroll now lives on view.Window beside
+// Top, so independence comes for free and a closed window's state is collected
+// with it - there is no longer anywhere for a leak to happen.
+func TestWindowsOntoOneBufferScrollIndependently(t *testing.T) {
+	buf := bufferOf(t, strings.Repeat("x", 200))
+	a := view.NewWindow(buf)
 	tree := view.NewTree(a)
-	scr := sim(t, 40, 10)
-	r := NewRenderer(DefaultTheme())
-	r.Render(scr, Frame{Tree: tree, Active: a})
+	scr := sim(t, 40, 12)
+	Render(scr, Frame{Tree: tree, Active: a}, DefaultTheme())
 
 	b, err := tree.Split(a, true)
 	if err != nil {
 		t.Fatalf("split: %v", err)
 	}
-	r.Render(scr, Frame{Tree: tree, Active: a})
-	if len(r.hscroll) != 2 {
-		t.Fatalf("scroll state holds %d windows, want 2", len(r.hscroll))
+	// Scroll one window far to the right, leave the other at the origin.
+	a.Pt = text.Pos{Line: 0, Col: 150}
+	b.Pt = text.Pos{Line: 0, Col: 0}
+	Render(scr, Frame{Tree: tree, Active: a}, DefaultTheme())
+
+	if a.LeftCol == 0 {
+		t.Error("window a did not scroll right to follow its point")
+	}
+	if b.LeftCol != 0 {
+		t.Errorf("window b LeftCol = %d, want 0: it shares a buffer, not a viewport", b.LeftCol)
 	}
 
 	if err := tree.Delete(b); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	r.Render(scr, Frame{Tree: tree, Active: a})
-
-	if len(r.hscroll) != 1 {
-		t.Errorf("scroll state holds %d windows after a close, want 1: a long session would leak", len(r.hscroll))
-	}
-	if _, stale := r.hscroll[b]; stale {
-		t.Error("closed window still has scroll state")
-	}
+	Render(scr, Frame{Tree: tree, Active: a}, DefaultTheme())
 }
 
 func TestHorizontalScrollReturnsLeftward(t *testing.T) {
 	f, w := singleFrame(t, strings.Repeat("abcde", 20))
-	r := NewRenderer(DefaultTheme())
 	scr := sim(t, 20, 6)
 
 	w.Pt = text.Pos{Line: 0, Col: 90}
-	r.Render(scr, f)
-	if r.hscroll[w] == 0 {
+	Render(scr, f, DefaultTheme())
+	if w.LeftCol == 0 {
 		t.Fatal("expected to have scrolled right")
 	}
 
 	w.Pt = text.Pos{Line: 0, Col: 0}
-	r.Render(scr, f)
-	if got := r.hscroll[w]; got != 0 {
-		t.Errorf("hscroll = %d after point returned to column 0, want 0", got)
+	Render(scr, f, DefaultTheme())
+	if got := w.LeftCol; got != 0 {
+		t.Errorf("LeftCol = %d after point returned to column 0, want 0", got)
 	}
 	scr.Show()
 	if got := string(cellAt(t, scr, 0, 0).Runes); got != "a" {
@@ -414,10 +419,21 @@ func TestCursorHiddenWhenActiveWindowIsNotOnScreen(t *testing.T) {
 	}
 }
 
+// A negative scroll margin is nonsense a config file can easily produce. It
+// must behave as zero rather than scrolling backwards or panicking, and since
+// the clamp now lives in Render the test has to be behavioural.
 func TestNegativeScrollMarginIsClamped(t *testing.T) {
-	r := NewRenderer(Theme{ScrollMargin: -5})
-	if r.th.ScrollMargin != 0 {
-		t.Errorf("ScrollMargin = %d, want 0", r.th.ScrollMargin)
+	f, w := singleFrame(t, linesOf(40)...)
+	w.Pt = text.Pos{Line: 30, Col: 0}
+
+	th := DefaultTheme()
+	th.ScrollMargin = -5
+	scr := sim(t, 20, 8)
+	Render(scr, f, th)
+
+	textH := 6 // 8 rows less the echo row less the modeline
+	if w.Top > 30 || 30 >= w.Top+textH {
+		t.Errorf("Top = %d leaves point at line 30 outside [%d,%d)", w.Top, w.Top, w.Top+textH)
 	}
 }
 
@@ -444,7 +460,7 @@ func TestTabRegionCarriesTheTextStyle(t *testing.T) {
 
 	scr := sim(t, 20, 6)
 	f, _ := singleFrame(t, "\tx")
-	NewRenderer(th).Render(scr, f)
+	Render(scr, f, th)
 	scr.Show()
 
 	wantFg, wantBg, _ := th.Text.Decompose()
@@ -523,7 +539,7 @@ func TestDrawLineDoesNotWriteLeftOfItsRectangle(t *testing.T) {
 	// in a split is the divider column and in general is not this pane's cell.
 	l := text.NewLine([]rune(strings.Repeat("日", 3))) // 6 columns
 	scr := sim(t, 8, 1)
-	NewRenderer(DefaultTheme()).drawLine(scr, 1, 0, 4, &l, 1)
+	drawLine(scr, 1, 0, 4, &l, 1, DefaultTheme(), lineHL{})
 	scr.Show()
 
 	if got := cellAt(t, scr, 0, 0); len(got.Runes) != 0 && string(got.Runes) != " " {

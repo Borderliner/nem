@@ -45,6 +45,12 @@ type Theme struct {
 	// Text area, applied via tcell directly.
 	Text  tcell.Style
 	Trunc tcell.Style
+	// ParenMatch styles both halves of a matched bracket pair, ParenMismatch a
+	// bracket whose partner is missing or of the wrong kind. Both are tcell
+	// styles because they apply to the text area, which never goes through Lip
+	// Gloss.
+	ParenMatch    tcell.Style
+	ParenMismatch tcell.Style
 
 	// Chrome, rendered through Lip Gloss and blitted in.
 	ModelineActive   lipgloss.Style
@@ -80,6 +86,11 @@ func DefaultTheme() Theme {
 	return Theme{
 		Text:  tcell.StyleDefault,
 		Trunc: tcell.StyleDefault.Foreground(tcell.ColorGray),
+		// A matched pair is marked by weight and reverse video rather than by a
+		// hue, so it stays legible whatever the terminal palette is; a mismatch
+		// is red, the one colour that reads as wrong everywhere.
+		ParenMatch:    tcell.StyleDefault.Bold(true).Reverse(true),
+		ParenMismatch: tcell.StyleDefault.Bold(true).Foreground(tcell.ColorWhite).Background(tcell.ColorRed),
 
 		ModelineActive:   lipgloss.NewStyle().Foreground(modeFgOn).Background(modeBgOn).Bold(true),
 		ModelineInactive: lipgloss.NewStyle().Foreground(modeFgOff).Background(modeBgOff),

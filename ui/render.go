@@ -28,31 +28,17 @@ type Frame struct {
 	MiniOn bool
 }
 
-// Renderer draws frames onto a screen.
+// Render draws f onto scr using th. It does not call Show; the caller decides
+// when to flush, so a frame and a cursor move are one update rather than two.
 //
-// It holds one piece of state: each window's horizontal scroll offset. That
-// belongs beside Top on view.Window - vertical and horizontal scroll are the
-// same kind of thing - but view has no field for it, so it lives here rather
-// than in a global. See the note on hscroll.
-type Renderer struct {
-	th Theme
-	// hscroll is the leftmost visible display column per window. Vertical
-	// scroll lives on view.Window as Top; this is its horizontal twin and
-	// should move there if view ever grows the field.
-	hscroll map[*view.Window]text.ColIdx
-}
-
-// NewRenderer returns a renderer using th.
-func NewRenderer(th Theme) *Renderer {
+// Rendering is a pure function of the frame, the theme and the screen: every
+// piece of per-window state it needs - which line is at the top, which column is
+// at the left - lives on the view.Window it is drawing. That is why this is a
+// function and not a method on a renderer object.
+func Render(scr tcell.Screen, f Frame, th Theme) {
 	if th.ScrollMargin < 0 {
 		th.ScrollMargin = 0
 	}
-	return &Renderer{th: th, hscroll: make(map[*view.Window]text.ColIdx)}
-}
-
-// Render draws f onto scr. It does not call Show; the caller decides when to
-// flush, so a frame and a cursor move are one update rather than two.
-func (r *Renderer) Render(scr tcell.Screen, f Frame) {
 	scr.Clear()
 
 	w, h := scr.Size()
@@ -70,44 +56,54 @@ func (r *Renderer) Render(scr tcell.Screen, f Frame) {
 	if treeH > 0 {
 		rects = f.Tree.Layout(w, treeH)
 		for win, rect := range rects {
-			r.drawWindow(scr, rect, win, win == f.Active)
+			drawWindow(scr, rect, win, win == f.Active, th)
 		}
 		for _, d := range f.Tree.Dividers(w, treeH) {
-			r.drawDivider(scr, d)
+			drawDivider(scr, d, th)
 		}
 	}
-	r.forgetClosedWindows(rects)
 
-	r.drawEcho(scr, echoY, w, f)
-	r.placeCursor(scr, w, h, echoY, rects, f)
+	drawEcho(scr, echoY, w, f, th)
+	placeCursor(scr, w, h, echoY, rects, f)
 }
 
 // drawWindow draws one pane: its visible buffer text, then its modeline.
-func (r *Renderer) drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active bool) {
+func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active bool, th Theme) {
 	if rect.W <= 0 || rect.H <= 0 || win == nil || win.Buf == nil {
 		return
 	}
 
 	textH := view.TextHeight(rect)
 	if textH > 0 {
-		// Vertical scroll first: afterwards point is guaranteed to lie within
-		// [Top, Top+textH), which the cursor placement below relies on.
-		win.ScrollToPoint(textH, r.th.ScrollMargin)
-		left := r.scrollLeftFor(win, rect.W)
+		// Scroll both axes first: afterwards point is guaranteed to lie within
+		// [Top, Top+textH) and [LeftCol, LeftCol+rect.W), which the cursor
+		// placement below relies on.
+		win.ScrollToPoint(textH, th.ScrollMargin)
+		win.ScrollToPointHorizontally(rect.W)
+
+		// Bracket matching is computed here, from point, at draw time. A command
+		// could not do it: Env cannot reach the screen by design, so it has
+		// nowhere to report a highlight to. Only the active window shows it,
+		// as in emacs.
+		var paren parenHL
+		if active {
+			paren = matchParenAt(win.Buf, win.Pt, th)
+		}
 
 		for i := 0; i < textH; i++ {
 			ln := win.Top + i
 			if ln >= win.Buf.NumLines() {
 				break // rows past the end of the buffer stay blank, as in emacs
 			}
-			r.drawLine(scr, rect.X, rect.Y+i, rect.W, win.Buf.Line(ln), left)
+			drawLine(scr, rect.X, rect.Y+i, rect.W,
+				win.Buf.Line(ln), win.LeftCol, th, paren.onLine(ln))
 		}
 	}
 
 	// The modeline owns the bottom row of the pane, so a pane one row tall is
 	// all modeline and no text.
 	blit.Draw(scr, rect.X, rect.Y+rect.H-1, rect.W, 1,
-		modelineString(r.th, win, rect.W, active))
+		modelineString(th, win, rect.W, active))
 }
 
 // drawLine writes one buffer line into the cells at y, starting from display
@@ -118,7 +114,9 @@ func (r *Renderer) drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window
 // its combining marks and blank the trailing cell of a wide glyph itself. That
 // matters because tcell measures width with the same uniseg segmenter that text
 // does, so the two cannot disagree about how many columns a glyph takes.
-func (r *Renderer) drawLine(scr tcell.Screen, x, y, width int, l *text.Line, left text.ColIdx) {
+//
+// hl carries any bracket-match highlight falling on this line.
+func drawLine(scr tcell.Screen, x, y, width int, l *text.Line, left text.ColIdx, th Theme, hl lineHL) {
 	lineW := l.Width()
 	truncated := lineW-left > text.ColIdx(width)
 
@@ -129,110 +127,60 @@ func (r *Renderer) drawLine(scr tcell.Screen, x, y, width int, l *text.Line, lef
 	}
 
 	if avail > 0 {
-		runes := l.Runes()
-		for i := text.RuneIdx(0); i < l.Len(); {
-			n := l.NextGrapheme(i)
-			if n <= i {
-				break // defensive: a non-advancing walk would spin
-			}
-			start := l.DisplayCol(i)
-			w := l.DisplayCol(n) - start // DisplayCol(Len()) is the line width
-			sx := start - left
+	walk:
+		for c := range l.Clusters() {
+			sx := c.Col - left
+			style := hl.styleFor(c.Start, th.Text)
 
 			switch {
-			case sx+w <= 0:
+			case sx+c.Width <= 0:
 				// Entirely scrolled off to the left.
 			case sx < 0:
 				// Straddles the left edge. Drop it whole rather than draw half
 				// a glyph; emacs shows nothing there either.
-			case sx+w > avail:
+			case sx+c.Width > avail:
 				// Straddles the right edge. Everything after it is off-screen
 				// too, so stop rather than keep walking the line.
-				i = l.Len()
-				continue
-			case runes[i] == '\t':
+				break walk
+			case c.Runes[0] == '\t':
 				// A tab is one cluster spanning several columns, and writing a
 				// literal tab would let the terminal reinterpret it.
-				for c := text.ColIdx(0); c < w; c++ {
-					scr.SetContent(x+int(sx+c), y, ' ', nil, r.th.Text)
+				for k := text.ColIdx(0); k < c.Width; k++ {
+					scr.SetContent(x+int(sx+k), y, ' ', nil, style)
 				}
 			default:
-				scr.SetContent(x+int(sx), y, runes[i], runes[i+1:n], r.th.Text)
+				scr.SetContent(x+int(sx), y, c.Runes[0], c.Runes[1:], style)
 			}
-			i = n
 		}
 	}
 
 	if truncated {
-		scr.SetContent(x+width-1, y, TruncMarker, nil, r.th.Trunc)
-	}
-}
-
-// scrollLeftFor returns the leftmost visible column for win, having adjusted it
-// so point is in view, and records it.
-func (r *Renderer) scrollLeftFor(win *view.Window, width int) text.ColIdx {
-	left := r.hscroll[win]
-	pt := win.Buf.ClampPos(win.Pt)
-	l := win.Buf.Line(pt.Line)
-	ptCol := l.DisplayCol(pt.Col)
-
-	// Two passes: how much room there is depends on whether the line overflows,
-	// which depends on where we scrolled to. One correction settles it.
-	for pass := 0; pass < 2; pass++ {
-		usable := text.ColIdx(width)
-		if l.Width()-left > text.ColIdx(width) {
-			usable-- // the truncation marker takes the last column
-		}
-		if usable < 1 {
-			usable = 1
-		}
-		if ptCol < left {
-			left = ptCol
-		}
-		if ptCol > left+usable-1 {
-			left = ptCol - usable + 1
-		}
-		if left < 0 {
-			left = 0
-		}
-	}
-
-	r.hscroll[win] = left
-	return left
-}
-
-// forgetClosedWindows drops scroll state for windows no longer on screen, so a
-// long session deleting and creating windows does not grow the map forever.
-func (r *Renderer) forgetClosedWindows(live map[*view.Window]view.Rect) {
-	for win := range r.hscroll {
-		if _, ok := live[win]; !ok {
-			delete(r.hscroll, win)
-		}
+		scr.SetContent(x+width-1, y, TruncMarker, nil, th.Trunc)
 	}
 }
 
 // drawDivider fills the column between two side-by-side panes. Horizontal
 // splits produce none: the upper window's modeline already separates them.
-func (r *Renderer) drawDivider(scr tcell.Screen, d view.Rect) {
+func drawDivider(scr tcell.Screen, d view.Rect, th Theme) {
 	if d.W <= 0 || d.H <= 0 {
 		return
 	}
-	one := r.th.Divider.Render(string(DividerRune))
+	one := th.Divider.Render(string(DividerRune))
 	col := strings.TrimSuffix(strings.Repeat(one+"\n", d.H), "\n")
 	blit.Draw(scr, d.X, d.Y, d.W, d.H, col)
 }
 
 // drawEcho draws the bottom row: a minibuffer prompt when one is active,
 // otherwise whatever message the editor wants to show.
-func (r *Renderer) drawEcho(scr tcell.Screen, y, width int, f Frame) {
+func drawEcho(scr tcell.Screen, y, width int, f Frame, th Theme) {
 	if y < 0 || f.Echo == "" {
 		return
 	}
 	// A minibuffer being typed into is ordinary text and must not be dimmed
 	// like a transient message.
-	style := r.th.Echo
+	style := th.Echo
 	if f.MiniOn {
-		style = r.th.Mini
+		style = th.Mini
 	}
 	blit.Draw(scr, 0, y, width, 1, style.Render(f.Echo))
 }
@@ -242,7 +190,7 @@ func (r *Renderer) drawEcho(scr tcell.Screen, y, width int, f Frame) {
 // This is the whole reason nem draws through tcell rather than a framework that
 // owns the screen: a styled cell pretending to be a cursor is visibly wrong to
 // look at all day, and it is invisible to an IME and to a screen reader.
-func (r *Renderer) placeCursor(scr tcell.Screen, w, h, echoY int, rects map[*view.Window]view.Rect, f Frame) {
+func placeCursor(scr tcell.Screen, w, h, echoY int, rects map[*view.Window]view.Rect, f Frame) {
 	if f.MiniOn {
 		x := int(f.MiniPt)
 		if x < 0 {
@@ -269,7 +217,7 @@ func (r *Renderer) placeCursor(scr tcell.Screen, w, h, echoY int, rects map[*vie
 	pt := f.Active.Buf.ClampPos(f.Active.Pt)
 	col := f.Active.Buf.Line(pt.Line).DisplayCol(pt.Col)
 
-	sx := int(col - r.hscroll[f.Active])
+	sx := int(col - f.Active.LeftCol)
 	sy := pt.Line - f.Active.Top
 	if sx < 0 {
 		sx = 0
