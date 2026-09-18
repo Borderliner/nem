@@ -554,3 +554,29 @@ It is served by `Seq.LastRune`, set by the event loop before dispatch. The
 alternative — an exported `SelfInsert(e, r)` called directly by the loop — leaves
 `M-x self-insert-command` and any Lua binding to it broken, so the `Seq` field is
 the correct home.
+
+## Tracked follow-up: filename completion reaches the filesystem directly
+
+`completeFilename` in `command/buffers.go` calls `os.ReadDir` rather than going
+through `Env`. Two consequences: its test needs `t.TempDir()` instead of the
+in-memory fake, and filename completion cannot be sandboxed or faked.
+
+Deliberately not fixed now — adding an `Env` listing method to serve one
+completion function is not yet worth a 31st interface method. It becomes worth it
+the moment anything wants virtual or remote files, or if the scripting layer
+should be prevented from enumerating the filesystem. Recorded so that decision is
+made rather than inherited.
+
+### Save failure handling, decided
+
+Both multi-buffer save walks (`save-some-buffers`, `save-buffers-kill-terminal`)
+**abort** on the first write failure rather than continuing.
+
+Whatever stopped one write — full disk, read-only mount — will almost certainly
+stop the rest, so continuing produces a cascade of identical failures. More
+importantly, aborting keeps the reporting honest: the summary cannot claim files
+were saved, buffers not yet reached stay modified and untouched, and for
+`save-buffers-kill-terminal` `Quit` is never reached — so the user is never
+ejected from the editor immediately after being told a file could not be written.
+Errors are wrapped as `saving <path>: %w`, naming the failing buffer while
+`errors.Is` still matches the cause.
