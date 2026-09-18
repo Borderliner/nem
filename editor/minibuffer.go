@@ -41,9 +41,6 @@ type miniState struct {
 	opts   command.ReadOpts
 	keys   *keymap.Map
 
-	// search is non-nil while this prompt is driving an incremental search.
-	search *command.Isearch
-
 	// last is the contents as of the most recent OnChange, so a change can be
 	// detected however it was made — typed, backspaced, killed or yanked.
 	last string
@@ -90,20 +87,13 @@ func (ms *miniState) contents() string { return ms.buf.String() }
 // what lets a prompting command read as straight-line code: find-file is
 // ReadString then OpenFile then Visit, not a three-state machine.
 //
-// # Why the editor owns the incremental-search session
+// # Incremental search
 //
-// A repeated C-s inside the prompt must advance to the next match, and the spec
-// puts that in the prompt's keymap. But ReadOpts cannot carry the session:
-// OnChange is bound to Isearch.Update, and Advance is not recoverable from that
-// closure. So the editor infers from the command name that a search is starting
-// (see noteIsearch) and creates its own session here, before the prompt opens,
-// so that the session's origin is the text window's point.
-//
-// The consequence, which is worth knowing: for a search prompt the caller's
-// OnChange is not invoked, because this session drives the search instead. The
-// two sessions share an origin and only one is ever asked to move point, so the
-// behaviour is identical — but ReadOpts growing a field for the session, or for
-// an OnAdvance callback, would remove the inference and the duplication both.
+// A repeated C-s inside the prompt must advance to the next match, which the
+// prompt's keymap owns. The session it advances arrives in ReadOpts.Session,
+// passed by the search command itself, so the editor never has to guess which
+// prompts are searches. Session and OnChange are independent hooks and both
+// fire; both run against the text window, not the prompt's.
 func (e *Editor) ReadString(opts command.ReadOpts) (string, error) {
 	if e.scr == nil {
 		return "", command.ErrQuit // nothing to prompt on
@@ -130,13 +120,6 @@ func (e *Editor) ReadString(opts command.ReadOpts) (string, error) {
 		keys:   miniKeymap(),
 		last:   buf.String(),
 	}
-	// Created while Win still reports the text window, so the session's origin
-	// is point in the buffer being searched.
-	if e.wantSearch != nil {
-		ms.search = command.NewIsearch(e, *e.wantSearch)
-		e.wantSearch = nil
-	}
-
 	// The echo area is deliberately NOT saved and restored. A prompt's own text
 	// lives in ms.line(), not in e.echo, so there is nothing of the prompt's to
 	// clean up — and a message the prompt produced, such as a failing
@@ -178,14 +161,14 @@ func (ms *miniState) control(e *Editor, name string) {
 		ms.done = true
 	case miniAbort:
 		ms.done, ms.abort = true, true
-		if ms.search != nil {
-			e.withTextWindow(func() { ms.search.Abandon() })
+		if ms.opts.Session != nil {
+			e.withTextWindow(func() { ms.opts.Session.Abandon() })
 		}
 	case miniComplete:
 		ms.complete(e)
 	case miniSearchFwd, miniSearchBack:
-		if ms.search != nil {
-			e.withTextWindow(func() { ms.search.Advance() })
+		if ms.opts.Session != nil {
+			e.withTextWindow(func() { ms.opts.Session.Advance() })
 		}
 	}
 }
@@ -262,10 +245,14 @@ func (e *Editor) afterMiniEdit() {
 		return
 	}
 	ms.last = cur
-	switch {
-	case ms.search != nil:
-		e.withTextWindow(func() { ms.search.Update(cur) })
-	case ms.opts.OnChange != nil:
+
+	// Both hooks fire. They are independent: a caller may drive a search and
+	// also want to observe the pattern. Previously the session shadowed
+	// OnChange, so a search prompt silently never called it.
+	if ms.opts.Session != nil {
+		e.withTextWindow(func() { ms.opts.Session.Update(cur) })
+	}
+	if ms.opts.OnChange != nil {
 		e.withTextWindow(func() { ms.opts.OnChange(cur) })
 	}
 }

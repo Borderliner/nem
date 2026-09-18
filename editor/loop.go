@@ -216,7 +216,6 @@ func (e *Editor) dispatch(name string) error {
 	}
 
 	e.childDispatched = false
-	e.noteIsearch(name)
 
 	e.runHooks(e.before, name)
 	err := e.reg.Run(name, e)
@@ -245,24 +244,6 @@ func (e *Editor) bookkeep(name string) {
 		}
 	}
 	e.lastCmd = name
-}
-
-// noteIsearch records that an incremental search is starting, so that the
-// prompt it opens knows to drive a search session.
-//
-// The editor has to infer this from the command name because ReadOpts cannot
-// carry the session: OnChange is bound to Isearch.Update, and Advance — which a
-// repeated C-s inside the prompt must call — is not recoverable from that
-// closure. See the note on ReadString.
-func (e *Editor) noteIsearch(name string) {
-	switch name {
-	case "isearch-forward":
-		back := false
-		e.wantSearch = &back
-	case "isearch-backward":
-		back := true
-		e.wantSearch = &back
-	}
 }
 
 // Redraw paints one frame. Exported so tests can assert on rendered output.

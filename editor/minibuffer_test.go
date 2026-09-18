@@ -180,6 +180,72 @@ func TestIsearchAdvancesOnRepeatedCtrlS(t *testing.T) {
 	wantPt(t, e, 0, 11)
 }
 
+// A prompt drives the session it is handed, whatever the command is called,
+// AND still calls the caller's OnChange.
+//
+// Both halves are regressions waiting to happen. The editor used to infer a
+// search from the command name, so a session passed by any other command was
+// ignored and point never moved; and the session shadowed OnChange, so a search
+// prompt silently never called it. This command is named nothing like
+// isearch-forward, which is the point.
+func TestPromptDrivesHandedSessionAndOnChange(t *testing.T) {
+	e, scr := newTestEditor(t, "alpha beta gamma")
+	feed(t, scr, txt("beta"), key(t, "RET"))
+
+	var seen []string
+	if err := e.Registry().Register(command.Command{
+		Name: "test-observed-search", Doc: "t", Interactive: true,
+		Fn: func(env command.Env) error {
+			_, err := env.ReadString(command.ReadOpts{
+				Prompt:   "Look: ",
+				Session:  command.NewIsearch(env, false),
+				OnChange: func(pat string) { seen = append(seen, pat) },
+			})
+			return err
+		},
+	}); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if err := e.Run("test-observed-search"); err != nil {
+		t.Fatalf("test-observed-search: %v", err)
+	}
+
+	// The handed session moved point: "alpha beta" is 10 runes, and a forward
+	// search leaves point after the match.
+	wantPt(t, e, 0, 10)
+
+	want := []string{"b", "be", "bet", "beta"}
+	if strings.Join(seen, ",") != strings.Join(want, ",") {
+		t.Errorf("OnChange saw %v, want %v", seen, want)
+	}
+}
+
+// A handed session's Advance is reachable from the prompt for any command, not
+// only the built-in search ones.
+func TestHandedSessionAdvancesOnSearchKey(t *testing.T) {
+	e, scr := newTestEditor(t, "xx ab cd ab ef")
+	feed(t, scr, txt("ab"), key(t, "C-s", "RET"))
+
+	if err := e.Registry().Register(command.Command{
+		Name: "test-advancing-search", Doc: "t", Interactive: true,
+		Fn: func(env command.Env) error {
+			_, err := env.ReadString(command.ReadOpts{
+				Prompt:  "Look: ",
+				Session: command.NewIsearch(env, false),
+			})
+			return err
+		},
+	}); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if err := e.Run("test-advancing-search"); err != nil {
+		t.Fatalf("test-advancing-search: %v", err)
+	}
+	// First match ends at 5; the repeated search key advances to the second,
+	// which ends at 11.
+	wantPt(t, e, 0, 11)
+}
+
 // A failing pattern reports and leaves point at the last good match rather
 // than jumping somewhere arbitrary.
 func TestIsearchFailingPatternReports(t *testing.T) {

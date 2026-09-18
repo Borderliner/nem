@@ -96,11 +96,6 @@ type Editor struct {
 	// dispatch.
 	childDispatched bool
 
-	// isearch is the session the minibuffer's C-s and C-r drive. See the note
-	// on ReadString about why the editor owns it.
-	isearch    *command.Isearch
-	wantSearch *bool // set by dispatch when an isearch command is running
-
 	before map[string][]func()
 	after  map[string][]func()
 
@@ -317,9 +312,9 @@ func (e *Editor) SaveBuffer(b *text.Buffer, path string) error {
 	if path == "" {
 		return b.Save()
 	}
-	old := b.Path()
+	// No path rollback here: text.SaveAs adopts the new path only after the
+	// write succeeds, so a failure leaves the buffer untouched.
 	if err := b.SaveAs(path); err != nil {
-		b.SetPath(old)
 		return err
 	}
 	if name := e.uniqueNameFor(b, filepath.Base(path)); name != "" {

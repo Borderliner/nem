@@ -88,10 +88,11 @@ func TestSaveBufferAdoptsANewPath(t *testing.T) {
 // A failed save must leave the buffer exactly as it was: still modified, still
 // pointing at its old path.
 //
-// text.Buffer.SaveAs assigns the path before attempting the write, so without
-// the guard in SaveBuffer a failed write would leave the buffer claiming a file
-// it was never written to — and a later successful C-x C-s would silently save
-// somewhere the user never asked for.
+// text.Buffer.SaveAs adopts a new path only after the write succeeds, so
+// SaveBuffer needs no rollback of its own. This test guards the behaviour at the
+// editor level regardless of where the guarantee lives: if a failed write ever
+// left the buffer claiming a file it was never written to, a later successful
+// C-x C-s would silently save somewhere the user never asked for.
 func TestFailedSaveLeavesBufferUntouched(t *testing.T) {
 	e, _ := newTestEditor(t, "precious")
 	e.Buf().SetPath("/original/path.txt")
