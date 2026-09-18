@@ -389,21 +389,79 @@ func TestFakeRunGoesThroughItsRegistry(t *testing.T) {
 	}
 }
 
-func TestFakeScratchAndLastCommand(t *testing.T) {
+func TestFakeLastCommand(t *testing.T) {
 	f := commandtest.New("")
 	if f.LastCommand() != "" {
 		t.Errorf("LastCommand on a fresh fake = %q, want empty", f.LastCommand())
 	}
 	f.SetLastCommand("yank")
-	f.SetScratch(text.Pos{Line: 2, Col: 5})
-
 	if f.LastCommand() != "yank" {
 		t.Errorf("LastCommand = %q, want yank", f.LastCommand())
 	}
-	// yank-pop needs the extent of the previous yank back out intact.
-	got, ok := f.Scratch().(text.Pos)
-	if !ok || got != (text.Pos{Line: 2, Col: 5}) {
-		t.Errorf("Scratch() = %v (%T), want text.Pos{2,5}", f.Scratch(), f.Scratch())
+}
+
+func TestFakeSeqPointerIsStable(t *testing.T) {
+	f := commandtest.New("")
+	if f.Seq() != f.Seq() {
+		t.Fatal("Seq() returned a different pointer on a second call")
+	}
+}
+
+func TestFakeSeqPersistsAcrossDispatches(t *testing.T) {
+	// The reason this matters: yank records the extent it inserted, and the
+	// NEXT command (yank-pop) must see it. A fake that handed out a fresh Seq
+	// per call would make every yank-pop test pass without testing anything.
+	f := commandtest.New("hello")
+
+	writer := command.Command{
+		Name: "fake-yank",
+		Fn: func(e command.Env) error {
+			e.Seq().LastYankFrom = text.Pos{Line: 0, Col: 0}
+			e.Seq().LastYankTo = text.Pos{Line: 0, Col: 5}
+			e.Seq().HasLastYank = true
+			e.Seq().RecenterCycle++
+			return nil
+		},
+	}
+	var sawFrom, sawTo text.Pos
+	var sawFlag bool
+	var sawCycle int
+	reader := command.Command{
+		Name: "fake-yank-pop",
+		Fn: func(e command.Env) error {
+			sawFrom, sawTo = e.Seq().LastYankFrom, e.Seq().LastYankTo
+			sawFlag = e.Seq().HasLastYank
+			sawCycle = e.Seq().RecenterCycle
+			return nil
+		},
+	}
+	if err := f.Reg.Register(writer); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if err := f.Reg.Register(reader); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	if err := f.Run("fake-yank"); err != nil {
+		t.Fatalf("Run fake-yank: %v", err)
+	}
+	if err := f.Run("fake-yank-pop"); err != nil {
+		t.Fatalf("Run fake-yank-pop: %v", err)
+	}
+
+	if !sawFlag {
+		t.Error("HasLastYank did not survive into the next dispatch")
+	}
+	if sawFrom != (text.Pos{Line: 0, Col: 0}) || sawTo != (text.Pos{Line: 0, Col: 5}) {
+		t.Errorf("yank extent seen as %v..%v, want {0,0}..{0,5}", sawFrom, sawTo)
+	}
+	if sawCycle != 1 {
+		t.Errorf("RecenterCycle seen as %d, want 1", sawCycle)
+	}
+
+	// And mutation through Env is visible on the fake itself.
+	if got := f.Seq().RecenterCycle; got != 1 {
+		t.Errorf("f.Seq().RecenterCycle = %d, want 1", got)
 	}
 }
 

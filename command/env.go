@@ -12,6 +12,21 @@
 //
 // Env is an interface rather than a struct because a struct holding editor
 // state would force this package to import editor, which imports this package.
+//
+// Three things are deliberately absent from Env. They are recorded here so
+// that their absence is not later mistaken for an oversight:
+//
+//   - Lua hooks. The editor fires hooks around dispatch, keyed on command
+//     name, so save-buffer need not know that before-save exists. A RunHook
+//     method here would leak the scripting layer into every command; do not
+//     add one.
+//   - Paren highlighting. show-paren is computed by ui from point at render
+//     time. Nothing highlight-related belongs on Env, because Env cannot reach
+//     the screen — that is this boundary working, not a gap in it.
+//   - Buffer naming in text. A text.Buffer has only a Path; display names live
+//     in the editor's name-to-buffer map. That is why *scratch* and
+//     *Buffer List* are editor concepts, and why BufferName and BufferByName
+//     are methods here rather than on the buffer itself.
 package command
 
 import (
@@ -41,6 +56,28 @@ var (
 	// that is not registered.
 	ErrUnknownCommand = errors.New("no such command")
 )
+
+// Seq holds state that spans consecutive commands.
+//
+// Commands read and mutate it in place; the editor resets whichever fields
+// need resetting at dispatch. It is a concrete struct rather than an untyped
+// scratch slot so that every field is type-checked — a failed type assertion
+// inside a command is a panic, and a panic costs the user unsaved work.
+//
+// A future sequencing need is a new field here, not a new method on Env.
+type Seq struct {
+	// LastYankFrom and LastYankTo bound the text the most recent yank
+	// inserted; HasLastYank reports whether they are meaningful.
+	//
+	// yank-pop cannot work without them: it must delete what the preceding
+	// yank inserted before putting the rotated entry in its place.
+	LastYankFrom, LastYankTo text.Pos
+	HasLastYank              bool
+
+	// RecenterCycle is recenter-top-bottom's position in its centre, top,
+	// bottom cycle across successive C-l presses.
+	RecenterCycle int
+}
 
 // CompleteFunc returns the candidate completions for a minibuffer prefix.
 type CompleteFunc func(prefix string) []string
@@ -111,16 +148,11 @@ type Env interface {
 	// "" at the start of a session. This is emacs's last-command.
 	LastCommand() string
 
-	// Scratch and SetScratch hold state that survives only between
-	// consecutive runs of the same command; the dispatcher clears it as soon
-	// as a different command runs.
+	// Seq returns the sequencing state shared across consecutive commands.
 	//
-	// Two v1 commands genuinely need this. yank-pop must delete the text the
-	// preceding yank inserted, so yank records that extent here. And
-	// recenter-top-bottom cycles centre, top, bottom across successive C-l
-	// presses, so it records its position in the cycle.
-	Scratch() any
-	SetScratch(v any)
+	// The pointer is stable for the life of the session, so commands mutate
+	// the struct in place: e.Seq().RecenterCycle++ is the intended idiom.
+	Seq() *Seq
 
 	// --- the minibuffer --------------------------------------------------
 

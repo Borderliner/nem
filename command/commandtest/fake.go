@@ -117,7 +117,7 @@ type Fake struct {
 	buffers []*text.Buffer
 	names   map[*text.Buffer]string
 	lastCmd string
-	scratch any
+	seq     command.Seq
 }
 
 // Compile-time proof that Fake satisfies the whole interface. If Env grows a
@@ -203,8 +203,11 @@ func (f *Fake) YankPop() (string, error) { return f.ring.YankPop() }
 // --- command.Env: command sequencing ---
 
 func (f *Fake) LastCommand() string { return f.lastCmd }
-func (f *Fake) Scratch() any        { return f.scratch }
-func (f *Fake) SetScratch(v any)    { f.scratch = v }
+
+// Seq returns the fake's sequencing state. The pointer is stable across calls
+// and across dispatches, which is the whole point: a fake handing out a fresh
+// Seq each time would make every yank-pop test pass for the wrong reason.
+func (f *Fake) Seq() *command.Seq { return &f.seq }
 
 // --- command.Env: the minibuffer ---
 
