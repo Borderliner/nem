@@ -282,10 +282,11 @@ func isearchCmd(backward bool) Func {
 		if backward {
 			prompt = "I-search backward: "
 		}
-		// Advancing to the next match on a repeated C-s happens in the
-		// editor's minibuffer keymap, which calls s.Advance. It cannot happen
-		// here: this call blocks until the prompt closes.
-		if _, err := e.ReadString(ReadOpts{Prompt: prompt, OnChange: s.Update}); err != nil {
+		// The session is handed over rather than closed over: the minibuffer
+		// drives Update on every edit and Advance when C-s is pressed again
+		// inside the prompt. Advancing cannot happen here, because this call
+		// blocks until the prompt closes.
+		if _, err := e.ReadString(ReadOpts{Prompt: prompt, Session: s}); err != nil {
 			if errors.Is(err, ErrQuit) {
 				s.Abandon()
 				e.Echo("Quit")

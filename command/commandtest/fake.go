@@ -238,9 +238,9 @@ func (f *Fake) Seq() *command.Seq { return &f.seq }
 
 // ReadString records the prompt and returns the next canned reply.
 //
-// When opts.OnChange is set it is called once per successive prefix of the
-// reply — "f", "fo", "foo" — rather than once with the final value, so an
-// incremental-search command is exercised the way real typing would drive it.
+// The change hooks are called once per successive prefix of the reply — "f",
+// "fo", "foo" — rather than once with the final value, so an incremental-search
+// command is exercised the way real typing would drive it.
 func (f *Fake) ReadString(opts command.ReadOpts) (string, error) {
 	f.Reads = append(f.Reads, opts)
 	f.Prompts = append(f.Prompts, opts.Prompt)
@@ -251,22 +251,31 @@ func (f *Fake) ReadString(opts command.ReadOpts) (string, error) {
 	f.Replies = f.Replies[1:]
 
 	if reply == Quit {
-		if opts.OnChange != nil {
-			opts.OnChange(opts.Initial)
-		}
+		notifyChange(opts, opts.Initial)
 		return "", command.ErrQuit
 	}
 
-	if opts.OnChange != nil {
-		runes := []rune(reply)
-		for i := range runes {
-			opts.OnChange(string(runes[:i+1]))
-		}
-		if len(runes) == 0 {
-			opts.OnChange("")
-		}
+	runes := []rune(reply)
+	for i := range runes {
+		notifyChange(opts, string(runes[:i+1]))
+	}
+	if len(runes) == 0 {
+		notifyChange(opts, "")
 	}
 	return reply, nil
+}
+
+// notifyChange fires both change hooks, in the order the real minibuffer fires
+// them. Session and OnChange are independent: a caller may drive a search and
+// also observe the pattern, so a fake that honoured only one would let a
+// command pass here and misbehave in the editor.
+func notifyChange(opts command.ReadOpts, s string) {
+	if opts.Session != nil {
+		opts.Session.Update(s)
+	}
+	if opts.OnChange != nil {
+		opts.OnChange(s)
+	}
 }
 
 // ReadChar records the prompt and returns the next canned rune, rejecting one

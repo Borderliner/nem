@@ -120,13 +120,32 @@ type ReadOpts struct {
 	Complete CompleteFunc
 
 	// OnChange, when non-nil, is called with the full contents after every
-	// edit of the minibuffer.
+	// edit of the minibuffer — typed, backspaced, killed or yanked alike.
 	//
-	// This is the hook that makes incremental search fall out of the ordinary
-	// prompt mechanism rather than needing one of its own: isearch is a
-	// ReadString whose OnChange searches from the saved start position and
-	// moves point to the match, so the display updates as the user types.
+	// This is the hook that makes search-as-you-type fall out of the ordinary
+	// prompt mechanism rather than needing one of its own.
+	//
+	// It runs with Win reporting the PRE-PROMPT TEXT WINDOW, not the
+	// minibuffer's, because a hook that reacts to the pattern needs to move
+	// point in the buffer being searched. Write an OnChange that assumes the
+	// minibuffer window and it will move point in the prompt instead, which
+	// reads as a rendering bug rather than as the mistake it is.
 	OnChange func(string)
+
+	// Session, when non-nil, is the incremental-search session this prompt
+	// drives. The minibuffer calls its Update after every edit and its Advance
+	// when the search key is pressed again inside the prompt, so the prompt and
+	// the search share one session.
+	//
+	// It exists because Advance cannot be expressed as a callback: a repeated
+	// C-s must step to the next match, which is a property of the session
+	// rather than of the pattern, and is not recoverable from an OnChange
+	// closure. Passing the session explicitly is what keeps the editor from
+	// having to guess which prompts are searches from their command names.
+	//
+	// Like OnChange, it runs against the pre-prompt text window. Session and
+	// OnChange are independent: set both and both are called.
+	Session *Isearch
 }
 
 // Env is the whole of the editor a command may touch.
@@ -135,6 +154,16 @@ type Env interface {
 
 	// Win returns the active window: the buffer being edited, where point is,
 	// and which lines are on screen.
+	//
+	// While a prompt is open, Win reports the MINIBUFFER's window, not the
+	// text window. That is deliberate and is what makes prompts editable for
+	// free: C-a, C-e, C-k, M-b and the kill ring are ordinary commands, and
+	// they must act on the prompt the user is typing into.
+	//
+	// The exception is ReadOpts.OnChange and ReadOpts.Session, which run
+	// against the pre-prompt text window — see the note on OnChange. Anything
+	// else that needs the text window while a prompt is open is asking for
+	// trouble; there is no accessor for it, by design.
 	Win() *view.Window
 
 	// Buf returns the active window's buffer. Shorthand for Win().Buf.
