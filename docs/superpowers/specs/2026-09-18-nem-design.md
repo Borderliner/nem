@@ -484,3 +484,47 @@ in tests. It invokes `OnChange` once per successive prefix (`f`, `fo`, `foo`) so
 incremental-search commands are driven the way real typing drives them, and
 exhausting its canned replies returns `ErrNoReply` rather than `ErrQuit` — a test
 bug must never masquerade as the user pressing `C-g`.
+
+## Tracked follow-ups
+
+Real defects or design regressions found while building, deliberately deferred so
+they do not race the in-flight command work. Each is small and each has a known
+fix — they are tracked here rather than left in a transcript.
+
+**1. Horizontal scroll is in the wrong package.** It currently lives in
+`ui.Renderer.hscroll`, a `map[*view.Window]text.ColIdx`, because the render
+agent was told not to modify `view`. That was my constraint and it was wrong:
+vertical scroll is `view.Window.Top`, and horizontal scroll is the same kind of
+state, so it belongs as `view.Window.LeftCol`. Two consequences of the current
+home: `Render` cannot be a package-level function, and the map leaks an entry per
+closed window (mitigated today by pruning windows absent from the layout each
+frame, which is a workaround for misplaced state).
+
+**2. `text.Line.Runes()` allocates in the hot path.** It copies the whole line,
+and the render path needs every visible line's runes on every keystroke — one
+allocation per visible line per frame. Fix: a lending accessor, or better a
+grapheme iterator yielding `(runes, startCol, width)` so `ui` stops
+reconstructing one from `NextGrapheme` + `DisplayCol`.
+
+**3. `DisplayCol(Len()) == Width()` is relied upon but only implied.** The render
+path depends on it for the last cluster of every line. I verified it holds for
+ASCII, tabs, CJK, emoji, combining marks and ZWJ clusters — it should be promoted
+to a documented guarantee on `Line` with a test pinning it, since it is currently
+an accident of the implementation rather than a contract.
+
+### One ordering hazard, recorded rather than fixed
+
+`Render` paints dividers **after** windows, so a pane writing into the divider
+column gets repainted over. The wide-glyph straddle-left guard in the draw path
+is therefore defensive rather than load-bearing *as currently ordered*. If anyone
+reorders the frame so dividers precede windows, that guard becomes the only thing
+stopping a wide glyph from eating the divider. Do not reorder without testing
+that case.
+
+### A tcell behaviour worth knowing
+
+tcell silently converts control runes to spaces. So writing a literal `\t`
+instead of expanding it produces byte-identical output under `StyleDefault` — and
+stops being identical the moment the text area carries a background colour. The
+render tests assert the tab region carries `Theme.Text` precisely because that is
+the form the bug will take once syntax highlighting lands.
