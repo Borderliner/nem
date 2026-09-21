@@ -223,18 +223,52 @@ Known and deliberately unfinished, recorded here because these were found by
 driving the real binary rather than by any test, and a test suite will not
 remind anyone of them.
 
-### Two commands run but produce nothing visible
+### FIXED: the modeline mislabelled every path-less buffer
 
-`<f1> b` (`describe-bindings`) and `C-x C-b` (`list-buffers`) both dispatch
-cleanly and pass their unit tests, but a pty audit of the real binary found no
-binding list and no `*Buffer List*` on screen. This is the same pattern as the
-region being invisible before v2: the command runs, its result never reaches the
-user's eyes. Both render into a file-less buffer via `NewBuffer` and then visit
-it, so the fault is somewhere between creating that buffer and showing it.
+An earlier revision of this section claimed `<f1> b` (`describe-bindings`) and
+`C-x C-b` (`list-buffers`) "produce nothing visible". **That was wrong.** Both
+commands worked all along: they build their listing, create the buffer and visit
+it, and the text renders correctly. A pty audit reported them as broken because
+it searched for the buffer *name* — and the name was the thing that was wrong.
+
+`ui.modelineString` derived a window's name from its buffer's path:
+
+```go
+name := ScratchName
+if p := w.Buf.Path(); p != "" {
+    name = filepath.Base(p)
+}
+```
+
+So **every buffer without a file was labelled `*scratch*`** — `*Buffer List*`,
+`*Bindings*`, all of them. `C-x C-b` rendered its listing while the modeline
+insisted you were still in `*scratch*`.
+
+The cause was a correct boundary meeting a renderer that could not ask across
+it. Buffer names are an `editor` concept — `editor` owns the name↔buffer map and
+`text.Buffer` deliberately carries only `Path()` — so `ui` had no way to learn
+what a buffer was called and guessed from the path instead.
+
+**The fix keeps the boundary and inverts the direction:** `ui.Frame` gained
+`NameOf func(*text.Buffer) string`, which `editor.frame()` populates from its own
+map. A nil `NameOf` falls back to the old path-derived behaviour, so `ui` stays
+usable as a library, and an empty result falls back too, since that is what a map
+miss returns. Nothing was added to `text.Buffer`.
 
 **The lesson worth keeping:** a passing unit test proves a command mutated state,
 not that a person can see the result. Every user-visible feature needs at least
-one assertion against rendered output.
+one assertion against rendered output. The lesson stands — it simply had the
+wrong example attached, and the right example is sharper: both halves of this bug
+were individually correct. The command really did fill a buffer; the modeline
+really did render a name. Only together were they wrong, and only an end-to-end
+assertion on the rendered screen could see it. The `editor` package had no test
+that read the screen at all until this fix.
+
+**A second lesson, about the audit rather than the code:** the pty audit that
+"found" this searched the output stream *after* the first frame and matched on
+substrings. That reported two working commands as broken and hid the real defect
+behind a plausible story. An audit that measures the wrong window is worse than
+no audit, because it manufactures confident false findings.
 
 ### `write-file` over an existing file nem has never read
 

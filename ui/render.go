@@ -40,6 +40,10 @@ type Frame struct {
 	// so rather than the renderer inferring it.
 	CursorX, CursorY int
 	CursorSet        bool
+	// NameOf reports what each buffer is called, for the modeline. Optional: a
+	// nil NameOf falls back to naming a buffer after its file, which is all the
+	// renderer can work out on its own. See NameFunc.
+	NameOf NameFunc
 }
 
 // Render draws f onto scr using th. It does not call Show; the caller decides
@@ -70,7 +74,7 @@ func Render(scr tcell.Screen, f Frame, th Theme) {
 	if treeH > 0 {
 		rects = f.Tree.Layout(w, treeH)
 		for win, rect := range rects {
-			drawWindow(scr, rect, win, win == f.Active, th)
+			drawWindow(scr, rect, win, win == f.Active, th, f.NameOf)
 		}
 		for _, d := range f.Tree.Dividers(w, treeH) {
 			drawDivider(scr, d, th)
@@ -90,7 +94,7 @@ func Render(scr tcell.Screen, f Frame, th Theme) {
 }
 
 // drawWindow draws one pane: its visible buffer text, then its modeline.
-func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active bool, th Theme) {
+func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active bool, th Theme, nameOf NameFunc) {
 	if rect.W <= 0 || rect.H <= 0 || win == nil || win.Buf == nil {
 		return
 	}
@@ -141,7 +145,7 @@ func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active bool,
 	// The modeline owns the bottom row of the pane, so a pane one row tall is
 	// all modeline and no text.
 	blit.Draw(scr, rect.X, rect.Y+rect.H-1, rect.W, 1,
-		modelineString(th, win, rect.W, active))
+		modelineString(th, win, rect.W, active, nameOf))
 }
 
 // drawLine writes one buffer line into the cells at y, starting from display

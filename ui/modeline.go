@@ -6,8 +6,35 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/hajianpour/nem/text"
 	"github.com/hajianpour/nem/view"
 )
+
+// NameFunc reports what a buffer is called.
+//
+// Buffer names live in the editor, which owns the name map; text.Buffer carries
+// only a path, by design. Without this the renderer can only guess a name from
+// the path, which labels every path-less buffer *scratch* - so a listing buffer
+// renders its contents correctly while the modeline insists you are still in
+// *scratch*. Each half looks right alone, which is why no unit test caught it.
+type NameFunc func(*text.Buffer) string
+
+// bufferName asks nameOf what b is called, falling back to b's file name and
+// then to *scratch*.
+//
+// The fallback keeps ui usable as a library: a caller that does not track buffer
+// names gets the old path-derived behaviour rather than a blank modeline.
+func bufferName(b *text.Buffer, nameOf NameFunc) string {
+	if nameOf != nil {
+		if n := nameOf(b); n != "" {
+			return n
+		}
+	}
+	if p := b.Path(); p != "" {
+		return filepath.Base(p)
+	}
+	return ScratchName
+}
 
 // modelineString builds one window's status line, exactly width cells wide.
 //
@@ -24,7 +51,7 @@ import (
 //
 // Padding is computed in display cells rather than runes, so a buffer named in
 // CJK still lines up.
-func modelineString(th Theme, w *view.Window, width int, active bool) string {
+func modelineString(th Theme, w *view.Window, width int, active bool, nameOf NameFunc) string {
 	if width <= 0 {
 		return ""
 	}
@@ -36,10 +63,7 @@ func modelineString(th Theme, w *view.Window, width int, active bool) string {
 		mark = th.ModelineMark.Render(string(ModifiedMark))
 	}
 
-	name := ScratchName
-	if p := w.Buf.Path(); p != "" {
-		name = filepath.Base(p)
-	}
+	name := bufferName(w.Buf, nameOf)
 
 	// Line numbers are 1-based and columns 0-based, which is what emacs
 	// reports. The column is a display column, not a rune index, so a cursor
