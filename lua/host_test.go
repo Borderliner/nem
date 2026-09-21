@@ -864,6 +864,7 @@ func TestV2SettingsApplyAndValidate(t *testing.T) {
 		nem.set("autosave-idle", 60)
 		nem.set("backup", false)
 		nem.set("clipboard", "off")
+		nem.set("line-numbers", false)
 	`)
 	mustLoad(t, h)
 	got := h.Settings()
@@ -878,6 +879,7 @@ func TestV2SettingsApplyAndValidate(t *testing.T) {
 		{"autosave-idle", got.AutosaveIdle, 60},
 		{"backup", got.Backup, false},
 		{"clipboard", got.Clipboard, "off"},
+		{"line-numbers", got.LineNumbers, false},
 	} {
 		if c.got != c.want {
 			t.Errorf("%s = %v, want %v", c.name, c.got, c.want)
@@ -894,6 +896,7 @@ func TestV2SettingsRejectBadValues(t *testing.T) {
 		`nem.set("autosave-idle", 99999)`,
 		`nem.set("backup", "yes")`,
 		`nem.set("clipboard", "xclip")`,
+		`nem.set("line-numbers", "yes")`,
 	} {
 		t.Run(script, func(t *testing.T) {
 			h, _, _ := newHost(t, script)

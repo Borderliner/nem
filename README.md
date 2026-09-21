@@ -49,7 +49,23 @@ over every command by name, and `C-u` takes numeric and negative arguments.
 **Undo** — linear undo and redo (`C-/` and `M-_`). Typing coalesces into one
 undo unit; a new edit after undoing discards the redo branch.
 
-**Help** — `<f1> b` lists every binding, `<f1> k` describes a key.
+**Help** — `<f1> b` lists every binding, `<f1> k` describes a key. Pause on a
+prefix like `C-x` and a panel shows everything that can follow it.
+
+**Completion** — `M-x`, `C-x C-f` and `C-x b` open a centred panel that filters
+as you type, fuzzily: `fwc` finds `forward-char`. Matched characters are
+highlighted so you can see why something matched.
+
+**Line numbers** — shown by default, and drawn outside the text so they can
+never be selected or copied.
+
+**Moving text** — `M-<up>` and `M-<down>` move the current line, or every line
+the region covers, keeping the selection so the key repeats.
+
+**Your work is kept** — a backup of the previous contents on first save, an
+autosave every 30 seconds while modified, and a refusal to overwrite a file that
+changed on disk underneath you. Nothing is written beside your file; it all goes
+under `~/.local/state/nem`.
 
 > `C-h` is bound to help too, but only works on terminals that negotiate the
 > extended keyboard protocol. On older terminals the terminal itself cannot tell

@@ -47,10 +47,62 @@ everywhere.
 ## Settings
 
 ```lua
-nem.set("tab-width", 4)        -- display width of a tab; default 8
-nem.set("scroll-margin", 3)    -- lines of context kept around point; default 2
-nem.set("undo-style", "linear")-- "linear" is the default and currently the only mode
+-- Display
+nem.set("tab-width", 4)          -- display width of a tab; default 8
+nem.set("scroll-margin", 3)      -- lines of context kept around point; default 2
+nem.set("line-numbers", true)    -- show a line-number gutter; default true
+
+-- Completion
+nem.set("completion-style", "popup")  -- "popup" (centred panel) or "bottom"; default "popup"
+nem.set("completion-rows", 10)        -- candidates visible at once; default 10
+
+-- Discovery
+nem.set("which-key-delay", 300)  -- ms a prefix waits before listing what follows;
+                                 -- default 300, 0 disables
+
+-- Safety
+nem.set("autosave-idle", 30)     -- seconds of idleness before autosaving; 0 disables
+nem.set("backup", true)          -- keep the previous contents on first save; default true
+
+-- System
+nem.set("clipboard", "osc52")    -- "osc52" or "off"; default "osc52"
+nem.set("undo-style", "linear")  -- "linear" is the default and currently the only mode
 ```
+
+### Line numbers
+
+The gutter is drawn outside the text, so line numbers **cannot be selected,
+marked or copied**. That is structural rather than a special case: `C-w` and
+`M-w` operate on positions inside the buffer, and a line number is never in the
+buffer. The line point is on is shown in bolder type.
+
+A pane too narrow to leave room for text drops the gutter rather than squeezing
+the text out.
+
+### Where backups and autosaves go
+
+Never beside your file. Everything lives under `$XDG_STATE_HOME/nem` (usually
+`~/.local/state/nem`) with the file's path mirrored beneath it:
+
+```
+~/.local/state/nem/backups/home/you/project/main.go~
+~/.local/state/nem/autosave/home/you/project/main.go#
+```
+
+So a git working tree stays clean, and two files with the same name in different
+projects cannot collide. If nem tells you an autosave is newer than the file on
+disk, `M-x recover-file` restores it.
+
+A save also refuses to overwrite a file that changed on disk underneath you,
+asking first rather than clobbering it silently.
+
+### Clipboard
+
+`C-w` and `M-w` also put the text on your system clipboard using OSC 52, which
+works over SSH. Reading the clipboard back is supported by far fewer terminals
+than writing it, so a yank falls back to nem's own kill ring when no reply
+arrives. Inside tmux you need `set -g allow-passthrough on` for it to leave the
+pane. Set `clipboard = "off"` if you would rather nem never touched it.
 
 ## Rebinding keys
 

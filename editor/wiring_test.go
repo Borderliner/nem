@@ -88,7 +88,7 @@ func TestConfigSettingsReachTheEditor(t *testing.T) {
 		TabWidth: 4, ScrollMargin: 5, UndoStyle: "linear",
 		CompletionStyle: "bottom", CompletionRows: 15,
 		WhichKeyDelay: 0, AutosaveIdle: 0,
-		Backup: false, Clipboard: "off",
+		Backup: false, Clipboard: "off", LineNumbers: false,
 	})
 
 	if e.th.ScrollMargin != 5 {
@@ -111,5 +111,8 @@ func TestConfigSettingsReachTheEditor(t *testing.T) {
 	}
 	if e.ClipboardMode() != ClipboardOff {
 		t.Error("clipboard=off did not reach the editor")
+	}
+	if e.th.LineNumbers {
+		t.Error("line-numbers=false did not reach the editor")
 	}
 }

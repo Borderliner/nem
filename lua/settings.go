@@ -49,6 +49,9 @@ type Settings struct {
 	// Clipboard is "osc52" or "off". When on, kills also reach the system
 	// clipboard.
 	Clipboard string
+
+	// LineNumbers says whether each window shows a line-number gutter.
+	LineNumbers bool
 }
 
 // DefaultSettings returns the built-in defaults, which are what the editor uses
@@ -58,7 +61,7 @@ func DefaultSettings() Settings {
 		TabWidth: 8, ScrollMargin: 2, UndoStyle: "linear",
 		CompletionStyle: "popup", CompletionRows: 10,
 		WhichKeyDelay: 300, AutosaveIdle: 30,
-		Backup: true, Clipboard: "osc52",
+		Backup: true, Clipboard: "osc52", LineNumbers: true,
 	}
 }
 
@@ -79,7 +82,7 @@ const (
 // why it has no effect.
 var knownSettings = []string{
 	"autosave-idle", "backup", "clipboard", "completion-rows", "completion-style",
-	"scroll-margin", "tab-width", "undo-style", "which-key-delay",
+	"line-numbers", "scroll-margin", "tab-width", "undo-style", "which-key-delay",
 }
 
 // set validates one key/value pair and stores it.
@@ -142,6 +145,12 @@ func (s *Settings) set(key string, v glua.LValue) error {
 			return fmt.Errorf("backup must be true or false, got %s", v.Type())
 		}
 		s.Backup = bool(b)
+	case "line-numbers":
+		b, ok := v.(glua.LBool)
+		if !ok {
+			return fmt.Errorf("line-numbers must be true or false, got %s", v.Type())
+		}
+		s.LineNumbers = bool(b)
 	case "clipboard":
 		str, err := checkEnum(key, v, "osc52", "off")
 		if err != nil {

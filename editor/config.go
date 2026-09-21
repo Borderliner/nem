@@ -101,6 +101,7 @@ func (e *Editor) applySettings(s lua.Settings) {
 	// UndoStyle has one legal value, already validated by the host, so there is
 	// nothing to apply until a second model exists.
 
+	e.th.LineNumbers = s.LineNumbers
 	e.SetCompletionStyle(s.CompletionStyle)
 	e.SetCompletionRows(s.CompletionRows)
 	// Zero disables each of these, which is why they are passed through
