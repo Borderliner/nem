@@ -6,22 +6,43 @@ One file, one screen, no modes — but `C-f` moves forward, `C-k` kills a line,
 `C-x C-s` saves, and the kill ring behaves the way your fingers expect.
 
 ```
-original line                          │  package main
-                                       │
-                                       │  func main() {
-                                       │  }
---  notes.md                    1:0    │ **  main.go                    3:1
-C-x C-s save   C-x C-c exit   M-x command
+ 1 package main                      │  1 # notes
+ 2                                   │  2
+ 3 import "fmt"                      │  3 - ship the thing
+ 4                                   │  4 - write it down
+ 5 func main() {                     │  5
+ 6     // say hello                  │
+ 7     fmt.Println("hi", 42)         │
+ 8 }                                 │
+▍main.go  go  ⎇ main ──────── 7:26  │  notes.md  md ──────── 3:0
+Wrote main.go
 ```
 
-## Build
+Code is coloured, line numbers sit outside the text so they can never be
+selected, and the status line carries the file type and git branch. It keeps
+your terminal's own background rather than painting over it.
+
+## Install
+
+Download a binary for your platform from the
+[latest release](https://github.com/Borderliner/nem/releases/latest), or:
 
 ```sh
-go build ./cmd/nem
+go install github.com/hajianpour/nem/cmd/nem@latest
+```
+
+From source:
+
+```sh
+git clone https://github.com/Borderliner/nem
+cd nem && go build ./cmd/nem
 ./nem file.txt
 ```
 
-Go 1.27 or later. No cgo, no runtime — one static binary.
+Go 1.27 or later. No cgo, no runtime, no external tools — one static binary,
+which is also why it cross-compiles to every supported platform from any of
+them. Releases cover Linux and macOS on amd64 and arm64; Windows compiles but
+is untested, so it is deliberately not published.
 
 ## What it does
 
@@ -129,4 +150,4 @@ of one mechanism. And **commands never reach the screen** — they act through a
 interface, which is why the whole command layer is tested headlessly.
 
 The full design, including the decisions that were rejected and why, is in
-[docs/superpowers/specs/2026-09-18-nem-design.md](docs/superpowers/specs/2026-09-18-nem-design.md).
+[docs/design/2026-09-18-nem-design.md](docs/design/2026-09-18-nem-design.md).

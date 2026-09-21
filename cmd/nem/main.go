@@ -18,12 +18,23 @@ import (
 	"github.com/hajianpour/nem/ui"
 )
 
+// version is stamped at build time with -ldflags "-X main.version=v1.2.3".
+// A local go build leaves it "dev", which is the honest answer for a binary
+// that came from a working tree rather than a tagged release.
+var version = "dev"
+
 func main() {
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "usage: %s [file...]\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println("nem", version)
+		return
+	}
 
 	if err := run(flag.Args()); err != nil {
 		fmt.Fprintln(os.Stderr, "nem:", err)

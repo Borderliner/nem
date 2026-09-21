@@ -1,0 +1,63 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Never publish a binary that does not pass its own tests. The release is
+      # gated on this deliberately: a tag is public and hard to take back.
+      - name: test
+        run: go test ./... -race -count=1
+
+      - name: build
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -e
+          mkdir -p dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            os=${target%/*}; arch=${target#*/}
+            out="dist/nem_${VERSION}_${os}_${arch}"
+            mkdir -p "$out"
+            # -trimpath keeps build paths out of the binary, so it is
+            # reproducible and carries nothing about the machine that made it.
+            CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build \
+              -trimpath \
+              -ldflags "-s -w -X main.version=${VERSION}" \
+              -o "$out/nem" ./cmd/nem
+            # Only what a user needs. docs/design is the project's own design
+            # history and is noise in a release tarball.
+            cp README.md "$out/"
+            cp docs/config.md "$out/"
+            cp examples/init.lua "$out/init.lua.example"
+            tar -czf "${out}.tar.gz" -C dist "$(basename "$out")"
+            rm -rf "$out"
+          done
+          cd dist && sha256sum *.tar.gz > checksums.txt
+          ls -la
+
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          gh release create "$VERSION" \
+            --title "nem $VERSION" \
+            --generate-notes \
+            dist/*.tar.gz dist/checksums.txt

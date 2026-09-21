@@ -7,7 +7,7 @@ import (
 )
 
 // defaultBindings is the built-in keymap, as documented in
-// docs/superpowers/specs/2026-09-18-nem-commands.md. Each entry maps an emacs
+// docs/design/2026-09-18-nem-commands.md. Each entry maps an emacs
 // key sequence to a command name; the names are resolved against the command
 // registry at dispatch, so this table has no compile-time dependency on the
 // command package.
