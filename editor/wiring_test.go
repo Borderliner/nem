@@ -116,3 +116,62 @@ func TestConfigSettingsReachTheEditor(t *testing.T) {
 		t.Error("line-numbers=false did not reach the editor")
 	}
 }
+
+// toggle-line-numbers flips the gutter and says which way it went, so the
+// keypress is never a silent no-op.
+func TestToggleLineNumbers(t *testing.T) {
+	e, _ := newTestEditor(t, "alpha", "beta")
+	if !e.th.LineNumbers {
+		t.Fatal("line numbers should start on")
+	}
+
+	press(t, e, "C-x", "n")
+	if e.th.LineNumbers {
+		t.Error("C-x n did not turn the gutter off")
+	}
+	if !strings.Contains(e.echo, "off") {
+		t.Errorf("echo = %q, want it to say the gutter went off", e.echo)
+	}
+
+	press(t, e, "C-x", "n")
+	if !e.th.LineNumbers {
+		t.Error("C-x n did not turn the gutter back on")
+	}
+	if !strings.Contains(e.echo, "on") {
+		t.Errorf("echo = %q, want it to say the gutter came back on", e.echo)
+	}
+}
+
+// The toggle must actually change what is drawn, not just a flag.
+func TestToggleLineNumbersChangesTheFrame(t *testing.T) {
+	e, scr := newTestEditor(t, "alpha", "beta")
+	e.Redraw()
+	withNumbers := rowOf(t, scr, 0)
+
+	press(t, e, "C-x", "n")
+	e.Redraw()
+	without := rowOf(t, scr, 0)
+
+	if withNumbers == without {
+		t.Errorf("row unchanged by the toggle: %q", withNumbers)
+	}
+	if !strings.HasPrefix(strings.TrimLeft(without, " "), "alpha") {
+		t.Errorf("with the gutter off the row is %q, want it to start with the text", without)
+	}
+}
+
+// rowOf reads one rendered row from the simulation screen.
+func rowOf(t *testing.T, scr tcell.SimulationScreen, y int) string {
+	t.Helper()
+	cells, w, _ := scr.GetContents()
+	var b strings.Builder
+	for x := 0; x < w; x++ {
+		rs := cells[y*w+x].Runes
+		if len(rs) == 0 {
+			b.WriteRune(' ')
+			continue
+		}
+		b.WriteString(string(rs))
+	}
+	return strings.TrimRight(b.String(), " ")
+}

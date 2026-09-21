@@ -89,6 +89,11 @@ var defaultBindings = []struct{ Spec, Command string }{
 	{"C-x 0", "delete-window"},
 	{"C-x o", "other-window"},
 
+	// Display. C-x n is free in nem: emacs uses it for narrowing, which nem does
+	// not have. C-c is deliberately not used - that prefix belongs to the user,
+	// and examples/init.lua already hands it out.
+	{"C-x n", "toggle-line-numbers"},
+
 	// Session.
 	{"C-g", "keyboard-quit"},
 	{"C-x C-c", "save-buffers-kill-terminal"},

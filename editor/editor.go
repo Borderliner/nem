@@ -165,6 +165,10 @@ func New(scr tcell.Screen) (*Editor, error) {
 		return nil, fmt.Errorf("registering recover-file: %w", err)
 	}
 
+	if err := registerDisplayCommands(e, reg); err != nil {
+		return nil, fmt.Errorf("registering display commands: %w", err)
+	}
+
 	scratch := e.NewBuffer(ui.ScratchName)
 	e.active = view.NewWindow(scratch)
 	e.tree = view.NewTree(e.active)
