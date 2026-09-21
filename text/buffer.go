@@ -21,13 +21,19 @@ type Buffer struct {
 	path    string
 	crlf    bool // file used \r\n line endings
 	finalNL bool // file ended with a newline
+
+	// Edit tracking for the highlight cache. See dirty.go.
+	rev       uint64
+	dirtyFrom int
+	lineDelta int
 }
 
 // NewBuffer returns an empty buffer holding a single empty line.
 func NewBuffer() *Buffer {
 	return &Buffer{
-		lines: []Line{NewLine(nil)},
-		undo:  newUndoLog(),
+		lines:     []Line{NewLine(nil)},
+		undo:      newUndoLog(),
+		dirtyFrom: noDirtyLine,
 	}
 }
 
@@ -194,6 +200,7 @@ func (b *Buffer) insertRaw(at Pos, rs []rune) error {
 		b.lines = nl
 	}
 
+	b.noteEdit(at.Line, len(parts)-1)
 	b.mark = adjustForInsert(b.mark, at, rs)
 	b.savePt = adjustForInsert(b.savePt, at, rs)
 	return nil
@@ -225,6 +232,7 @@ func (b *Buffer) deleteRaw(from, to Pos) ([]rune, error) {
 		b.lines = nl
 	}
 
+	b.noteEdit(from.Line, -(to.Line - from.Line))
 	b.mark = adjustForDelete(b.mark, from, to)
 	b.savePt = adjustForDelete(b.savePt, from, to)
 	return removed, nil
