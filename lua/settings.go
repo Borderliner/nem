@@ -52,6 +52,14 @@ type Settings struct {
 
 	// LineNumbers says whether each window shows a line-number gutter.
 	LineNumbers bool
+
+	// Syntax says whether code is coloured.
+	Syntax bool
+
+	// Theme picks the syntax palette: "dark", "light", or "auto" to guess from
+	// the terminal. One palette cannot serve both grounds - colours with enough
+	// contrast on black wash out on white - so nem carries two.
+	Theme string
 }
 
 // DefaultSettings returns the built-in defaults, which are what the editor uses
@@ -62,6 +70,7 @@ func DefaultSettings() Settings {
 		CompletionStyle: "popup", CompletionRows: 10,
 		WhichKeyDelay: 300, AutosaveIdle: 30,
 		Backup: true, Clipboard: "osc52", LineNumbers: true,
+		Syntax: true, Theme: "auto",
 	}
 }
 
@@ -82,7 +91,8 @@ const (
 // why it has no effect.
 var knownSettings = []string{
 	"autosave-idle", "backup", "clipboard", "completion-rows", "completion-style",
-	"line-numbers", "scroll-margin", "tab-width", "undo-style", "which-key-delay",
+	"line-numbers", "scroll-margin", "syntax", "tab-width", "theme", "undo-style",
+	"which-key-delay",
 }
 
 // set validates one key/value pair and stores it.
@@ -145,6 +155,18 @@ func (s *Settings) set(key string, v glua.LValue) error {
 			return fmt.Errorf("backup must be true or false, got %s", v.Type())
 		}
 		s.Backup = bool(b)
+	case "syntax":
+		b, ok := v.(glua.LBool)
+		if !ok {
+			return fmt.Errorf("syntax must be true or false, got %s", v.Type())
+		}
+		s.Syntax = bool(b)
+	case "theme":
+		str, err := checkEnum(key, v, "auto", "dark", "light")
+		if err != nil {
+			return err
+		}
+		s.Theme = str
 	case "line-numbers":
 		b, ok := v.(glua.LBool)
 		if !ok {

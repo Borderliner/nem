@@ -865,6 +865,8 @@ func TestV2SettingsApplyAndValidate(t *testing.T) {
 		nem.set("backup", false)
 		nem.set("clipboard", "off")
 		nem.set("line-numbers", false)
+		nem.set("syntax", false)
+		nem.set("theme", "light")
 	`)
 	mustLoad(t, h)
 	got := h.Settings()
@@ -880,6 +882,8 @@ func TestV2SettingsApplyAndValidate(t *testing.T) {
 		{"backup", got.Backup, false},
 		{"clipboard", got.Clipboard, "off"},
 		{"line-numbers", got.LineNumbers, false},
+		{"syntax", got.Syntax, false},
+		{"theme", got.Theme, "light"},
 	} {
 		if c.got != c.want {
 			t.Errorf("%s = %v, want %v", c.name, c.got, c.want)
@@ -897,6 +901,8 @@ func TestV2SettingsRejectBadValues(t *testing.T) {
 		`nem.set("backup", "yes")`,
 		`nem.set("clipboard", "xclip")`,
 		`nem.set("line-numbers", "yes")`,
+		`nem.set("syntax", "on")`,
+		`nem.set("theme", "solarized")`,
 	} {
 		t.Run(script, func(t *testing.T) {
 			h, _, _ := newHost(t, script)

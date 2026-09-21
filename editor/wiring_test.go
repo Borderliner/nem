@@ -6,6 +6,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/hajianpour/nem/lua"
+	"github.com/hajianpour/nem/ui"
 )
 
 // The clipboard read path is dead unless HandleEvent routes the terminal's
@@ -89,6 +90,7 @@ func TestConfigSettingsReachTheEditor(t *testing.T) {
 		CompletionStyle: "bottom", CompletionRows: 15,
 		WhichKeyDelay: 0, AutosaveIdle: 0,
 		Backup: false, Clipboard: "off", LineNumbers: false,
+		Syntax: false, Theme: "light",
 	})
 
 	if e.th.ScrollMargin != 5 {
@@ -114,6 +116,15 @@ func TestConfigSettingsReachTheEditor(t *testing.T) {
 	}
 	if e.th.LineNumbers {
 		t.Error("line-numbers=false did not reach the editor")
+	}
+	if e.th.Syntax {
+		t.Error("syntax=false did not reach the editor")
+	}
+	// theme="light" must actually swap the palette, not just be accepted.
+	dark := ui.DefaultTheme()
+	dark.UseSyntaxPalette(false)
+	if e.th.SyntaxStyle == dark.SyntaxStyle {
+		t.Error(`theme="light" left the dark palette in place`)
 	}
 }
 

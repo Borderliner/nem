@@ -4,6 +4,8 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/hajianpour/nem/syntax"
 	"github.com/hajianpour/nem/text"
+	"os"
+	"strings"
 )
 
 // SpansFunc reports how one line is classified, for colouring.
@@ -36,12 +38,27 @@ const numSyntaxClasses = int(syntax.Punctuation) + 1
 // keywords, strings, comments - stand out more when the scaffolding around them
 // does not compete.
 const (
-	colourKeyword  = "#c678dd"
-	colourString   = "#98c379"
-	colourComment  = "#7f848e"
-	colourNumber   = "#d19a66"
-	colourFunction = "#61afef"
-	colourType     = "#e5c07b"
+	// Dark palette. Measured against a near-black ground these run 4.4:1 to
+	// 9.7:1, comfortably readable. Against white they run 1.7:1 to 3.8:1 and
+	// are not: this is a dark-terminal palette and must not be used on a light
+	// one, which is why there are two.
+	darkKeyword  = "#c678dd"
+	darkString   = "#98c379"
+	darkComment  = "#7f848e"
+	darkNumber   = "#d19a66"
+	darkFunction = "#61afef"
+	darkType     = "#e5c07b"
+
+	// Light palette, measured 4.55:1 to 7.59:1 against white - every value
+	// clears WCAG AA for body text. Comments are the tightest at 4.55, which is
+	// deliberate: a comment should sit behind the code without becoming
+	// unreadable.
+	lightKeyword  = "#8250df"
+	lightString   = "#116329"
+	lightComment  = "#6e7781"
+	lightNumber   = "#953800"
+	lightFunction = "#0550ae"
+	lightType     = "#7d4e00"
 )
 
 // defaultSyntaxStyles returns the built-in mapping from class to style.
@@ -50,6 +67,15 @@ const (
 // reading them as the same kind of thing as 42 is both conventional and one
 // fewer colour for a theme author to choose.
 func defaultSyntaxStyles() [numSyntaxClasses]tcell.Style {
+	return syntaxStyles(TerminalIsLight())
+}
+
+// syntaxStyles builds the class-to-style table for one palette.
+//
+// A single palette cannot serve both grounds. Colours with enough contrast on
+// black are washed out on white and vice versa, so nem carries two and picks
+// one rather than shipping a compromise that reads poorly on both.
+func syntaxStyles(light bool) [numSyntaxClasses]tcell.Style {
 	var s [numSyntaxClasses]tcell.Style
 	for i := range s {
 		s[i] = tcell.StyleDefault
@@ -57,15 +83,46 @@ func defaultSyntaxStyles() [numSyntaxClasses]tcell.Style {
 	fg := func(hex string) tcell.Style {
 		return tcell.StyleDefault.Foreground(tcell.GetColor(hex))
 	}
-	s[syntax.Keyword] = fg(colourKeyword)
-	s[syntax.String] = fg(colourString)
-	s[syntax.Comment] = fg(colourComment)
-	s[syntax.Number] = fg(colourNumber)
-	s[syntax.Function] = fg(colourFunction)
-	s[syntax.Type] = fg(colourType)
-	s[syntax.Constant] = fg(colourNumber)
+
+	kw, str, cmt := darkKeyword, darkString, darkComment
+	num, fn, typ := darkNumber, darkFunction, darkType
+	if light {
+		kw, str, cmt = lightKeyword, lightString, lightComment
+		num, fn, typ = lightNumber, lightFunction, lightType
+	}
+
+	s[syntax.Keyword] = fg(kw)
+	s[syntax.String] = fg(str)
+	s[syntax.Comment] = fg(cmt)
+	s[syntax.Number] = fg(num)
+	s[syntax.Function] = fg(fn)
+	s[syntax.Type] = fg(typ)
+	s[syntax.Constant] = fg(num)
 	// Plain, Operator and Punctuation keep tcell.StyleDefault.
 	return s
+}
+
+// UseSyntaxPalette switches the syntax colours between the two palettes.
+func (t *Theme) UseSyntaxPalette(light bool) {
+	t.SyntaxStyle = syntaxStyles(light)
+}
+
+// TerminalIsLight guesses whether the terminal has a light background.
+//
+// COLORFGBG is set by several terminals as "fg;bg" (sometimes "fg;default;bg")
+// with the colour numbers of each. Background 7 or 15 is white or bright white;
+// everything else is treated as dark. It is a heuristic - many terminals do not
+// set it at all - so the answer is only a default, overridable with the theme
+// setting. Guessing dark is the safer miss: most terminals are dark, and the
+// dark palette on a light ground is faint rather than invisible.
+func TerminalIsLight() bool {
+	v := os.Getenv("COLORFGBG")
+	if v == "" {
+		return false
+	}
+	parts := strings.Split(v, ";")
+	bg := parts[len(parts)-1]
+	return bg == "7" || bg == "15"
 }
 
 // lineSyntax walks one line's spans alongside the draw loop.

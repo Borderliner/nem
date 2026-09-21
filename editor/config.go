@@ -6,6 +6,7 @@ import (
 
 	"github.com/hajianpour/nem/lua"
 	"github.com/hajianpour/nem/text"
+	"github.com/hajianpour/nem/ui"
 )
 
 // configTimeout bounds a single entry into Lua.
@@ -102,6 +103,17 @@ func (e *Editor) applySettings(s lua.Settings) {
 	// nothing to apply until a second model exists.
 
 	e.th.LineNumbers = s.LineNumbers
+	e.th.Syntax = s.Syntax
+	// "auto" guesses from the terminal; an explicit choice always wins, because
+	// the guess relies on COLORFGBG which many terminals never set.
+	switch s.Theme {
+	case "light":
+		e.th.UseSyntaxPalette(true)
+	case "dark":
+		e.th.UseSyntaxPalette(false)
+	default:
+		e.th.UseSyntaxPalette(ui.TerminalIsLight())
+	}
 	e.SetCompletionStyle(s.CompletionStyle)
 	e.SetCompletionRows(s.CompletionRows)
 	// Zero disables each of these, which is why they are passed through
