@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/hajianpour/nem/syntax"
 	"github.com/hajianpour/nem/text"
 	"github.com/hajianpour/nem/ui/blit"
 	"github.com/hajianpour/nem/view"
@@ -44,6 +45,9 @@ type Frame struct {
 	// nil NameOf falls back to naming a buffer after its file, which is all the
 	// renderer can work out on its own. See NameFunc.
 	NameOf NameFunc
+	// SpansOf reports how each line is classified, for syntax colour. Optional:
+	// a nil SpansOf draws the text uncoloured. See SpansFunc.
+	SpansOf SpansFunc
 }
 
 // Render draws f onto scr using th. It does not call Show; the caller decides
@@ -74,7 +78,7 @@ func Render(scr tcell.Screen, f Frame, th Theme) {
 	if treeH > 0 {
 		rects = f.Tree.Layout(w, treeH)
 		for win, rect := range rects {
-			drawWindow(scr, rect, win, win == f.Active, th, f.NameOf)
+			drawWindow(scr, rect, win, win == f.Active, th, f.NameOf, f.SpansOf)
 		}
 		for _, d := range f.Tree.Dividers(w, treeH) {
 			drawDivider(scr, d, th)
@@ -94,7 +98,7 @@ func Render(scr tcell.Screen, f Frame, th Theme) {
 }
 
 // drawWindow draws one pane: its visible buffer text, then its modeline.
-func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active bool, th Theme, nameOf NameFunc) {
+func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active bool, th Theme, nameOf NameFunc, spansOf SpansFunc) {
 	if rect.W <= 0 || rect.H <= 0 || win == nil || win.Buf == nil {
 		return
 	}
@@ -137,8 +141,12 @@ func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active bool,
 				break // rows past the end of the buffer stay blank, as in emacs
 			}
 			l := win.Buf.Line(ln)
+			var spans []syntax.Span
+			if spansOf != nil {
+				spans = spansOf(win.Buf, ln)
+			}
 			drawLine(scr, textX, rect.Y+i, textW,
-				l, win.LeftCol, th, paren.onLine(ln), region.onLine(ln, l))
+				l, win.LeftCol, th, paren.onLine(ln), region.onLine(ln, l), spans)
 		}
 	}
 
@@ -160,7 +168,7 @@ func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active bool,
 // hl carries any bracket-match highlight falling on this line, reg any part of
 // the selection. Where both fall on a cell they compose: the region contributes
 // the inverted background and the bracket keeps its weight and underline.
-func drawLine(scr tcell.Screen, x, y, width int, l *text.Line, left text.ColIdx, th Theme, hl lineHL, reg regionHL) {
+func drawLine(scr tcell.Screen, x, y, width int, l *text.Line, left text.ColIdx, th Theme, hl lineHL, reg regionHL, spans []syntax.Span) {
 	lineW := l.Width()
 	truncated := lineW-left > text.ColIdx(width)
 
@@ -171,10 +179,15 @@ func drawLine(scr tcell.Screen, x, y, width int, l *text.Line, left text.ColIdx,
 	}
 
 	if avail > 0 {
+		syn := newLineSyntax(spans, &th)
 	walk:
 		for c := range l.Clusters() {
 			sx := c.Col - left
-			style := hl.styleFor(c.Start, th.Text)
+			// Order matters and each step only adds: syntax sets the
+			// foreground, a matched bracket adds weight and an underline over
+			// whatever colour that is, and the region inverts the result.
+			style := syn.styleAt(c.Start, th.Text)
+			style = parenOver(hl, c.Start, style, th.Text)
 			if reg.covers(c.Start, c.Start+text.RuneIdx(len(c.Runes))) {
 				style = overlay(style, reg.style)
 			}

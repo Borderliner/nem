@@ -164,6 +164,13 @@ type Theme struct {
 	// text being typed is ordinary content, not a passing notice.
 	Mini lipgloss.Style
 
+	// Syntax enables colouring the text area from a SpansFunc. Off restores
+	// exactly the uncoloured rendering.
+	Syntax bool
+	// SyntaxStyle maps a syntax.Class to its style. Foregrounds only: see
+	// defaultSyntaxStyles and the note above about never painting a background.
+	SyntaxStyle [numSyntaxClasses]tcell.Style
+
 	// ScrollMargin is the rows of context kept around point.
 	ScrollMargin int
 }
@@ -201,6 +208,9 @@ func DefaultTheme() Theme {
 		Divider: lipgloss.NewStyle().Foreground(rule),
 		Echo:    lipgloss.NewStyle().Foreground(quiet),
 		Mini:    lipgloss.NewStyle(),
+
+		Syntax:      true,
+		SyntaxStyle: defaultSyntaxStyles(),
 
 		ScrollMargin: DefaultScrollMargin,
 	}

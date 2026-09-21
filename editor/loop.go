@@ -344,7 +344,11 @@ func (e *Editor) clampWindowPoints() {
 func (e *Editor) frame() ui.Frame {
 	// The editor owns the name map, so it is the only thing that can tell the
 	// renderer what a path-less buffer is called.
-	f := ui.Frame{Tree: e.tree, Active: e.active, Echo: e.echo, NameOf: e.BufferName}
+	f := ui.Frame{
+		Tree: e.tree, Active: e.active, Echo: e.echo,
+		NameOf:  e.BufferName,
+		SpansOf: e.spansOf,
+	}
 	if e.mini != nil {
 		f.Echo = e.mini.line()
 		f.MiniPt = e.mini.cursorCol()

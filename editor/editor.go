@@ -24,6 +24,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/hajianpour/nem/command"
+	"github.com/hajianpour/nem/highlight"
 	"github.com/hajianpour/nem/keymap"
 	"github.com/hajianpour/nem/lua"
 	"github.com/hajianpour/nem/text"
@@ -84,6 +85,10 @@ type Editor struct {
 	// wk is prefix-key discovery: the delay, and the panel while it shows. See
 	// whichkey.go; it describes whatever pending holds.
 	wk whichKeyState
+
+	// hl caches syntax state per buffer, so a keystroke re-lexes from the edit
+	// rather than from the top of the file. See highlight.go.
+	hl map[*text.Buffer]*highlight.Cache
 
 	// comp holds completion preferences from the config. They are applied when a
 	// panel is built rather than when a session starts, so a reload takes effect
@@ -148,6 +153,7 @@ func New(scr tcell.Screen) (*Editor, error) {
 		scr:    scr,
 		safe:   newSafety(),
 		comp:   defaultCompletionPrefs(),
+		hl:     map[*text.Buffer]*highlight.Cache{},
 		before: map[string][]func(){},
 		after:  map[string][]func(){},
 	}
@@ -342,6 +348,7 @@ func (e *Editor) KillBuffer(b *text.Buffer) error {
 	}
 	delete(e.byName, e.names[b])
 	delete(e.names, b)
+	e.forgetHighlight(b)
 	for i, c := range e.buffers {
 		if c == b {
 			e.buffers = append(e.buffers[:i], e.buffers[i+1:]...)
@@ -404,6 +411,9 @@ func (e *Editor) SaveBuffer(b *text.Buffer, path string) error {
 		e.names[b] = name
 		e.byName[name] = b
 	}
+	// The buffer just became a .go file, or a .lua one. Lex it as what it is
+	// now rather than as what it was when it had no name.
+	e.retuneHighlight(b)
 	e.afterSave(target)
 	return nil
 }
