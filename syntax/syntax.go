@@ -125,11 +125,20 @@ type Lexer interface {
 	Name() string
 }
 
-// For returns the lexer for a path, by file extension.
+// For returns the lexer for a path, by file name.
 //
-// It never returns nil: an unrecognised extension gets the plain lexer, so a
-// caller never has to check before lexing.
-func For(path string) Lexer {
+// It never returns nil: a name nothing recognises gets the plain lexer, so a
+// caller never has to check before lexing. Use ForWithHeader when the file's
+// first line is available, which is what identifies a script with no extension.
+func For(path string) Lexer { return ForWithHeader(path, "") }
+
+// nativeFor returns the hand-written lexer for a path, or nil if there is none.
+//
+// These come first everywhere. They carry state properly across lines and know
+// their grammar, where a rule file can only approximate with regexes - so a
+// bundled or nano-supplied definition for the same language must never displace
+// one of these.
+func nativeFor(path string) Lexer {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".go":
 		return goLexer{}
@@ -140,7 +149,7 @@ func For(path string) Lexer {
 	case ".md", ".markdown":
 		return markdownLexer{}
 	}
-	return PlainLexer{}
+	return nil
 }
 
 // PlainLexer classifies nothing, for text nem has no grammar for.

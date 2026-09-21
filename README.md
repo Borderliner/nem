@@ -78,7 +78,15 @@ as you type, fuzzily: `fwc` finds `forward-char`. Matched characters are
 highlighted so you can see why something matched.
 
 **Line numbers** — shown by default, and drawn outside the text so they can
-never be selected or copied.
+never be selected or copied. `C-x n` toggles them.
+
+**Syntax highlighting** — Go, Lua, JSON and Markdown have hand-written lexers;
+C, Python, shell, Rust, JavaScript, TypeScript, YAML, TOML, HTML, CSS, SQL,
+Makefile, Dockerfile, XML and INI are bundled into the binary. If nano happens
+to be installed, its definitions add about forty more. Nothing needs installing.
+
+**Selection** — `C-SPC` marks, and the region is visible. Typing replaces it,
+Backspace deletes it, and that undoes in one step.
 
 **Moving text** — `M-<up>` and `M-<down>` move the current line, or every line
 the region covers, keeping the selection so the key repeats.

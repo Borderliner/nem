@@ -205,3 +205,43 @@ func TestNativeLexersWinOverNanorc(t *testing.T) {
 		}
 	}
 }
+
+// An extensionless script must highlight from its shebang using the bundled
+// rules, with no nano installed. Before this, only nano's definitions were
+// given the first line, so the case that motivated bundling did not work.
+func TestExtensionlessScriptHighlightsFromItsShebang(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deploy") // deliberately no extension
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nset -eu\n"), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	b, err := text.LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+
+	lex := lexerFor(b)
+	if _, plain := lex.(syntax.PlainLexer); plain {
+		t.Fatal("an extensionless #!/bin/sh script got the plain lexer")
+	}
+	if got := lex.Name(); got != "sh" {
+		t.Errorf("lexer = %q, want the bundled sh rules", got)
+	}
+}
+
+// And a file with neither an extension nor a shebang stays plain.
+func TestNamelessUnmarkedFileStaysPlain(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "notes")
+	if err := os.WriteFile(path, []byte("just some prose\n"), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	b, err := text.LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	if _, plain := lexerFor(b).(syntax.PlainLexer); !plain {
+		t.Error("a file with no extension and no shebang should stay plain")
+	}
+}

@@ -1,0 +1,17 @@
+# SQL. Keywords are matched case-insensitively with an inline flag, since SQL
+# is conventionally written in either case and often in both at once.
+
+syntax sql "\.sql$"
+comment "--"
+
+class keyword "(?i)\b(add|all|alter|and|as|asc|begin|between|by|case|cast|check|column|commit|constraint|create|cross|database|default|delete|desc|distinct|drop|else|end|exists|foreign|from|full|group|having|if|in|index|inner|insert|into|is|join|key|left|like|limit|not|null|offset|on|or|order|outer|primary|references|returning|right|rollback|select|set|table|then|transaction|union|unique|update|using|values|view|when|where|with)\b"
+class type "(?i)\b(bigint|binary|bit|blob|boolean|char|date|datetime|decimal|double|float|int|integer|interval|json|jsonb|numeric|real|serial|smallint|text|time|timestamp|uuid|varchar|varbinary)\b"
+class constant "(?i)\b(true|false|null|current_date|current_time|current_timestamp)\b"
+class function "(?i)\b(avg|coalesce|concat|count|greatest|least|lower|max|min|now|nullif|round|substring|sum|trim|upper)[[:blank:]]*\("
+class number "\b[0-9]+(\.[0-9]+)?\b"
+
+class comment "--.*$"
+class comment start="/\*" end="\*/"
+
+class string "'([^']|'')*'"
+class string "\"[^\"]*\""

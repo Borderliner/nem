@@ -1,0 +1,14 @@
+# HTML.
+
+syntax html "\.(html?|htm|xhtml)$"
+
+class keyword "</?[A-Za-z][A-Za-z0-9-]*"
+class keyword "/?>"
+class type "\b[A-Za-z-]+(?:=)"
+class constant "&[A-Za-z]+;|&#[0-9]+;"
+class keyword "<!DOCTYPE[^>]*>"
+
+class comment start="<!--" end="-->"
+
+class string "\"[^\"]*\""
+class string "'[^']*'"

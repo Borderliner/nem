@@ -107,8 +107,23 @@ terminals set and many do not. When it is absent nem guesses dark, because most
 terminals are and because the dark palette on a light background is faint rather
 than invisible. If your code looks washed out, set `theme = "light"`.
 
-Highlighting covers Go, Lua, JSON and Markdown. Anything else renders plain —
-including this file's own `*scratch*` buffer, which has no file type.
+Highlighting works out of the box with nothing installed. It comes from three
+places, in order:
+
+1. **Hand-written lexers** for Go, Lua, JSON and Markdown. These carry state
+   across lines, so a block comment or a raw string spanning lines is handled
+   exactly rather than approximately.
+2. **Bundled rules**, compiled into the binary, for C, Python, shell, Rust,
+   JavaScript, TypeScript, YAML, TOML, HTML, CSS, SQL, Makefile, Dockerfile,
+   XML and INI.
+3. **nano's rules**, read from `/usr/share/nano` when nano happens to be
+   installed, covering roughly 40 more languages. Purely a bonus — nem never
+   needs them.
+
+A file with no extension is matched on its `#!` line, so a script called
+`deploy` starting with `#!/bin/sh` is highlighted as shell.
+
+Anything unmatched renders plain, including `*scratch*`.
 
 ### Where backups and autosaves go
 

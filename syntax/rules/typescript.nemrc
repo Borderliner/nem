@@ -1,0 +1,22 @@
+# TypeScript.
+
+syntax typescript "\.(ts|tsx|mts|cts)$"
+comment "//"
+
+class function "\bfunction[[:blank:]]+[A-Za-z_$][A-Za-z0-9_$]*"
+class type "\b(class|interface|type|enum)[[:blank:]]+[A-Za-z_$][A-Za-z0-9_$]*"
+
+class keyword "\b(abstract|any|as|asserts|async|await|break|case|catch|class|const|constructor|continue|declare|default|delete|do|else|enum|export|extends|finally|for|from|function|get|if|implements|import|in|infer|instanceof|interface|is|keyof|let|namespace|new|of|override|private|protected|public|readonly|return|satisfies|set|static|super|switch|this|throw|try|type|typeof|var|void|while|yield)\b"
+class constant "\b(true|false|null|undefined|NaN|Infinity)\b"
+class type "\b(Array|Awaited|Boolean|Date|Error|Exclude|Extract|Map|NonNullable|Number|Object|Omit|Partial|Pick|Promise|Readonly|Record|Required|Set|String|Symbol|bigint|boolean|never|number|object|string|symbol|unknown)\b"
+
+class number "\b0[xX][0-9a-fA-F_]+n?\b"
+class number "\b[0-9][0-9_]*(\.[0-9_]*)?([eE][-+]?[0-9]+)?n?\b"
+
+class comment "//.*$"
+class comment start="/\*" end="\*/"
+
+class string "`[^`]*`"
+class string start="`" end="`"
+class string "\"([^\"\\]|\\.)*\""
+class string "'([^'\\]|\\.)*'"

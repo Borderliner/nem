@@ -1,0 +1,33 @@
+# C and C++.
+#
+# Rule order is deliberate throughout these files: broad rules first, and
+# strings LAST so they win. A URL inside a string literal is common, and if the
+# comment rule painted over it then half of `u := "http://x"` would read as a
+# comment - it looks like the code is disabled. The reverse blemish, a quoted
+# word inside a comment taking the string colour, is milder and rarer.
+
+syntax c "\.(c|h|cc|cpp|cxx|hpp|hxx)$"
+comment "//"
+
+# The call form comes before the keyword lists so that `for (` and `if (`,
+# which match it just as `printf(` does, are repainted as the keywords they
+# are. RE2 has no lookahead, so the rule cannot exclude them itself.
+class function "\b[a-zA-Z_][a-zA-Z0-9_]*[[:blank:]]*\("
+
+class keyword "\b(auto|break|case|const|continue|default|do|else|enum|extern|for|goto|if|inline|register|restrict|return|sizeof|static|struct|switch|typedef|union|volatile|while|_Atomic|_Bool|_Generic|_Noreturn|_Static_assert)\b"
+class keyword "\b(alignas|alignof|catch|class|concept|consteval|constexpr|constinit|decltype|delete|explicit|export|friend|mutable|namespace|new|noexcept|operator|private|protected|public|requires|static_assert|template|this|throw|try|typeid|typename|using|virtual)\b"
+class keyword "^[[:blank:]]*#[[:blank:]]*(include|define|undef|ifdef|ifndef|if|elif|else|endif|pragma|error|warning|line)\b"
+
+class type "\b(void|char|short|int|long|float|double|signed|unsigned|bool|size_t|ssize_t|ptrdiff_t|wchar_t|char16_t|char32_t|intptr_t|uintptr_t|u?int(8|16|32|64)_t|FILE|va_list)\b"
+class constant "\b(NULL|nullptr|true|false|EOF|stdin|stdout|stderr)\b"
+
+class number "\b0[xX][0-9a-fA-F']+([uUlL]*)\b"
+class number "\b0[bB][01']+([uUlL]*)\b"
+class number "\b[0-9][0-9']*(\.[0-9']*)?([eEpP][-+]?[0-9]+)?([uUlLfF]*)\b"
+
+
+class comment "//.*$"
+class comment start="/\*" end="\*/"
+
+class string "'([^'\\]|\\.)*'"
+class string "\"([^\"\\]|\\.)*\""

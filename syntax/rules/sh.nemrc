@@ -1,0 +1,22 @@
+# POSIX shell and bash.
+
+syntax sh "\.(sh|bash|zsh|ksh)$" "^(\.bashrc|\.zshrc|\.profile|\.bash_profile|PKGBUILD)$"
+header "^#!.*\b(ba|z|k|d|a)?sh\b"
+comment "#"
+
+# The function-definition form comes before the keyword list so that a name
+# colliding with a builtin is repainted as the keyword it also is.
+class function "^[[:blank:]]*[A-Za-z_][A-Za-z0-9_]*[[:blank:]]*\(\)"
+
+class keyword "\b(if|then|elif|else|fi|for|while|until|do|done|case|esac|in|function|select|time|coproc)\b"
+class keyword "(^|[[:blank:];(])(alias|bg|break|builtin|cd|command|continue|declare|echo|eval|exec|exit|export|fg|getopts|hash|jobs|kill|local|printf|pwd|read|readonly|return|set|shift|shopt|source|test|trap|type|typeset|ulimit|umask|unalias|unset|wait)\b"
+
+class constant "\$\{[^}]*\}"
+class constant "\$[A-Za-z_][A-Za-z0-9_]*"
+class constant "\$[0-9*@#?$!-]"
+class number "\b[0-9]+\b"
+
+class comment "(^|[[:blank:]])#.*$"
+
+class string "'[^']*'"
+class string "\"([^\"\\]|\\.)*\""

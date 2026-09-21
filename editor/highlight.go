@@ -59,16 +59,20 @@ func nanoLexers() *nanorc.Set {
 // gets the plain lexer, so *scratch* and *Buffer List* render uncoloured
 // without a special case.
 func lexerFor(b *text.Buffer) syntax.Lexer {
-	lex := syntax.For(b.Path())
+	// The first line is read up front because the bundled rules need the
+	// shebang too, not just nano's. An extensionless script called "deploy"
+	// starting with #!/bin/sh must highlight on a machine with no nano
+	// installed, which is the whole reason the rules are bundled.
+	var first string
+	if b.NumLines() > 0 {
+		first = b.Line(0).String()
+	}
+	lex := syntax.ForWithHeader(b.Path(), first)
 	if _, plain := lex.(syntax.PlainLexer); !plain {
 		return lex
 	}
 	if b.Path() == "" {
 		return lex // a nameless buffer has nothing to match on
-	}
-	var first string
-	if b.NumLines() > 0 {
-		first = b.Line(0).String()
 	}
 	if n := nanoLexers().For(b.Path(), first); n != nil {
 		return n

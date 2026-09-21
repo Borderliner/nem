@@ -1,0 +1,13 @@
+# Dockerfile.
+
+syntax dockerfile "\.dockerfile$" "^([Dd]ockerfile|Containerfile)(\..*)?$"
+comment "#"
+
+class keyword "(?i)^[[:blank:]]*(add|arg|cmd|copy|entrypoint|env|expose|from|healthcheck|label|maintainer|onbuild|run|shell|stopsignal|user|volume|workdir)\b"
+class keyword "(?i)[[:blank:]]as[[:blank:]]"
+class constant "\$[A-Za-z_][A-Za-z0-9_]*"
+class constant "\$\{[^}]*\}"
+class number "\b[0-9]+\b"
+class comment "^[[:blank:]]*#.*$"
+class string "\"([^\"\\]|\\.)*\""
+class string "'[^']*'"

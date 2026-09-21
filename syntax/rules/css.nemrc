@@ -1,0 +1,18 @@
+# CSS, and enough of SCSS to be useful.
+
+syntax css "\.(css|scss|sass|less)$"
+
+class type "(^|[[:blank:],>+~])[.#][A-Za-z_-][A-Za-z0-9_-]*"
+class type "::?[a-z-]+\b"
+class function "\b[a-z-]+[[:blank:]]*(?::)"
+class keyword "@[a-z-]+\b"
+class constant "#[0-9a-fA-F]{3,8}\b"
+class number "\b[-+]?[0-9]*\.?[0-9]+(px|em|rem|ex|ch|vw|vh|vmin|vmax|%|s|ms|deg|rad|turn|fr|pt|cm|mm|in)?\b"
+class function "\b(calc|clamp|min|max|var|rgb|rgba|hsl|hsla|url|linear-gradient|radial-gradient|translate|rotate|scale|cubic-bezier)[[:blank:]]*\("
+class constant "\b(inherit|initial|unset|none|auto|important)\b"
+
+class comment start="/\*" end="\*/"
+class comment "//.*$"
+
+class string "\"[^\"]*\""
+class string "'[^']*'"

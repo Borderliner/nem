@@ -1,0 +1,15 @@
+# XML.
+
+syntax xml "\.(xml|xsd|xsl|xslt|svg|rss|atom|plist|pom)$"
+
+class keyword "</?[A-Za-z_:][A-Za-z0-9_.:-]*"
+class keyword "/?>"
+class type "\b[A-Za-z_:][A-Za-z0-9_.:-]*(?:=)"
+class constant "&[A-Za-z]+;|&#[0-9]+;"
+class keyword "<\?xml[^?]*\?>"
+
+class comment start="<!--" end="-->"
+class string start="<!\[CDATA\[" end="\]\]>"
+
+class string "\"[^\"]*\""
+class string "'[^']*'"

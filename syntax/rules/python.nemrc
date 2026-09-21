@@ -1,0 +1,29 @@
+# Python.
+
+syntax python "\.pyi?$"
+header "^#!.*\bpython[0-9.]*\b"
+comment "#"
+
+class function "\bdef[[:blank:]]+[A-Za-z_][A-Za-z0-9_]*"
+class type "\bclass[[:blank:]]+[A-Za-z_][A-Za-z0-9_]*"
+
+class keyword "\b(and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|match|nonlocal|not|or|pass|raise|return|try|while|with|yield)\b"
+class constant "\b(True|False|None|NotImplemented|Ellipsis|__name__|__main__|self|cls)\b"
+class type "\b(bool|bytearray|bytes|complex|dict|float|frozenset|int|list|object|set|str|tuple|type)\b"
+class function "\b(abs|all|any|enumerate|filter|getattr|hasattr|isinstance|issubclass|iter|len|map|max|min|next|open|print|range|repr|reversed|round|setattr|sorted|sum|super|zip)\b"
+
+class number "\b0[xX][0-9a-fA-F_]+\b"
+class number "\b0[bB][01_]+\b"
+class number "\b[0-9][0-9_]*(\.[0-9_]*)?([eE][-+]?[0-9]+)?[jJ]?\b"
+
+class comment "#.*$"
+
+# Triple-quoted forms come before the single-line ones so that a docstring
+# opening and closing on one line is matched whole rather than as two empty
+# strings meeting in the middle.
+class string "\"\"\"([^\"]|\"[^\"]|\"\"[^\"])*\"\"\""
+class string "'''([^']|'[^']|''[^'])*'''"
+class string start="\"\"\"" end="\"\"\""
+class string start="'''" end="'''"
+class string "[rRbBuUfF]{0,2}\"([^\"\\]|\\.)*\""
+class string "[rRbBuUfF]{0,2}'([^'\\]|\\.)*'"

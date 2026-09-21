@@ -1,0 +1,12 @@
+# INI and desktop-entry style configuration.
+
+syntax ini "\.(ini|cfg|conf|desktop|service|socket|timer|target|mount|gitconfig|editorconfig)$" "^(\.gitconfig|\.editorconfig|\.npmrc|\.curlrc)$"
+comment "#"
+
+class type "^[[:blank:]]*\[[^]]*\]"
+class function "^[[:blank:]]*[A-Za-z0-9_.-]+[[:blank:]]*(?:=)"
+class constant "\b(true|false|yes|no|on|off)\b"
+class number "\b-?[0-9]+(\.[0-9]+)?\b"
+class comment "^[[:blank:]]*[#;].*$"
+class string "'[^']*'"
+class string "\"([^\"\\]|\\.)*\""

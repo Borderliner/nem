@@ -1,0 +1,13 @@
+# Makefiles.
+
+syntax makefile "\.(mk|make)$" "^([Mm]akefile|GNUmakefile)$"
+comment "#"
+
+class function "^[A-Za-z0-9_./$()%-]+[[:blank:]]*::?([[:blank:]]|$)"
+class keyword "^[[:blank:]]*[-]?(include|ifeq|ifneq|ifdef|ifndef|else|endif|define|endef|export|unexport|override|vpath)\b"
+class constant "\$[({][^)}]*[)}]"
+class constant "\$[@<^+*?%]"
+class type "\.(PHONY|SUFFIXES|DEFAULT|PRECIOUS|INTERMEDIATE|SECONDARY|DELETE_ON_ERROR|IGNORE|SILENT|EXPORT_ALL_VARIABLES|NOTPARALLEL|ONESHELL|POSIX)\b"
+class comment "#.*$"
+class string "\"([^\"\\]|\\.)*\""
+class string "'[^']*'"
