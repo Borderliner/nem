@@ -6,6 +6,9 @@ import (
 
 	"github.com/Borderliner/nem/text"
 	"github.com/gdamore/tcell/v2"
+
+	"github.com/Borderliner/nem/syntax"
+	"os"
 )
 
 // fgOnScreen is the foreground colour of one rendered cell. Syntax styles set
@@ -145,5 +148,60 @@ func TestEditingUpdatesTheColours(t *testing.T) {
 
 	if !anyColourOnRow(t, scr, 0) {
 		t.Error("typing // did not colour the line as a comment")
+	}
+}
+
+// A language nem has no hand-written lexer for must still be coloured, from
+// nano's definitions. Skipped where nano is not installed, which is normal.
+func TestNanorcLanguagesAreColoured(t *testing.T) {
+	if _, err := os.Stat("/usr/share/nano"); err != nil {
+		t.Skip("nano is not installed here")
+	}
+	e, _ := newTestEditor(t, `def handler(self):`, `    return "hi"  # done`)
+	e.Buf().SetPath(filepath.Join(t.TempDir(), "script.py"))
+	e.retuneHighlight(e.Buf())
+
+	if name := e.cacheFor(e.Buf()).Lexer().Name(); name != "python" {
+		t.Fatalf("lexer = %q, want python", name)
+	}
+
+	var classes []syntax.Class
+	for ln := 0; ln < e.Buf().NumLines(); ln++ {
+		for _, s := range e.spansOf(e.Buf(), ln) {
+			classes = append(classes, s.Class)
+		}
+	}
+	if len(classes) == 0 {
+		t.Fatal("no spans for a Python file; highlighting is not reaching nanorc")
+	}
+	var sawString, sawComment bool
+	for _, c := range classes {
+		switch c {
+		case syntax.String:
+			sawString = true
+		case syntax.Comment:
+			sawComment = true
+		}
+	}
+	if !sawString {
+		t.Error(`no String span for "hi"`)
+	}
+	if !sawComment {
+		t.Error("no Comment span for the trailing #")
+	}
+}
+
+// nem's own lexers must not be displaced by nano's, which ship definitions for
+// the same four languages and are less precise.
+func TestNativeLexersWinOverNanorc(t *testing.T) {
+	for _, tc := range []struct{ file, want string }{
+		{"a.go", "go"}, {"b.lua", "lua"}, {"c.json", "json"}, {"d.md", "markdown"},
+	} {
+		e, _ := newTestEditor(t, "x")
+		e.Buf().SetPath(filepath.Join(t.TempDir(), tc.file))
+		e.retuneHighlight(e.Buf())
+		if got := e.cacheFor(e.Buf()).Lexer().Name(); got != tc.want {
+			t.Errorf("%s: lexer = %q, want nem's own %q", tc.file, got, tc.want)
+		}
 	}
 }

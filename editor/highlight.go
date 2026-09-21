@@ -1,8 +1,11 @@
 package editor
 
 import (
+	"sync"
+
 	"github.com/Borderliner/nem/highlight"
 	"github.com/Borderliner/nem/syntax"
+	"github.com/Borderliner/nem/syntax/nanorc"
 	"github.com/Borderliner/nem/text"
 )
 
@@ -24,6 +27,55 @@ func (e *Editor) spansOf(b *text.Buffer, line int) []syntax.Span {
 	return e.cacheFor(b).Spans(b, line)
 }
 
+// nanoSet holds the languages read from the system's nano installation.
+//
+// Loaded once and lazily: reading forty files is cheap but pointless for an
+// editor that never opens a file nano covers, and doing it at init would charge
+// every launch for it. sync.Once rather than a plain nil check because the
+// editor may hold several buffers and the first lex of each could race - the
+// input loop is single-threaded today, and this does not depend on that staying
+// true.
+var (
+	nanoOnce sync.Once
+	nanoSet  *nanorc.Set
+)
+
+func nanoLexers() *nanorc.Set {
+	nanoOnce.Do(func() {
+		// Problems are dropped rather than reported: a malformed file in a
+		// system directory is not something the user of this editor can act on,
+		// and one warning per launch would be noise. The affected language is
+		// simply not offered.
+		nanoSet, _ = nanorc.Load(nanorc.DefaultDirs()...)
+	})
+	return nanoSet
+}
+
+// lexerFor picks the lexer for a buffer.
+//
+// nem's hand-written lexers come first: they carry proper state across lines
+// and are precise where a regex pass can only approximate. nano's definitions
+// fill in everything else, which is most languages. A buffer nothing matches
+// gets the plain lexer, so *scratch* and *Buffer List* render uncoloured
+// without a special case.
+func lexerFor(b *text.Buffer) syntax.Lexer {
+	lex := syntax.For(b.Path())
+	if _, plain := lex.(syntax.PlainLexer); !plain {
+		return lex
+	}
+	if b.Path() == "" {
+		return lex // a nameless buffer has nothing to match on
+	}
+	var first string
+	if b.NumLines() > 0 {
+		first = b.Line(0).String()
+	}
+	if n := nanoLexers().For(b.Path(), first); n != nil {
+		return n
+	}
+	return lex
+}
+
 // cacheFor returns the buffer's highlight cache, creating it on first use.
 //
 // Caches are per buffer because the cache holds one lexer state per line: they
@@ -32,7 +84,7 @@ func (e *Editor) cacheFor(b *text.Buffer) *highlight.Cache {
 	if c, ok := e.hl[b]; ok {
 		return c
 	}
-	c := highlight.New(syntax.For(b.Path()))
+	c := highlight.New(lexerFor(b))
 	e.hl[b] = c
 	return c
 }
@@ -48,7 +100,7 @@ func (e *Editor) retuneHighlight(b *text.Buffer) {
 	if !ok {
 		return // no cache yet; cacheFor will pick the right lexer when one is made
 	}
-	lex := syntax.For(b.Path())
+	lex := lexerFor(b)
 	if lex.Name() == c.Lexer().Name() {
 		return
 	}
