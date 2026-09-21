@@ -216,3 +216,58 @@ nem.set("autosave-idle", 30)           -- seconds; 0 disables
 nem.set("backup", true)
 nem.set("clipboard", "osc52")          -- or "off"
 ```
+
+## Open work after v2
+
+Known and deliberately unfinished, recorded here because these were found by
+driving the real binary rather than by any test, and a test suite will not
+remind anyone of them.
+
+### Two commands run but produce nothing visible
+
+`<f1> b` (`describe-bindings`) and `C-x C-b` (`list-buffers`) both dispatch
+cleanly and pass their unit tests, but a pty audit of the real binary found no
+binding list and no `*Buffer List*` on screen. This is the same pattern as the
+region being invisible before v2: the command runs, its result never reaches the
+user's eyes. Both render into a file-less buffer via `NewBuffer` and then visit
+it, so the fault is somewhere between creating that buffer and showing it.
+
+**The lesson worth keeping:** a passing unit test proves a command mutated state,
+not that a person can see the result. Every user-visible feature needs at least
+one assertion against rendered output.
+
+### `write-file` over an existing file nem has never read
+
+External-change detection compares against a fingerprint recorded at load or
+save, and a file nem never opened has none — so `C-x C-w` over someone else's
+file writes silently. Emacs asks "File exists; overwrite?" there. That is a
+second, separate prompt from external-change detection, and it is missing.
+
+### A Lua whole-buffer rewrite could now be one undo step
+
+`nem.buf.set_text` costs two undo steps for a general replacement because it is a
+delete plus an insert, and when it was written the undo log had no grouping.
+`text.BeginUndoGroup`/`EndUndoGroup` now exist, so wrapping the rewrite makes it
+a single `C-/`. Unblocked, not done.
+
+### Point cannot reach a final empty line
+
+`text` stores a file's trailing newline as metadata rather than as an empty last
+line, so `alpha\nbeta\n` is a two-line buffer and `M->` lands at the end of
+`beta`. Emacs gives you that empty line and lets you sit on it, which is why
+pasting "as a new last line" needs an explicit `RET` first. Emacs's model is the
+better one here.
+
+### Smaller items
+
+- `text.Buffer.Line(i)` is still an unguarded `&b.lines[i]`. Dispatch-time point
+  clamping closes the reachable path; the sharp edge remains for a future caller.
+- `completeFilename` reads the filesystem directly rather than through `Env`, so
+  completion cannot be sandboxed or faked.
+- A Lua tail-call spin is the one remaining way a config can hang the editor; the
+  5s timeout bounds it.
+- `which-key`'s `+prefix` row is unreachable with the default bindings, since none
+  is three keys deep. It becomes live as soon as a config defines one.
+- `AnchorBottom` panels sit over the active window's modeline while showing.
+- `blitdemo` is redundant now that `ui` and `ui/blit` are tested, and it has
+  already misled once by looking like an editor.
