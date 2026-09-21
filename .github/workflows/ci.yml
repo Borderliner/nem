@@ -56,10 +56,11 @@ jobs:
       # nem is cgo-free on purpose, so every target builds from one runner.
       # This job exists to keep it that way: a dependency that pulls in cgo
       # would break here rather than at release time.
-      - name: build every release target
+      - name: build every release target, statically
         run: |
           set -e
-          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 \
+                        windows/amd64 windows/arm64; do
             os=${target%/*}; arch=${target#*/}
             echo "building $target"
             CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -o /dev/null ./cmd/nem

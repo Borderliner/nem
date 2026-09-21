@@ -534,3 +534,50 @@ func TestRootThatIsAFileErrors(t *testing.T) {
 		t.Error("WriteBackup succeeded with a file as the root, want an error")
 	}
 }
+
+// State must land where each platform expects it. XDG_STATE_HOME wins because a
+// user who sets it means it; LOCALAPPDATA is set only on Windows, so honouring
+// it puts state in the right place there without branching on GOOS - which
+// would be untestable from any single platform.
+func TestDefaultRootFollowsThePlatformConvention(t *testing.T) {
+	t.Run("XDG_STATE_HOME wins", func(t *testing.T) {
+		t.Setenv("XDG_STATE_HOME", "/xdg")
+		t.Setenv("LOCALAPPDATA", `/local`)
+		got, err := backup.DefaultRoot()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := filepath.Join("/xdg", "nem"); got != want {
+			t.Errorf("DefaultRoot() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("LOCALAPPDATA when XDG is unset", func(t *testing.T) {
+		t.Setenv("XDG_STATE_HOME", "")
+		t.Setenv("LOCALAPPDATA", "/local")
+		got, err := backup.DefaultRoot()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := filepath.Join("/local", "nem"); got != want {
+			t.Errorf("DefaultRoot() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("a relative value is ignored", func(t *testing.T) {
+		t.Setenv("XDG_STATE_HOME", "relative/path")
+		t.Setenv("LOCALAPPDATA", "also/relative")
+		got, err := backup.DefaultRoot()
+		if err != nil {
+			t.Skipf("no home directory resolvable here: %v", err)
+		}
+		if filepath.IsAbs(got) == false {
+			t.Errorf("DefaultRoot() = %q, want an absolute path", got)
+		}
+		for _, bad := range []string{"relative", "also"} {
+			if filepath.Base(filepath.Dir(got)) == bad {
+				t.Errorf("DefaultRoot() = %q, honoured a relative override", got)
+			}
+		}
+	})
+}

@@ -55,6 +55,12 @@ func DefaultRoot() (string, error) {
 	if x := os.Getenv("XDG_STATE_HOME"); filepath.IsAbs(x) {
 		return filepath.Join(x, "nem"), nil
 	}
+	// LOCALAPPDATA is set on Windows and nowhere else, so honouring it puts
+	// state where Windows expects it without branching on GOOS - and without
+	// an untestable path, since a test can just set the variable.
+	if a := os.Getenv("LOCALAPPDATA"); filepath.IsAbs(a) {
+		return filepath.Join(a, "nem"), nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("backup: locating the home directory: %w", err)

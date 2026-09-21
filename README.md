@@ -35,14 +35,22 @@ From source:
 
 ```sh
 git clone https://github.com/Borderliner/nem
-cd nem && go build ./cmd/nem
+cd nem && make build
 ./nem file.txt
 ```
 
-Go 1.27 or later. No cgo, no runtime, no external tools — one static binary,
-which is also why it cross-compiles to every supported platform from any of
-them. Releases cover Linux and macOS on amd64 and arm64; Windows compiles but
-is untested, so it is deliberately not published.
+Go 1.27 or later, and nothing else.
+
+`make build` sets `CGO_ENABLED=0`, which matters: Go turns cgo on by default
+when a C compiler is present, and a dependency pulls in `os/user`, which links
+libc for NSS lookups. With it off the binary is **fully static** — no libc, no
+glibc version skew, runs on musl and Alpine — and strips to about 5 MB. A plain
+`go build` still works but gives you a dynamically linked binary.
+
+Being cgo-free is also why every platform cross-compiles from any other, so
+releases for Linux, macOS and Windows on both amd64 and arm64 all come off one
+machine. Windows binaries are published but lightly tested; state lives under
+`%LOCALAPPDATA%` there rather than the XDG path used elsewhere.
 
 ## What it does
 

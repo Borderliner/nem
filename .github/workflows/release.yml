@@ -31,26 +31,46 @@ jobs:
         run: |
           set -e
           mkdir -p dist
-          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+          # nem is cgo-free, so every platform builds from this one runner and
+          # every binary is fully static - no libc, no glibc version skew, runs
+          # on musl and Alpine. CGO_ENABLED=0 is what guarantees that: Go turns
+          # cgo on by default when a C compiler is present, and a Lip Gloss
+          # dependency pulls in os/user, which links libc for NSS lookups.
+          for target in \
+              linux/amd64 linux/arm64 \
+              darwin/amd64 darwin/arm64 \
+              windows/amd64 windows/arm64; do
             os=${target%/*}; arch=${target#*/}
-            out="dist/nem_${VERSION}_${os}_${arch}"
+            name="nem_${VERSION}_${os}_${arch}"
+            out="dist/$name"
             mkdir -p "$out"
-            # -trimpath keeps build paths out of the binary, so it is
-            # reproducible and carries nothing about the machine that made it.
+
+            bin="$out/nem"
+            [ "$os" = windows ] && bin="$out/nem.exe"
+
+            # -trimpath keeps build paths out of the binary; -s -w drop the
+            # symbol table and DWARF, which is 7.4MB -> 5.1MB, a third of it.
             CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build \
               -trimpath \
               -ldflags "-s -w -X main.version=${VERSION}" \
-              -o "$out/nem" ./cmd/nem
+              -o "$bin" ./cmd/nem
+
             # Only what a user needs. docs/design is the project's own design
             # history and is noise in a release tarball.
             cp README.md "$out/"
             cp docs/config.md "$out/"
             cp examples/init.lua "$out/init.lua.example"
-            tar -czf "${out}.tar.gz" -C dist "$(basename "$out")"
+
+            # zip for Windows because it is what people expect there, but a
+            # missing tool must not fail a release - modern Windows ships tar.
+            if [ "$os" = windows ] && command -v zip >/dev/null; then
+              (cd dist && zip -qr "${name}.zip" "$name")
+            else
+              tar -czf "${out}.tar.gz" -C dist "$name"
+            fi
             rm -rf "$out"
           done
-          cd dist && sha256sum *.tar.gz > checksums.txt
-          ls -la
+          cd dist && sha256sum * > checksums.txt && ls -la
 
       - name: publish
         env:
@@ -60,4 +80,4 @@ jobs:
           gh release create "$VERSION" \
             --title "nem $VERSION" \
             --generate-notes \
-            dist/*.tar.gz dist/checksums.txt
+            dist/*.tar.gz dist/*.zip dist/checksums.txt
