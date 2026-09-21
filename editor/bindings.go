@@ -54,6 +54,7 @@ var defaultBindings = []struct{ Spec, Command string }{
 	// Mark, region, kill ring.
 	{"C-SPC", "set-mark-command"},
 	{"C-x C-x", "exchange-point-and-mark"},
+	{"C-x h", "mark-whole-buffer"},
 	{"C-w", "kill-region"},
 	{"M-w", "kill-ring-save"},
 	{"C-y", "yank"},

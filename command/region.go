@@ -10,6 +10,12 @@ import (
 func RegisterRegion(r *Registry) error {
 	for _, c := range []Command{
 		{
+			Name:        "mark-whole-buffer",
+			Doc:         "Put point at the start of the buffer and the mark at the end.",
+			Fn:          markWholeBuffer,
+			Interactive: true,
+		},
+		{
 			Name:        "set-mark-command",
 			Doc:         "Set the mark where point is.",
 			Fn:          setMarkCommand,
@@ -284,5 +290,19 @@ func undoOrRedo(e Env, backward bool) error {
 		}
 		w.Pt = b.ClampPos(pos)
 	}
+	return nil
+}
+
+// markWholeBuffer selects everything.
+//
+// Point goes to the start and the mark to the end, which is emacs's order for
+// C-x h. It reads backwards next to every other editor's select-all, where the
+// cursor lands at the end, but the region is identical either way and C-x C-x
+// swaps them.
+func markWholeBuffer(e Env) error {
+	b := e.Buf()
+	b.SetMark(b.End())
+	e.Win().Pt = text.Pos{}
+	e.Echo("Mark set")
 	return nil
 }

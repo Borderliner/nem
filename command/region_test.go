@@ -60,7 +60,8 @@ func TestRegisterRegionRegistersEveryCommand(t *testing.T) {
 	}
 	want := []string{
 		"exchange-point-and-mark", "kill-region", "kill-ring-save",
-		"redo", "set-mark-command", "undo", "yank", "yank-pop",
+		"mark-whole-buffer", "redo", "set-mark-command", "undo", "yank",
+		"yank-pop",
 	}
 	if got := r.Names(); !slices.Equal(got, want) {
 		t.Errorf("Names() = %q, want %q", got, want)
@@ -634,5 +635,43 @@ func TestClearMarkMakesRegionCommandsRefuseAgain(t *testing.T) {
 	}
 	if !regionHasEcho(f, "No mark set in this buffer") {
 		t.Errorf("Echoes = %q, want a refusal", f.Echoes)
+	}
+}
+
+// C-x h must select everything, so C-w or M-w after it takes the whole buffer.
+func TestMarkWholeBufferSelectsEverything(t *testing.T) {
+	r, f := regionSetup(t, "alpha", "beta", "gamma")
+	f.Win().Pt = text.Pos{Line: 1, Col: 2}
+
+	runRegion(t, r, f, "mark-whole-buffer")
+
+	if !f.Buf().HasMark() {
+		t.Fatal("no mark after mark-whole-buffer")
+	}
+	if got := f.Point(); got != (text.Pos{}) {
+		t.Errorf("point = %v, want the start of the buffer", got)
+	}
+	if got, want := f.Buf().Mark(), f.Buf().End(); got != want {
+		t.Errorf("mark = %v, want the end of the buffer %v", got, want)
+	}
+
+	// The proof that matters: killing the region empties the buffer.
+	runRegion(t, r, f, "kill-region")
+	if got := f.Text(); got != "" {
+		t.Errorf("buffer = %q after selecting all and killing, want empty", got)
+	}
+}
+
+// And what was killed must come back whole.
+func TestMarkWholeBufferThenKillAndYankRoundTrips(t *testing.T) {
+	r, f := regionSetup(t, "alpha", "beta", "gamma")
+	before := f.Text()
+
+	runRegion(t, r, f, "mark-whole-buffer")
+	runRegion(t, r, f, "kill-region")
+	runRegion(t, r, f, "yank")
+
+	if got := f.Text(); got != before {
+		t.Errorf("round trip gave %q, want %q", got, before)
 	}
 }
