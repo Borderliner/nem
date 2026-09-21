@@ -103,6 +103,7 @@ func (e *Editor) applySettings(s lua.Settings) {
 	// nothing to apply until a second model exists.
 
 	e.th.LineNumbers = s.LineNumbers
+	e.SetDeleteSelection(s.DeleteSelection)
 	e.th.Syntax = s.Syntax
 	// "auto" guesses from the terminal; an explicit choice always wins, because
 	// the guess relies on COLORFGBG which many terminals never set.

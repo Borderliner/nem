@@ -53,6 +53,10 @@ type Settings struct {
 	// LineNumbers says whether each window shows a line-number gutter.
 	LineNumbers bool
 
+	// DeleteSelection makes typing or deleting replace an active region, as
+	// every modern editor does. Emacs ships this off; nem ships it on.
+	DeleteSelection bool
+
 	// Syntax says whether code is coloured.
 	Syntax bool
 
@@ -70,7 +74,8 @@ func DefaultSettings() Settings {
 		CompletionStyle: "popup", CompletionRows: 10,
 		WhichKeyDelay: 300, AutosaveIdle: 30,
 		Backup: true, Clipboard: "osc52", LineNumbers: true,
-		Syntax: true, Theme: "auto",
+		DeleteSelection: true,
+		Syntax:          true, Theme: "auto",
 	}
 }
 
@@ -91,8 +96,8 @@ const (
 // why it has no effect.
 var knownSettings = []string{
 	"autosave-idle", "backup", "clipboard", "completion-rows", "completion-style",
-	"line-numbers", "scroll-margin", "syntax", "tab-width", "theme", "undo-style",
-	"which-key-delay",
+	"delete-selection", "line-numbers", "scroll-margin", "syntax", "tab-width",
+	"theme", "undo-style", "which-key-delay",
 }
 
 // set validates one key/value pair and stores it.
@@ -173,6 +178,12 @@ func (s *Settings) set(key string, v glua.LValue) error {
 			return fmt.Errorf("line-numbers must be true or false, got %s", v.Type())
 		}
 		s.LineNumbers = bool(b)
+	case "delete-selection":
+		b, ok := v.(glua.LBool)
+		if !ok {
+			return fmt.Errorf("delete-selection must be true or false, got %s", v.Type())
+		}
+		s.DeleteSelection = bool(b)
 	case "clipboard":
 		str, err := checkEnum(key, v, "osc52", "off")
 		if err != nil {

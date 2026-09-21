@@ -106,6 +106,11 @@ type Editor struct {
 	// on the next frame instead of needing an open prompt to be rebuilt.
 	comp completionPrefs
 
+	// delSel makes typing and deleting replace an active region. On by default;
+	// see delsel.go. Set through SetDeleteSelection rather than directly, so the
+	// config path and the tests use the same door.
+	delSel bool
+
 	// mini is the innermost active prompt, or nil when none is. miniDepth
 	// counts nesting for the recursion guard.
 	mini      *miniState
@@ -164,6 +169,7 @@ func New(scr tcell.Screen) (*Editor, error) {
 		scr:    scr,
 		safe:   newSafety(),
 		comp:   defaultCompletionPrefs(),
+		delSel: true,
 		hl:     map[*text.Buffer]*highlight.Cache{},
 		vcs:    map[*text.Buffer]branchEntry{},
 		before: map[string][]func(){},

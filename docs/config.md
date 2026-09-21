@@ -51,6 +51,7 @@ everywhere.
 nem.set("tab-width", 4)          -- display width of a tab; default 8
 nem.set("scroll-margin", 3)      -- lines of context kept around point; default 2
 nem.set("line-numbers", true)    -- show a line-number gutter; default true
+nem.set("delete-selection", true)-- typing replaces the selection; default true
 nem.set("syntax", true)          -- colour code; default true
 nem.set("theme", "auto")         -- syntax palette: "auto", "dark" or "light"
 
@@ -80,6 +81,20 @@ buffer. The line point is on is shown in bolder type.
 
 A pane too narrow to leave room for text drops the gutter rather than squeezing
 the text out.
+
+### Typing replaces the selection
+
+With a region active, typing replaces it, and Backspace or `C-d` deletes it
+rather than removing a single character. `C-y` replaces it with what you yank.
+The whole replacement is one undo step.
+
+This is emacs's `delete-selection-mode`, which vanilla emacs leaves off and
+every other editor leaves on. `delete-selection = false` restores emacs's
+behaviour, where a selection sits inert until a command explicitly uses it.
+
+`C-w` and `M-w` are unaffected — they consume the region themselves. So is
+`TAB`: with a block selected it indents, and deleting instead would be
+destructive.
 
 ### Syntax colours and the two palettes
 

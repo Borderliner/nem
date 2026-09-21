@@ -273,6 +273,8 @@ func (e *Editor) dispatchReporting(name string) {
 //     previous one, which is what yank-pop and recenter-top-bottom need.
 //   - Every window's point, clamped back inside its buffer. See
 //     clampWindowPoints: this one prevents a crash, not a misbehaviour.
+//   - An active region, consumed by the handful of commands that replace it.
+//     See delsel.go.
 //
 // It is re-entrant: M-x and Lua's nem.run come through here too. Only the
 // innermost dispatch does the bookkeeping, so M-x kill-line leaves the kill run
@@ -286,8 +288,19 @@ func (e *Editor) dispatch(name string) error {
 
 	e.childDispatched = false
 
+	// A region the command is about to replace is deleted first, inside an undo
+	// group that stays open across the command so the two undo together. skip
+	// is true when the deletion was the whole operation.
+	skip, closeGroup := e.consumeSelection(name)
+	if closeGroup != nil {
+		defer closeGroup()
+	}
+
+	var err error
 	e.runHooks(e.before, name)
-	err := e.reg.Run(name, e)
+	if !skip {
+		err = e.reg.Run(name, e)
+	}
 	e.runHooks(e.after, name)
 
 	// Outside the childDispatched guard on purpose: clamping is idempotent and

@@ -867,6 +867,7 @@ func TestV2SettingsApplyAndValidate(t *testing.T) {
 		nem.set("line-numbers", false)
 		nem.set("syntax", false)
 		nem.set("theme", "light")
+		nem.set("delete-selection", false)
 	`)
 	mustLoad(t, h)
 	got := h.Settings()
@@ -884,6 +885,7 @@ func TestV2SettingsApplyAndValidate(t *testing.T) {
 		{"line-numbers", got.LineNumbers, false},
 		{"syntax", got.Syntax, false},
 		{"theme", got.Theme, "light"},
+		{"delete-selection", got.DeleteSelection, false},
 	} {
 		if c.got != c.want {
 			t.Errorf("%s = %v, want %v", c.name, c.got, c.want)
@@ -903,6 +905,7 @@ func TestV2SettingsRejectBadValues(t *testing.T) {
 		`nem.set("line-numbers", "yes")`,
 		`nem.set("syntax", "on")`,
 		`nem.set("theme", "solarized")`,
+		`nem.set("delete-selection", "yes")`,
 	} {
 		t.Run(script, func(t *testing.T) {
 			h, _, _ := newHost(t, script)
