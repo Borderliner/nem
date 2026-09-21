@@ -78,6 +78,11 @@ type Editor struct {
 	// modifies.
 	arg argState
 
+	// events is the channel Loop reads from while it is running, and nil
+	// otherwise. Nested prompt loops must read from the SAME source: see
+	// nextEvent.
+	events <-chan tcell.Event
+
 	// pending holds the keys of a partially typed sequence, so C-x waits for
 	// its second key.
 	pending []keymap.Key

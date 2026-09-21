@@ -171,7 +171,7 @@ func (e *Editor) ReadString(opts command.ReadOpts) (string, error) {
 func (e *Editor) readLoop(ms *miniState) {
 	e.Redraw()
 	for !ms.done && !e.quit {
-		ev := e.scr.PollEvent()
+		ev := e.nextEvent()
 		if ev == nil {
 			ms.abort = true
 			return
@@ -385,7 +385,7 @@ func (e *Editor) ReadChar(prompt string, valid []rune) (rune, error) {
 	for {
 		e.Echo("%s", prompt)
 		e.Redraw()
-		ev := e.scr.PollEvent()
+		ev := e.nextEvent()
 		if ev == nil {
 			return 0, command.ErrQuit
 		}
@@ -425,7 +425,7 @@ func (e *Editor) ReadKey(prompt string) (keymap.Key, error) {
 	for {
 		e.Echo("%s", prompt)
 		e.Redraw()
-		ev := e.scr.PollEvent()
+		ev := e.nextEvent()
 		if ev == nil {
 			return keymap.Key{}, command.ErrQuit
 		}

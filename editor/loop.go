@@ -35,6 +35,11 @@ func (e *Editor) Loop() error {
 	events := make(chan tcell.Event)
 	quit := make(chan struct{})
 	go e.scr.ChannelEvents(events, quit)
+	// Nested prompt loops read from this same channel. Without it they call
+	// PollEvent while this goroutine is also reading, and two consumers race
+	// for one keyboard.
+	e.events = events
+	defer func() { e.events = nil }()
 	// Closing quit stops tcell's producer, so Loop cannot leave a goroutine
 	// behind however it returns.
 	defer close(quit)
@@ -80,6 +85,28 @@ func (e *Editor) Loop() error {
 		e.Redraw()
 	}
 	return nil
+}
+
+// nextEvent returns the next terminal event from whichever source is active.
+//
+// While Loop runs, tcell feeds events to a channel from its own goroutine, and
+// a nested prompt loop MUST take them from that channel. Calling PollEvent
+// directly instead makes two consumers race for one keyboard: the channel's
+// goroutine is already blocked in a read and wins, so the first keystroke after
+// a prompt opens is swallowed and surfaces only once the prompt closes. That is
+// exactly what "C-s then the first letter does nothing" looked like.
+//
+// Outside Loop - tests that drive HandleEvent directly - there is no channel
+// and PollEvent is the only source, so it stays the fallback.
+func (e *Editor) nextEvent() tcell.Event {
+	if e.events == nil {
+		return e.scr.PollEvent()
+	}
+	ev, ok := <-e.events
+	if !ok {
+		return nil // the screen finalized underneath us
+	}
+	return ev
 }
 
 // HandleEvent processes one terminal event. Exported so tests can drive the
