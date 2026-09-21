@@ -59,7 +59,8 @@ machine. Windows binaries are published but lightly tested; state lives under
 Cursor motion stops at grapheme boundaries, so a decomposed `é` or a ZWJ family
 emoji is one press, not seven.
 
-**Mark and kill ring** — `C-SPC` sets the mark, `C-w` kills the region, `M-w`
+**Mark and kill ring** — `C-SPC` sets the mark, `C-x h` selects the whole
+buffer, `C-w` kills the region, `M-w`
 copies it, `C-y` yanks and `M-y` rotates. Consecutive kills accumulate into one
 entry, so `C-k C-k` then `C-y` gives you back what you took. Backward kills
 prepend, so `M-DEL M-DEL` over "foo bar" yanks as `foo bar`, not `bar foo`.
@@ -98,6 +99,10 @@ Backspace deletes it, and that undoes in one step.
 
 **Moving text** — `M-<up>` and `M-<down>` move the current line, or every line
 the region covers, keeping the selection so the key repeats.
+
+**System clipboard** — `C-w` and `M-w` also put the text on your system
+clipboard over OSC 52, which works through SSH. Reading it back is supported by
+far fewer terminals than writing, so a yank falls back to nem's own kill ring.
 
 **Your work is kept** — a backup of the previous contents on first save, an
 autosave every 30 seconds while modified, and a refusal to overwrite a file that
@@ -142,8 +147,9 @@ See [docs/config.md](docs/config.md).
 
 ## Not yet
 
-Syntax highlighting · mouse support · line wrapping (long lines truncate with
-`$` and scroll horizontally) · undo tree · multi-line search patterns
+Mouse support · line wrapping (long lines truncate with `$` and scroll
+horizontally instead) · undo tree · multi-line search patterns · language-aware
+indentation
 
 ## Design
 
