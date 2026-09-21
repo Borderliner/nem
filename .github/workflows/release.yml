@@ -58,6 +58,8 @@ jobs:
             # Only what a user needs. docs/design is the project's own design
             # history and is noise in a release tarball.
             cp README.md "$out/"
+            cp LICENSE "$out/"
+            cp THIRD-PARTY.md "$out/"
             cp docs/config.md "$out/"
             cp examples/init.lua "$out/init.lua.example"
 

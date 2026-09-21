@@ -167,3 +167,12 @@ interface, which is why the whole command layer is tested headlessly.
 
 The full design, including the decisions that were rejected and why, is in
 [docs/design/2026-09-18-nem-design.md](docs/design/2026-09-18-nem-design.md).
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).
+
+Released binaries are statically linked and so contain the permissively licensed
+libraries listed in [THIRD-PARTY.md](THIRD-PARTY.md). nem reads nano's syntax
+definitions from the system when they are present but never distributes them;
+the rules it bundles are its own.
