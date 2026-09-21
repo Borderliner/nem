@@ -51,6 +51,8 @@ everywhere.
 nem.set("tab-width", 4)          -- display width of a tab; default 8
 nem.set("scroll-margin", 3)      -- lines of context kept around point; default 2
 nem.set("line-numbers", true)    -- show a line-number gutter; default true
+nem.set("syntax", true)          -- colour code; default true
+nem.set("theme", "auto")         -- syntax palette: "auto", "dark" or "light"
 
 -- Completion
 nem.set("completion-style", "popup")  -- "popup" (centred panel) or "bottom"; default "popup"
@@ -78,6 +80,20 @@ buffer. The line point is on is shown in bolder type.
 
 A pane too narrow to leave room for text drops the gutter rather than squeezing
 the text out.
+
+### Syntax colours and the two palettes
+
+nem never paints a background, so it sits inside whatever terminal colours you
+already run. That means one palette cannot serve everyone: colours with enough
+contrast on black wash out on white. So there are two, and `theme` picks.
+
+`"auto"` guesses from the `COLORFGBG` environment variable, which several
+terminals set and many do not. When it is absent nem guesses dark, because most
+terminals are and because the dark palette on a light background is faint rather
+than invisible. If your code looks washed out, set `theme = "light"`.
+
+Highlighting covers Go, Lua, JSON and Markdown. Anything else renders plain —
+including this file's own `*scratch*` buffer, which has no file type.
 
 ### Where backups and autosaves go
 
