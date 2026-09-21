@@ -45,7 +45,7 @@ func marked(t *testing.T, markPos, pt text.Pos, lines ...string) (Frame, *view.W
 func TestRegionHighlightsASingleLineSpan(t *testing.T) {
 	// "alpha beta" - select "alpha" by marking column 0 and leaving point at 5.
 	f, _ := marked(t, text.Pos{Line: 0, Col: 0}, text.Pos{Line: 0, Col: 5}, "alpha beta")
-	scr := draw(t, 12, 3, f)
+	scr := drawPlain(t, 12, 3, f)
 
 	if got, want := selectionRow(t, scr, 0, 12), "#####......."; got != want {
 		t.Errorf("row 0 selection\n got %q\nwant %q", got, want)
@@ -57,7 +57,7 @@ func TestRegionHighlightsASingleLineSpan(t *testing.T) {
 // follows point passes every test where it happens to.
 func TestRegionWorksWithTheMarkAfterPoint(t *testing.T) {
 	f, _ := marked(t, text.Pos{Line: 0, Col: 5}, text.Pos{Line: 0, Col: 0}, "alpha beta")
-	scr := draw(t, 12, 3, f)
+	scr := drawPlain(t, 12, 3, f)
 
 	if got, want := selectionRow(t, scr, 0, 12), "#####......."; got != want {
 		t.Errorf("row 0 selection\n got %q\nwant %q", got, want)
@@ -68,7 +68,7 @@ func TestRegionSpansMultipleLines(t *testing.T) {
 	// From line 0 col 2 to line 2 col 3.
 	f, _ := marked(t, text.Pos{Line: 0, Col: 2}, text.Pos{Line: 2, Col: 3},
 		"abcde", "fg", "hijkl")
-	scr := draw(t, 8, 5, f)
+	scr := drawPlain(t, 8, 5, f)
 
 	for _, tc := range []struct {
 		row  int
@@ -94,7 +94,7 @@ func TestRegionSpanningTheWholeBuffer(t *testing.T) {
 	f, w := marked(t, text.Pos{}, text.Pos{}, "one", "two", "three")
 	w.Buf.SetMark(text.Pos{})
 	w.Pt = w.Buf.End()
-	scr := draw(t, 7, 5, f)
+	scr := drawPlain(t, 7, 5, f)
 
 	for _, tc := range []struct {
 		row  int
@@ -114,7 +114,7 @@ func TestRegionSpanningTheWholeBuffer(t *testing.T) {
 // one-cell selection.
 func TestEmptyRegionHighlightsNothing(t *testing.T) {
 	f, _ := marked(t, text.Pos{Line: 0, Col: 3}, text.Pos{Line: 0, Col: 3}, "alpha beta")
-	scr := draw(t, 12, 3, f)
+	scr := drawPlain(t, 12, 3, f)
 
 	if got, want := selectionRow(t, scr, 0, 12), "............"; got != want {
 		t.Errorf("row 0 selection\n got %q\nwant %q", got, want)
@@ -127,7 +127,7 @@ func TestNoMarkHighlightsNothing(t *testing.T) {
 	if w.Buf.HasMark() {
 		t.Fatal("fixture buffer already has a mark")
 	}
-	scr := draw(t, 12, 3, f)
+	scr := drawPlain(t, 12, 3, f)
 
 	if got, want := selectionRow(t, scr, 0, 12), "............"; got != want {
 		t.Errorf("row 0 selection\n got %q\nwant %q", got, want)
@@ -150,7 +150,7 @@ func TestInactiveWindowShowsNoRegion(t *testing.T) {
 	}
 	w2.Pt = text.Pos{Line: 0, Col: 5}
 
-	scr := draw(t, 24, 4, Frame{Tree: tree, Active: w1})
+	scr := drawPlain(t, 24, 4, Frame{Tree: tree, Active: w1})
 
 	rects := tree.Layout(24, 3)
 	r1, r2 := rects[w1], rects[w2]
@@ -181,7 +181,7 @@ func TestInactiveWindowShowsNoRegion(t *testing.T) {
 func TestRegionHighlightsWideGlyphsWhole(t *testing.T) {
 	f, w := marked(t, text.Pos{Line: 0, Col: 0}, text.Pos{Line: 0, Col: 3}, "日本語x")
 	_ = w
-	scr := draw(t, 10, 3, f)
+	scr := drawPlain(t, 10, 3, f)
 
 	for _, x := range []int{0, 2, 4} { // base cell of each CJK glyph
 		if !reversedAt(t, scr, x, 0) {
@@ -203,7 +203,7 @@ func TestRegionHighlightsWideGlyphsWhole(t *testing.T) {
 func TestRegionHighlightsEveryColumnOfATab(t *testing.T) {
 	// One tab then "ab". The tab expands to the next multiple of 8.
 	f, _ := marked(t, text.Pos{Line: 0, Col: 0}, text.Pos{Line: 0, Col: 1}, "\tab")
-	scr := draw(t, 12, 3, f)
+	scr := drawPlain(t, 12, 3, f)
 
 	if got, want := selectionRow(t, scr, 0, 12), "########...."; got != want {
 		t.Errorf("a selected tab must invert every column it expands across\n got %q\nwant %q", got, want)
@@ -222,7 +222,7 @@ func TestRegionContinuesOffTheTop(t *testing.T) {
 	f, w := singleFrame(t, linesOf(40)...)
 	w.Buf.SetMark(text.Pos{Line: 0, Col: 0})
 	w.Pt = text.Pos{Line: 30, Col: 0}
-	scr := draw(t, scrW, scrH, f)
+	scr := drawPlain(t, scrW, scrH, f)
 
 	if w.Top == 0 {
 		t.Fatalf("fixture did not scroll: Top = 0")
@@ -261,7 +261,7 @@ func TestRegionContinuesOffTheBottom(t *testing.T) {
 	f, w := singleFrame(t, linesOf(40)...)
 	w.Pt = text.Pos{Line: 0, Col: 0}
 	w.Buf.SetMark(text.Pos{Line: 39, Col: 0})
-	scr := draw(t, scrW, scrH, f)
+	scr := drawPlain(t, scrW, scrH, f)
 
 	textH := view.TextHeight(f.Tree.Layout(scrW, scrH-1)[w])
 	for row := 0; row < textH; row++ {
@@ -281,7 +281,7 @@ func TestRegionBeyondTheHorizontalScrollOffset(t *testing.T) {
 	f, w := singleFrame(t, long)
 	w.Buf.SetMark(text.Pos{Line: 0, Col: 0})
 	w.Pt = text.Pos{Line: 0, Col: 70}
-	scr := draw(t, scrW, 3, f)
+	scr := drawPlain(t, scrW, 3, f)
 
 	if w.LeftCol == 0 {
 		t.Fatalf("fixture did not scroll horizontally: LeftCol = 0")
@@ -321,7 +321,7 @@ func TestRegionSpanOnLineWithBothEndsOffScreen(t *testing.T) {
 func TestRegionInADegenerateWindowDoesNotPanic(t *testing.T) {
 	for _, size := range [][2]int{{1, 2}, {2, 2}, {1, 1}, {3, 2}} {
 		f, _ := marked(t, text.Pos{Line: 0, Col: 0}, text.Pos{Line: 1, Col: 2}, "alpha", "beta")
-		draw(t, size[0], size[1], f) // must not panic
+		drawPlain(t, size[0], size[1], f) // must not panic
 	}
 }
 
@@ -332,7 +332,7 @@ func TestRegionAndBracketMatchCompose(t *testing.T) {
 	f, w := singleFrame(t, "(ab)")
 	w.Buf.SetMark(text.Pos{Line: 0, Col: 0})
 	w.Pt = text.Pos{Line: 0, Col: 4} // point just after ')', so both brackets match
-	scr := draw(t, 8, 3, f)
+	scr := drawPlain(t, 8, 3, f)
 
 	_, _, attr := cellAt(t, scr, 0, 0).Style.Decompose()
 	if attr&tcell.AttrReverse == 0 {
@@ -353,7 +353,7 @@ func TestRegionFillDoesNotEatWideGlyphsAtTheEndOfALine(t *testing.T) {
 	f, w := singleFrame(t, "日本語x", "second")
 	w.Buf.SetMark(text.Pos{Line: 0, Col: 0})
 	w.Pt = text.Pos{Line: 1, Col: 2}
-	scr := draw(t, 10, 4, f)
+	scr := drawPlain(t, 10, 4, f)
 
 	for _, want := range []struct {
 		x int

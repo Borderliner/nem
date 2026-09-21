@@ -89,6 +89,24 @@ type Theme struct {
 	// since an unclosed bracket is the other thing worth interrupting you for.
 	ParenMatch    tcell.Style
 	ParenMismatch tcell.Style
+	// LineNumbers turns the gutter on. It is on by default: a line number is
+	// the one piece of chrome you want in view constantly rather than on
+	// request, and every editor people arrive from shows them.
+	//
+	// The numbers live only here, in the renderer. They are never in the buffer,
+	// so a region cannot reach them and C-w cannot copy them - the gutter is
+	// drawn outside the span handed to drawLine, which is what makes that
+	// structural rather than a rule someone has to remember.
+	//
+	// LineNumber is quiet for the same reason inactive buffer names are: it is
+	// secondary information you read only when you are looking for it.
+	// LineNumberCurrent marks the line point is on, using the terminal's own
+	// foreground plus weight rather than a colour, so it reads correctly on a
+	// light or a dark background without nem knowing which it is on.
+	LineNumbers       bool
+	LineNumber        tcell.Style
+	LineNumberCurrent tcell.Style
+
 	// Region styles the cells between point and the mark.
 	//
 	// A selection is the one thing in the editor that legitimately needs a
@@ -165,6 +183,10 @@ func DefaultTheme() Theme {
 		ParenMatch:    tcell.StyleDefault.Bold(true).Underline(true),
 		ParenMismatch: tcell.StyleDefault.Bold(true).Foreground(tcell.GetColor(colourMark)),
 		Region:        tcell.StyleDefault.Reverse(true),
+
+		LineNumbers:       true,
+		LineNumber:        tcell.StyleDefault.Foreground(tcell.GetColor(colourQuiet)),
+		LineNumberCurrent: tcell.StyleDefault.Bold(true),
 
 		PanelBorder:   tcell.StyleDefault.Foreground(tcell.GetColor(colourRule)),
 		PanelSelected: tcell.StyleDefault.Reverse(true),

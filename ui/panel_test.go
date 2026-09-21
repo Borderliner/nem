@@ -252,7 +252,7 @@ func TestPanelOccludesTheTextBeneathIt(t *testing.T) {
 		Rect:  view.Rect{X: 2, Y: 0, W: 6, H: 2},
 		Lines: []PanelLine{},
 	}}
-	scr := draw(t, 20, 6, f)
+	scr := drawPlain(t, 20, 6, f)
 
 	// Index by rune, not byte: the border glyphs are multi-byte, so a byte offset
 	// lands mid-sequence and compares against nothing meaningful.

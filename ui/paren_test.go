@@ -19,6 +19,7 @@ func parenAt(t *testing.T, line int, col text.RuneIdx, lines ...string) parenHL 
 
 func TestMatchParen(t *testing.T) {
 	th := DefaultTheme()
+	th.LineNumbers = false // this test measures text-area columns; see drawPlain
 	for _, tc := range []struct {
 		name  string
 		lines []string
@@ -209,6 +210,7 @@ func TestParenHLOnLineSelectsOnlyThatLine(t *testing.T) {
 
 func TestLineHLStyleForFallsBackToBase(t *testing.T) {
 	th := DefaultTheme()
+	th.LineNumbers = false // this test measures text-area columns; see drawPlain
 	h := lineHL{idx: [2]text.RuneIdx{2, 7}, style: [2]tcell.Style{th.ParenMatch, th.ParenMatch}, n: 2}
 	if got := h.styleFor(2, th.Text); got != th.ParenMatch {
 		t.Error("styleFor(2) did not return the override")
@@ -222,6 +224,7 @@ func TestLineHLStyleForFallsBackToBase(t *testing.T) {
 
 func TestMatchedBracketsAreStyledOnScreen(t *testing.T) {
 	th := DefaultTheme()
+	th.LineNumbers = false // this test measures text-area columns; see drawPlain
 	f, w := singleFrame(t, "(x)")
 	w.Pt = text.Pos{Line: 0, Col: 0}
 	scr := sim(t, 20, 6)
@@ -241,6 +244,7 @@ func TestMatchedBracketsAreStyledOnScreen(t *testing.T) {
 
 func TestUnmatchedBracketIsStyledAsMismatch(t *testing.T) {
 	th := DefaultTheme()
+	th.LineNumbers = false // this test measures text-area columns; see drawPlain
 	f, w := singleFrame(t, "(x")
 	w.Pt = text.Pos{Line: 0, Col: 0}
 	scr := sim(t, 20, 6)
@@ -257,6 +261,7 @@ func TestUnmatchedBracketIsStyledAsMismatch(t *testing.T) {
 // is not on screen.
 func TestMatchFoundWhenPartnerIsScrolledOffScreen(t *testing.T) {
 	th := DefaultTheme()
+	th.LineNumbers = false // this test measures text-area columns; see drawPlain
 	lines := make([]string, 40)
 	lines[0] = "("
 	for i := 1; i < 39; i++ {
@@ -292,6 +297,7 @@ func TestMatchFoundWhenPartnerIsScrolledOffScreen(t *testing.T) {
 // Only the window holding point shows a bracket highlight, as in emacs.
 func TestInactiveWindowShowsNoParenHighlight(t *testing.T) {
 	th := DefaultTheme()
+	th.LineNumbers = false // this test measures text-area columns; see drawPlain
 	left := view.NewWindow(bufferOf(t, "(x)"))
 	tree := view.NewTree(left)
 	right, err := tree.Split(left, true)
@@ -316,6 +322,7 @@ func TestInactiveWindowShowsNoParenHighlight(t *testing.T) {
 // cluster, wide or not.
 func TestHighlightDoesNotDisturbWideGlyphs(t *testing.T) {
 	th := DefaultTheme()
+	th.LineNumbers = false // this test measures text-area columns; see drawPlain
 	f, w := singleFrame(t, "(日)")
 	w.Pt = text.Pos{Line: 0, Col: 0}
 	scr := sim(t, 20, 6)

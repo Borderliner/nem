@@ -17,7 +17,7 @@ import (
 
 func TestSingleWindowDrawsTextAndModeline(t *testing.T) {
 	f, _ := singleFrame(t, "hello", "world")
-	scr := draw(t, 20, 6, f)
+	scr := drawPlain(t, 20, 6, f)
 
 	if got := strings.TrimRight(rowText(t, scr, 0), " "); got != "hello" {
 		t.Errorf("row 0 = %q, want %q", got, "hello")
@@ -37,7 +37,7 @@ func TestSingleWindowDrawsTextAndModeline(t *testing.T) {
 func TestCursorSitsAtPointInActiveWindow(t *testing.T) {
 	f, w := singleFrame(t, "hello", "world")
 	w.Pt = text.Pos{Line: 1, Col: 3}
-	scr := draw(t, 20, 6, f)
+	scr := drawPlain(t, 20, 6, f)
 
 	x, y, vis := scr.GetCursor()
 	if !vis {
@@ -52,7 +52,7 @@ func TestCursorUsesDisplayColumnNotRuneIndex(t *testing.T) {
 	// Point after two CJK glyphs is rune index 2 but display column 4.
 	f, w := singleFrame(t, "日本語")
 	w.Pt = text.Pos{Line: 0, Col: 2}
-	scr := draw(t, 20, 6, f)
+	scr := drawPlain(t, 20, 6, f)
 
 	x, _, _ := scr.GetCursor()
 	if x != 4 {
@@ -69,7 +69,7 @@ func TestVerticalSplitDrawsBothPanesAndDivider(t *testing.T) {
 	}
 	right.Visit(bufferOf(t, "RIGHT"))
 
-	scr := draw(t, 40, 8, Frame{Tree: tree, Active: left})
+	scr := drawPlain(t, 40, 8, Frame{Tree: tree, Active: left})
 
 	dividers := tree.Dividers(40, 7)
 	if len(dividers) != 1 {
@@ -105,7 +105,7 @@ func TestHorizontalSplitHasNoDivider(t *testing.T) {
 	}
 	bottom.Visit(bufferOf(t, "BOTTOM"))
 
-	scr := draw(t, 40, 12, Frame{Tree: tree, Active: top})
+	scr := drawPlain(t, 40, 12, Frame{Tree: tree, Active: top})
 
 	// view draws no divider for a horizontal split: the upper window's modeline
 	// already separates the panes.
@@ -141,7 +141,7 @@ func TestScrollFollowsPointBelowViewport(t *testing.T) {
 	f, w := singleFrame(t, lines...)
 	w.Pt = text.Pos{Line: 30}
 
-	scr := draw(t, 20, 8, f)
+	scr := drawPlain(t, 20, 8, f)
 
 	if w.Top == 0 {
 		t.Fatal("Top still 0; the render path must scroll point into view")
@@ -161,7 +161,7 @@ func TestScrollFollowsPointBelowViewport(t *testing.T) {
 
 func TestLongLineTruncatesWithMarker(t *testing.T) {
 	f, _ := singleFrame(t, strings.Repeat("a", 100))
-	scr := draw(t, 20, 6, f)
+	scr := drawPlain(t, 20, 6, f)
 
 	row := rowText(t, scr, 0)
 	if want := strings.Repeat("a", 19) + "$"; row != want {
@@ -171,7 +171,7 @@ func TestLongLineTruncatesWithMarker(t *testing.T) {
 
 func TestShortLineHasNoTruncationMarker(t *testing.T) {
 	f, _ := singleFrame(t, strings.Repeat("a", 20))
-	scr := draw(t, 20, 6, f)
+	scr := drawPlain(t, 20, 6, f)
 
 	if row := rowText(t, scr, 0); strings.Contains(row, "$") {
 		t.Errorf("row 0 = %q, want no truncation marker for a line that fits exactly", row)
@@ -180,7 +180,7 @@ func TestShortLineHasNoTruncationMarker(t *testing.T) {
 
 func TestWideGlyphNeverDoubleDrawn(t *testing.T) {
 	f, _ := singleFrame(t, "日本語")
-	scr := draw(t, 20, 6, f)
+	scr := drawPlain(t, 20, 6, f)
 
 	for i, want := range []string{"日", "", "本", "", "語", ""} {
 		if got := string(cellAt(t, scr, i, 0).Runes); got != want {
@@ -191,7 +191,7 @@ func TestWideGlyphNeverDoubleDrawn(t *testing.T) {
 
 func TestEmojiOccupiesTwoCells(t *testing.T) {
 	f, _ := singleFrame(t, "🚀x")
-	scr := draw(t, 20, 6, f)
+	scr := drawPlain(t, 20, 6, f)
 
 	if got := string(cellAt(t, scr, 0, 0).Runes); got != "🚀" {
 		t.Errorf("cell 0 = %q, want the emoji", got)
@@ -203,7 +203,7 @@ func TestEmojiOccupiesTwoCells(t *testing.T) {
 
 func TestCombiningMarkStaysInOneCell(t *testing.T) {
 	f, _ := singleFrame(t, "éz")
-	scr := draw(t, 20, 6, f)
+	scr := drawPlain(t, 20, 6, f)
 
 	if got := string(cellAt(t, scr, 0, 0).Runes); got != "é" {
 		t.Errorf("cell 0 = %q, want the combining cluster", got)
@@ -215,7 +215,7 @@ func TestCombiningMarkStaysInOneCell(t *testing.T) {
 
 func TestTabAdvancesToTabStop(t *testing.T) {
 	f, _ := singleFrame(t, "\tx")
-	scr := draw(t, 20, 6, f)
+	scr := drawPlain(t, 20, 6, f)
 
 	row := rowText(t, scr, 0)
 	if want := strings.Repeat(" ", 8) + "x"; !strings.HasPrefix(row, want) {
@@ -228,7 +228,7 @@ func TestWideGlyphStraddlingRightEdgeIsClipped(t *testing.T) {
 	// marker takes the last column and the wide glyph cannot fit in the two
 	// that remain. It must be dropped whole, never half-drawn.
 	f, _ := singleFrame(t, "aa日")
-	scr := draw(t, 3, 6, f)
+	scr := drawPlain(t, 3, 6, f)
 
 	if row := rowText(t, scr, 0); row != "aa$" {
 		t.Errorf("row 0 = %q, want %q", row, "aa$")
@@ -239,7 +239,7 @@ func TestHorizontalScrollFollowsPoint(t *testing.T) {
 	f, w := singleFrame(t, strings.Repeat("abcde", 20)) // 100 columns
 	w.Pt = text.Pos{Line: 0, Col: 90}
 
-	scr := draw(t, 20, 6, f)
+	scr := drawPlain(t, 20, 6, f)
 
 	x, y, vis := scr.GetCursor()
 	if !vis {
@@ -260,7 +260,7 @@ func TestHorizontalScrollFollowsPoint(t *testing.T) {
 func TestEchoAreaDrawsOnBottomRow(t *testing.T) {
 	f, _ := singleFrame(t, "hi")
 	f.Echo = "C-x C-z is undefined"
-	scr := draw(t, 40, 6, f)
+	scr := drawPlain(t, 40, 6, f)
 
 	if got := rowText(t, scr, 5); !strings.Contains(got, "C-x C-z is undefined") {
 		t.Errorf("echo row = %q, want the message", got)
@@ -271,7 +271,7 @@ func TestMinibufferInactiveLeavesCursorInWindow(t *testing.T) {
 	f, w := singleFrame(t, "hello")
 	w.Pt = text.Pos{Line: 0, Col: 2}
 	f.Echo = "a message"
-	scr := draw(t, 40, 6, f)
+	scr := drawPlain(t, 40, 6, f)
 
 	x, y, _ := scr.GetCursor()
 	if x != 2 || y != 0 {
@@ -286,7 +286,7 @@ func TestMinibufferActiveTakesCursor(t *testing.T) {
 	f.MiniOn = true
 	f.MiniPt = 22
 
-	scr := draw(t, 40, 6, f)
+	scr := drawPlain(t, 40, 6, f)
 
 	x, y, vis := scr.GetCursor()
 	if !vis {
@@ -342,10 +342,10 @@ func TestRenderIsIdempotent(t *testing.T) {
 	f, w := singleFrame(t, "hello", "world")
 	w.Pt = text.Pos{Line: 1, Col: 2}
 
-	first := draw(t, 20, 6, f)
+	first := drawPlain(t, 20, 6, f)
 	want := rowText(t, first, 0) + "|" + rowText(t, first, 1)
 
-	second := draw(t, 20, 6, f)
+	second := drawPlain(t, 20, 6, f)
 	got := rowText(t, second, 0) + "|" + rowText(t, second, 1)
 
 	if got != want {
@@ -393,13 +393,15 @@ func TestHorizontalScrollReturnsLeftward(t *testing.T) {
 	scr := sim(t, 20, 6)
 
 	w.Pt = text.Pos{Line: 0, Col: 90}
-	Render(scr, f, DefaultTheme())
+	plain := DefaultTheme()
+	plain.LineNumbers = false // measures text-area columns; see drawPlain
+	Render(scr, f, plain)
 	if w.LeftCol == 0 {
 		t.Fatal("expected to have scrolled right")
 	}
 
 	w.Pt = text.Pos{Line: 0, Col: 0}
-	Render(scr, f, DefaultTheme())
+	Render(scr, f, plain)
 	if got := w.LeftCol; got != 0 {
 		t.Errorf("LeftCol = %d after point returned to column 0, want 0", got)
 	}
@@ -412,7 +414,7 @@ func TestHorizontalScrollReturnsLeftward(t *testing.T) {
 func TestCursorHiddenWhenActiveWindowIsNotOnScreen(t *testing.T) {
 	f, _ := singleFrame(t, "hello")
 	f.Active = view.NewWindow(bufferOf(t, "elsewhere")) // not in the tree
-	scr := draw(t, 20, 6, f)
+	scr := drawPlain(t, 20, 6, f)
 
 	if _, _, vis := scr.GetCursor(); vis {
 		t.Error("cursor shown for a window that is not in the tree")
@@ -444,7 +446,7 @@ func TestWideGlyphStartingInsideEdgeButOverflowingIsDropped(t *testing.T) {
 	// that only asks where a glyph starts, rather than where it ends, draws
 	// half of it here.
 	f, _ := singleFrame(t, "a日b")
-	scr := draw(t, 3, 6, f)
+	scr := drawPlain(t, 3, 6, f)
 
 	if row := rowText(t, scr, 0); row != "a $" {
 		t.Errorf("row 0 = %q, want %q", row, "a $")
@@ -456,6 +458,7 @@ func TestTabRegionCarriesTheTextStyle(t *testing.T) {
 	// the text style, not merely left blank. It looks identical under a default
 	// style, and wrong the moment the text area has a background colour.
 	th := DefaultTheme()
+	th.LineNumbers = false // measures text-area columns; see drawPlain
 	th.Text = tcell.StyleDefault.Background(tcell.ColorDarkBlue)
 
 	scr := sim(t, 20, 6)
@@ -498,7 +501,7 @@ func TestGlyphStraddlingLeftEdgeDoesNotCorruptTheDivider(t *testing.T) {
 	rightWin.Visit(bufferOf(t, lines...))
 	rightWin.Pt = text.Pos{Line: 0, Col: 20}
 
-	scr := draw(t, 40, 8, Frame{Tree: tree, Active: rightWin})
+	scr := drawPlain(t, 40, 8, Frame{Tree: tree, Active: rightWin})
 
 	dividers := tree.Dividers(40, 7)
 	if len(dividers) != 1 {
@@ -522,7 +525,7 @@ func TestScrollKeepsMarginOfContextBelowPoint(t *testing.T) {
 	f, w := singleFrame(t, lines...)
 	w.Pt = text.Pos{Line: 30}
 
-	scr := draw(t, 20, 8, f)
+	scr := drawPlain(t, 20, 8, f)
 
 	_, y, _ := scr.GetCursor()
 	textH := 6 // 8 rows less the echo row less the modeline

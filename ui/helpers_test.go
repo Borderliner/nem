@@ -65,6 +65,28 @@ func draw(t *testing.T, w, h int, f Frame) tcell.SimulationScreen {
 	return scr
 }
 
+// drawPlain renders with the line-number gutter switched off, so the text area
+// begins at the pane's own first column.
+//
+// It exists for tests of what happens *inside* the text area - tab stops, wide
+// glyphs, region spans, truncation, cursor columns. The gutter is a fixed offset
+// orthogonal to every one of those, so measuring them from column 0 is what
+// keeps each test about its own subject rather than about layout arithmetic.
+//
+// The gutter's interaction with each of those concerns is not skipped: it is
+// covered against the real default theme in gutter_test.go, which asserts that a
+// region never reaches the numbers, that the cursor lands on the right character
+// with a gutter present, and that the truncation marker stays in the text area.
+func drawPlain(t *testing.T, w, h int, f Frame) tcell.SimulationScreen {
+	t.Helper()
+	th := DefaultTheme()
+	th.LineNumbers = false
+	scr := sim(t, w, h)
+	Render(scr, f, th)
+	scr.Show()
+	return scr
+}
+
 // cellAt returns the front-buffer cell at (x, y).
 func cellAt(t *testing.T, scr tcell.SimulationScreen, x, y int) tcell.SimCell {
 	t.Helper()

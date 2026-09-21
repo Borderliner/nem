@@ -86,7 +86,7 @@ func Render(scr tcell.Screen, f Frame, th Theme) {
 		drawPanel(scr, p, th)
 	}
 
-	placeCursor(scr, w, h, echoY, rects, f)
+	placeCursor(scr, w, h, echoY, rects, f, th)
 }
 
 // drawWindow draws one pane: its visible buffer text, then its modeline.
@@ -97,11 +97,22 @@ func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active bool,
 
 	textH := view.TextHeight(rect)
 	if textH > 0 {
+		// The gutter takes columns off the left of the pane, so everything below
+		// works in the narrowed text area: textX is where the text begins and
+		// textW how much of it there is. Handing drawLine those two is what puts
+		// the line numbers beyond the reach of the region and the bracket match.
+		gw := gutterFor(rect, win, th)
+		textX, textW := rect.X+gw, rect.W-gw
+
 		// Scroll both axes first: afterwards point is guaranteed to lie within
-		// [Top, Top+textH) and [LeftCol, LeftCol+rect.W), which the cursor
-		// placement below relies on.
+		// [Top, Top+textH) and [LeftCol, LeftCol+textW), which the cursor
+		// placement below relies on. Horizontal scrolling is given the narrowed
+		// width - given the pane's full width it would believe point was visible
+		// while it sat off the right edge by the width of the gutter.
 		win.ScrollToPoint(textH, th.ScrollMargin)
-		win.ScrollToPointHorizontally(rect.W)
+		win.ScrollToPointHorizontally(textW)
+
+		drawGutter(scr, rect, win, textH, active, th)
 
 		// Bracket matching is computed here, from point, at draw time. A command
 		// could not do it: Env cannot reach the screen by design, so it has
@@ -122,7 +133,7 @@ func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active bool,
 				break // rows past the end of the buffer stay blank, as in emacs
 			}
 			l := win.Buf.Line(ln)
-			drawLine(scr, rect.X, rect.Y+i, rect.W,
+			drawLine(scr, textX, rect.Y+i, textW,
 				l, win.LeftCol, th, paren.onLine(ln), region.onLine(ln, l))
 		}
 	}
@@ -237,7 +248,7 @@ func drawEcho(scr tcell.Screen, y, width int, f Frame, th Theme) {
 // This is the whole reason nem draws through tcell rather than a framework that
 // owns the screen: a styled cell pretending to be a cursor is visibly wrong to
 // look at all day, and it is invisible to an IME and to a screen reader.
-func placeCursor(scr tcell.Screen, w, h, echoY int, rects map[*view.Window]view.Rect, f Frame) {
+func placeCursor(scr tcell.Screen, w, h, echoY int, rects map[*view.Window]view.Rect, f Frame, th Theme) {
 	// An explicit override wins over everything, including an active prompt: when
 	// completion renders the prompt inside a panel, MiniOn is still set but the
 	// echo row is not where the user is typing.
@@ -268,6 +279,11 @@ func placeCursor(scr tcell.Screen, w, h, echoY int, rects map[*view.Window]view.
 		return
 	}
 
+	// The same gutter width drawWindow used, from the same function, because a
+	// disagreement here puts the cursor beside the character it is on.
+	gw := gutterFor(rect, f.Active, th)
+	textW := rect.W - gw
+
 	pt := f.Active.Buf.ClampPos(f.Active.Pt)
 	col := f.Active.Buf.Line(pt.Line).DisplayCol(pt.Col)
 
@@ -276,8 +292,8 @@ func placeCursor(scr tcell.Screen, w, h, echoY int, rects map[*view.Window]view.
 	if sx < 0 {
 		sx = 0
 	}
-	if sx > rect.W-1 {
-		sx = rect.W - 1
+	if sx > textW-1 {
+		sx = textW - 1
 	}
 	if sy < 0 {
 		sy = 0
@@ -285,5 +301,5 @@ func placeCursor(scr tcell.Screen, w, h, echoY int, rects map[*view.Window]view.
 	if sy > textH-1 {
 		sy = textH - 1
 	}
-	scr.ShowCursor(rect.X+sx, rect.Y+sy)
+	scr.ShowCursor(rect.X+gw+sx, rect.Y+sy)
 }
