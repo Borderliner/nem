@@ -90,6 +90,17 @@ type Editor struct {
 	// rather than from the top of the file. See highlight.go.
 	hl map[*text.Buffer]*highlight.Cache
 
+	// vcs caches each buffer's git branch, because the modeline asks for it on
+	// every frame and the answer costs a walk up the directory tree. See vcs.go.
+	vcs map[*text.Buffer]branchEntry
+
+	// startup shows the welcome panel. It is set by the caller when nem was
+	// started with no file to open, and cleared by the first keystroke - see
+	// dismissStartup. Nothing sets it again, which is what makes the panel a
+	// once-per-session thing rather than something that reappears whenever the
+	// scratch buffer happens to be empty.
+	startup bool
+
 	// comp holds completion preferences from the config. They are applied when a
 	// panel is built rather than when a session starts, so a reload takes effect
 	// on the next frame instead of needing an open prompt to be rebuilt.
@@ -154,6 +165,7 @@ func New(scr tcell.Screen) (*Editor, error) {
 		safe:   newSafety(),
 		comp:   defaultCompletionPrefs(),
 		hl:     map[*text.Buffer]*highlight.Cache{},
+		vcs:    map[*text.Buffer]branchEntry{},
 		before: map[string][]func(){},
 		after:  map[string][]func(){},
 	}
@@ -349,6 +361,7 @@ func (e *Editor) KillBuffer(b *text.Buffer) error {
 	delete(e.byName, e.names[b])
 	delete(e.names, b)
 	e.forgetHighlight(b)
+	e.forgetBranch(b)
 	for i, c := range e.buffers {
 		if c == b {
 			e.buffers = append(e.buffers[:i], e.buffers[i+1:]...)
@@ -414,6 +427,9 @@ func (e *Editor) SaveBuffer(b *text.Buffer, path string) error {
 	// The buffer just became a .go file, or a .lua one. Lex it as what it is
 	// now rather than as what it was when it had no name.
 	e.retuneHighlight(b)
+	// The old reading described a different file, and possibly a different
+	// repository: saving into one moves the buffer onto its branch.
+	e.forgetBranch(b)
 	e.afterSave(target)
 	return nil
 }
@@ -560,3 +576,18 @@ func (e *Editor) Quit(force bool) error {
 
 // Quitting reports whether the session has been asked to end, for tests.
 func (e *Editor) Quitting() bool { return e.quit }
+
+// ShowStartup asks for the welcome panel on the next frame.
+//
+// The caller decides rather than the editor, because only the caller knows
+// whether a file was named on the command line - the editor sees an empty
+// *scratch* either way, and showing a welcome over a file someone asked for
+// would be an interruption rather than a greeting.
+func (e *Editor) ShowStartup() { e.startup = true }
+
+// dismissStartup hides the welcome panel.
+//
+// It never swallows the keystroke that dismisses it: the key goes on to be
+// resolved normally, so the panel costs nothing more than the glance it was
+// there to be worth.
+func (e *Editor) dismissStartup() { e.startup = false }

@@ -112,6 +112,10 @@ func (e *Editor) HandleKey(k keymap.Key) {
 	// dismisses the panel is not also consumed by it - the feature must cost a
 	// fluent user nothing.
 	e.dismissWhichKey()
+	// The welcome panel goes on the first keystroke, whatever it was, and does
+	// not come back. Dismissing here rather than per branch is what keeps the
+	// key itself from being consumed.
+	e.dismissStartup()
 
 	// C-g is handled before anything else, because in emacs it is never a
 	// no-op. Cancelling a half-typed C-x prefix or a half-typed argument must
@@ -346,8 +350,10 @@ func (e *Editor) frame() ui.Frame {
 	// renderer what a path-less buffer is called.
 	f := ui.Frame{
 		Tree: e.tree, Active: e.active, Echo: e.echo,
-		NameOf:  e.BufferName,
-		SpansOf: e.spansOf,
+		NameOf:   e.BufferName,
+		SpansOf:  e.spansOf,
+		TypeOf:   e.FileType,
+		BranchOf: e.BranchOf,
 	}
 	if e.mini != nil {
 		f.Echo = e.mini.line()
@@ -361,6 +367,9 @@ func (e *Editor) frame() ui.Frame {
 	if p := e.whichKeyPanel(); p != nil {
 		f.Panels = append(f.Panels, *p)
 	}
+	if p, ok := e.startupPanel(); ok {
+		f.Panels = append(f.Panels, p)
+	}
 	return f
 }
 
@@ -370,4 +379,20 @@ func (e *Editor) Redraw() {
 	}
 	ui.Render(e.scr, e.frame(), e.th)
 	e.scr.Show()
+}
+
+// startupPanel builds the welcome panel when one is wanted and there is room.
+//
+// The frame handed to the placer is the screen minus the echo row, matching the
+// area the split tree is laid out in, so the panel can never cover the row a
+// message or a prompt would appear on.
+func (e *Editor) startupPanel() (ui.Panel, bool) {
+	if !e.startup || e.scr == nil {
+		return ui.Panel{}, false
+	}
+	w, h := e.scr.Size()
+	if w <= 0 || h <= 1 {
+		return ui.Panel{}, false
+	}
+	return ui.StartupPanel(view.Rect{W: w, H: h - 1}, e.th)
 }

@@ -48,6 +48,11 @@ type Frame struct {
 	// SpansOf reports how each line is classified, for syntax colour. Optional:
 	// a nil SpansOf draws the text uncoloured. See SpansFunc.
 	SpansOf SpansFunc
+	// TypeOf reports each buffer's file type, and BranchOf the git branch its
+	// file sits on, for the modeline's segments. Both optional: a nil source
+	// simply contributes no segment. See TypeFunc and BranchFunc.
+	TypeOf   TypeFunc
+	BranchOf BranchFunc
 }
 
 // Render draws f onto scr using th. It does not call Show; the caller decides
@@ -78,7 +83,8 @@ func Render(scr tcell.Screen, f Frame, th Theme) {
 	if treeH > 0 {
 		rects = f.Tree.Layout(w, treeH)
 		for win, rect := range rects {
-			drawWindow(scr, rect, win, win == f.Active, th, f.NameOf, f.SpansOf)
+			info := modelineInfo{Name: f.NameOf, Type: f.TypeOf, Branch: f.BranchOf}
+			drawWindow(scr, rect, win, win == f.Active, th, info, f.SpansOf)
 		}
 		for _, d := range f.Tree.Dividers(w, treeH) {
 			drawDivider(scr, d, th)
@@ -98,7 +104,7 @@ func Render(scr tcell.Screen, f Frame, th Theme) {
 }
 
 // drawWindow draws one pane: its visible buffer text, then its modeline.
-func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active bool, th Theme, nameOf NameFunc, spansOf SpansFunc) {
+func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active bool, th Theme, info modelineInfo, spansOf SpansFunc) {
 	if rect.W <= 0 || rect.H <= 0 || win == nil || win.Buf == nil {
 		return
 	}
@@ -153,7 +159,7 @@ func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active bool,
 	// The modeline owns the bottom row of the pane, so a pane one row tall is
 	// all modeline and no text.
 	blit.Draw(scr, rect.X, rect.Y+rect.H-1, rect.W, 1,
-		modelineString(th, win, rect.W, active, nameOf))
+		modelineString(th, win, rect.W, active, info))
 }
 
 // drawLine writes one buffer line into the cells at y, starting from display

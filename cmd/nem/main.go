@@ -62,6 +62,12 @@ func run(paths []string) (err error) {
 	_ = e.LoadConfig("")
 	defer e.CloseConfig()
 
+	// Only the command line knows whether a file was asked for; the editor sees
+	// an empty *scratch* either way.
+	if len(paths) == 0 {
+		e.ShowStartup()
+	}
+
 	for i, path := range paths {
 		b, err := e.OpenFile(path)
 		if err != nil {
