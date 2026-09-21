@@ -4,10 +4,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Borderliner/nem/command"
+	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/view"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/command"
-	"github.com/hajianpour/nem/text"
-	"github.com/hajianpour/nem/view"
 )
 
 // --- the session, tested directly ----------------------------------------

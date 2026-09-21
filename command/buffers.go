@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/text"
 )
 
 // bufferListName is the display name of the buffer that list-buffers renders

@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hajianpour/nem/command"
-	"github.com/hajianpour/nem/command/commandtest"
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/command"
+	"github.com/Borderliner/nem/command/commandtest"
+	"github.com/Borderliner/nem/text"
 )
 
 // Helpers here are prefixed ln because package command_test is shared with

@@ -3,7 +3,7 @@ package command
 import (
 	"unicode"
 
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/text"
 )
 
 // Word scanning lives here, in one place, because forward-word and kill-word

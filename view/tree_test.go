@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/text"
 )
 
 func TestTextHeight(t *testing.T) {

@@ -1,8 +1,8 @@
 package ui
 
 import (
+	"github.com/Borderliner/nem/ui/blit"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/ui/blit"
 )
 
 // Screen owns the terminal. It is a thin wrapper over tcell.Screen whose only

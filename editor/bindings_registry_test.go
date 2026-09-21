@@ -4,7 +4,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/hajianpour/nem/command"
+	"github.com/Borderliner/nem/command"
 )
 
 // Every command named in the default binding table must actually exist in the

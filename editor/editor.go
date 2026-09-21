@@ -22,14 +22,14 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/Borderliner/nem/command"
+	"github.com/Borderliner/nem/highlight"
+	"github.com/Borderliner/nem/keymap"
+	"github.com/Borderliner/nem/lua"
+	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/ui"
+	"github.com/Borderliner/nem/view"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/command"
-	"github.com/hajianpour/nem/highlight"
-	"github.com/hajianpour/nem/keymap"
-	"github.com/hajianpour/nem/lua"
-	"github.com/hajianpour/nem/text"
-	"github.com/hajianpour/nem/ui"
-	"github.com/hajianpour/nem/view"
 )
 
 // A drifting Env breaks the build here, loudly, rather than in whichever

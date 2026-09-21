@@ -14,8 +14,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/hajianpour/nem/editor"
-	"github.com/hajianpour/nem/ui"
+	"github.com/Borderliner/nem/editor"
+	"github.com/Borderliner/nem/ui"
 )
 
 // version is stamped at build time with -ldflags "-X main.version=v1.2.3".

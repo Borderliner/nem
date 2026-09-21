@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hajianpour/nem/keymap"
-	"github.com/hajianpour/nem/text"
-	"github.com/hajianpour/nem/ui"
-	"github.com/hajianpour/nem/view"
+	"github.com/Borderliner/nem/keymap"
+	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/ui"
+	"github.com/Borderliner/nem/view"
 )
 
 // Prefix-key discovery: press C-x, pause, and a panel lists what can follow.

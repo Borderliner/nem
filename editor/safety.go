@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/hajianpour/nem/backup"
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/backup"
+	"github.com/Borderliner/nem/text"
 )
 
 // Data safety: backups, autosaves, recovery, and noticing when something else

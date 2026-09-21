@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/view"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/text"
-	"github.com/hajianpour/nem/view"
 )
 
 // reversedAt reports whether the cell at (x, y) carries the selection's inverted

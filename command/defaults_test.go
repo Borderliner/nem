@@ -3,7 +3,7 @@ package command_test
 import (
 	"testing"
 
-	"github.com/hajianpour/nem/command"
+	"github.com/Borderliner/nem/command"
 )
 
 // Every group must register without conflict. A duplicate command name across

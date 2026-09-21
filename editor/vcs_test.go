@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/text"
 )
 
 // repoWith builds a directory holding a .git directory whose HEAD is head, and

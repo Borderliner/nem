@@ -1,8 +1,8 @@
 package ui
 
 import (
+	"github.com/Borderliner/nem/text"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/text"
 )
 
 // Region highlighting is computed here, from point and the mark, at draw time -

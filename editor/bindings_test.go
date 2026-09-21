@@ -3,7 +3,7 @@ package editor
 import (
 	"testing"
 
-	"github.com/hajianpour/nem/keymap"
+	"github.com/Borderliner/nem/keymap"
 )
 
 // Every default binding must parse and install cleanly. This is the test that

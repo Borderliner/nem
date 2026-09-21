@@ -3,7 +3,7 @@ package command
 import (
 	"testing"
 
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/text"
 )
 
 func buf(t *testing.T, lines ...string) *text.Buffer {

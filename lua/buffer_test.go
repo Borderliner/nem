@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hajianpour/nem/command/commandtest"
-	"github.com/hajianpour/nem/keymap"
-	nemlua "github.com/hajianpour/nem/lua"
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/command/commandtest"
+	"github.com/Borderliner/nem/keymap"
+	nemlua "github.com/Borderliner/nem/lua"
+	"github.com/Borderliner/nem/text"
 )
 
 // writeScript puts a config script in a scratch file and returns its path, so

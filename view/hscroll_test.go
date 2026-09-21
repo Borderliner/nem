@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/text"
 )
 
 // bufOneLine returns a buffer holding a single line of s.

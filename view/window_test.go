@@ -3,7 +3,7 @@ package view
 import (
 	"testing"
 
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/text"
 )
 
 // bufLines returns a buffer holding n lines named line0..line(n-1).

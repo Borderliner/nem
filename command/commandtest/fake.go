@@ -18,10 +18,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hajianpour/nem/command"
-	"github.com/hajianpour/nem/keymap"
-	"github.com/hajianpour/nem/text"
-	"github.com/hajianpour/nem/view"
+	"github.com/Borderliner/nem/command"
+	"github.com/Borderliner/nem/keymap"
+	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/view"
 )
 
 // Quit placed in Replies makes that prompt return command.ErrQuit, which is

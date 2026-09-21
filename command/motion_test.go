@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hajianpour/nem/command"
-	"github.com/hajianpour/nem/command/commandtest"
-	"github.com/hajianpour/nem/text"
-	"github.com/hajianpour/nem/view"
+	"github.com/Borderliner/nem/command"
+	"github.com/Borderliner/nem/command/commandtest"
+	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/view"
 )
 
 // family is a ZWJ emoji sequence: seven runes, one grapheme, one cursor stop.

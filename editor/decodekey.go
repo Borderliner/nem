@@ -1,8 +1,8 @@
 package editor
 
 import (
+	"github.com/Borderliner/nem/keymap"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/keymap"
 )
 
 // tcellSpecials maps tcell's named keys onto keymap's. Only keys keymap knows

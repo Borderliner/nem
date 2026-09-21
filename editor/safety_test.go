@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Borderliner/nem/backup"
+	"github.com/Borderliner/nem/text"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/backup"
-	"github.com/hajianpour/nem/text"
 )
 
 // safeEditor returns an editor whose backup store is a temporary directory, plus

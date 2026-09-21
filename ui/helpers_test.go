@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/view"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/text"
-	"github.com/hajianpour/nem/view"
 	"github.com/muesli/termenv"
 	"regexp"
 )

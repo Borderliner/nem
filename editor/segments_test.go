@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hajianpour/nem/ui"
+	"github.com/Borderliner/nem/ui"
 )
 
 // The segments are worth nothing unless they reach the screen. Each half of

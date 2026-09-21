@@ -1,8 +1,8 @@
 package ui
 
 import (
+	"github.com/Borderliner/nem/text"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/text"
 )
 
 // ParenScanLimit caps how many runes a bracket search examines in each

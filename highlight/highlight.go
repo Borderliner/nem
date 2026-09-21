@@ -17,8 +17,8 @@
 package highlight
 
 import (
-	"github.com/hajianpour/nem/syntax"
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/syntax"
+	"github.com/Borderliner/nem/text"
 )
 
 // spanCacheLimit bounds how many lines' spans are held.

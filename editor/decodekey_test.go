@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/Borderliner/nem/keymap"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/keymap"
 )
 
 // dbg renders a Key by its fields. Key implements Stringer, so %+v would print

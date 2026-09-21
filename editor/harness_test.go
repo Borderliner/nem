@@ -5,9 +5,9 @@ import (
 	"testing"
 	"unicode"
 
+	"github.com/Borderliner/nem/keymap"
+	"github.com/Borderliner/nem/text"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/keymap"
-	"github.com/hajianpour/nem/text"
 )
 
 // The harness drives the editor by emacs key spec, because that is the only

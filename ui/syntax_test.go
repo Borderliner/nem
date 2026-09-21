@@ -3,10 +3,10 @@ package ui
 import (
 	"testing"
 
+	"github.com/Borderliner/nem/syntax"
+	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/view"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/syntax"
-	"github.com/hajianpour/nem/text"
-	"github.com/hajianpour/nem/view"
 )
 
 // spansOn builds a SpansFunc from a per-line table, so a test states exactly

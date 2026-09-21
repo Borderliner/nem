@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/text"
 )
 
 // writeConfig puts a script in a temp file and returns its path.

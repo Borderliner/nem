@@ -4,8 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Borderliner/nem/text"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/text"
 )
 
 // fgOnScreen is the foreground colour of one rendered cell. Syntax styles set

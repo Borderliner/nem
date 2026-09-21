@@ -5,8 +5,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/hajianpour/nem/text"
-	"github.com/hajianpour/nem/view"
+	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/view"
 )
 
 // Editing commands: everything that changes buffer contents.

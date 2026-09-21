@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hajianpour/nem/highlight"
-	"github.com/hajianpour/nem/syntax"
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/highlight"
+	"github.com/Borderliner/nem/syntax"
+	"github.com/Borderliner/nem/text"
 )
 
 // reference is the obvious implementation: lex every line from the top, every

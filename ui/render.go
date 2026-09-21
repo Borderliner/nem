@@ -3,11 +3,11 @@ package ui
 import (
 	"strings"
 
+	"github.com/Borderliner/nem/syntax"
+	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/ui/blit"
+	"github.com/Borderliner/nem/view"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/syntax"
-	"github.com/hajianpour/nem/text"
-	"github.com/hajianpour/nem/ui/blit"
-	"github.com/hajianpour/nem/view"
 )
 
 // Frame is everything the renderer needs to draw one frame. It is a snapshot

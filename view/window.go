@@ -8,7 +8,7 @@
 // testable without one and why this package is separate from ui.
 package view
 
-import "github.com/hajianpour/nem/text"
+import "github.com/Borderliner/nem/text"
 
 // GoalColUnset marks a window whose goal column has not been established. The
 // goal column is set by horizontal motion and preserved by vertical motion, so

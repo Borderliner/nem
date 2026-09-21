@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hajianpour/nem/view"
+	"github.com/Borderliner/nem/view"
 )
 
 func TestStartupPanelShowsTheEssentialKeys(t *testing.T) {

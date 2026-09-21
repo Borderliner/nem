@@ -1,6 +1,6 @@
 package editor
 
-import "github.com/hajianpour/nem/command"
+import "github.com/Borderliner/nem/command"
 
 // registerDisplayCommands adds the commands that change how the editor looks
 // rather than what a buffer contains.

@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Borderliner/nem/command"
+	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/ui"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/command"
-	"github.com/hajianpour/nem/text"
-	"github.com/hajianpour/nem/ui"
 )
 
 // Every name in the classification sets must be a real command. A name that no

@@ -1,9 +1,9 @@
 package editor
 
 import (
-	"github.com/hajianpour/nem/highlight"
-	"github.com/hajianpour/nem/syntax"
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/highlight"
+	"github.com/Borderliner/nem/syntax"
+	"github.com/Borderliner/nem/text"
 )
 
 // Syntax highlighting is wired here because it needs three things that live in

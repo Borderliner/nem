@@ -4,8 +4,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hajianpour/nem/text"
-	"github.com/hajianpour/nem/view"
+	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/view"
 )
 
 // RegisterMotion adds nem's motion commands to r.

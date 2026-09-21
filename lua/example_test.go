@@ -4,11 +4,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hajianpour/nem/command"
-	"github.com/hajianpour/nem/command/commandtest"
-	"github.com/hajianpour/nem/keymap"
-	nemlua "github.com/hajianpour/nem/lua"
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/command"
+	"github.com/Borderliner/nem/command/commandtest"
+	"github.com/Borderliner/nem/keymap"
+	nemlua "github.com/Borderliner/nem/lua"
+	"github.com/Borderliner/nem/text"
 )
 
 // examples/init.lua is committed and users will copy it verbatim, so it has to

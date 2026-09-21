@@ -4,11 +4,11 @@ import (
 	"errors"
 	"time"
 
+	"github.com/Borderliner/nem/command"
+	"github.com/Borderliner/nem/keymap"
+	"github.com/Borderliner/nem/ui"
+	"github.com/Borderliner/nem/view"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/command"
-	"github.com/hajianpour/nem/keymap"
-	"github.com/hajianpour/nem/ui"
-	"github.com/hajianpour/nem/view"
 )
 
 // Loop reads events and dispatches commands until the session ends.

@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hajianpour/nem/highlight"
-	"github.com/hajianpour/nem/syntax"
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/highlight"
+	"github.com/Borderliner/nem/syntax"
+	"github.com/Borderliner/nem/text"
 )
 
 // Several edits between two reads collapse into one lowest line and a summed

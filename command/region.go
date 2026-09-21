@@ -3,7 +3,7 @@ package command
 import (
 	"errors"
 
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/text"
 )
 
 // RegisterRegion adds the mark, region, kill-ring and undo commands.

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hajianpour/nem/backup"
+	"github.com/Borderliner/nem/backup"
 )
 
 // inside reports whether p lies strictly beneath root. Equality with root counts

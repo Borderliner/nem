@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/view"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/hajianpour/nem/text"
-	"github.com/hajianpour/nem/view"
 )
 
 // NameFunc reports what a buffer is called.

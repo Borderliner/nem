@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hajianpour/nem/command"
-	"github.com/hajianpour/nem/command/commandtest"
-	"github.com/hajianpour/nem/keymap"
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/command"
+	"github.com/Borderliner/nem/command/commandtest"
+	"github.com/Borderliner/nem/keymap"
+	"github.com/Borderliner/nem/text"
 )
 
 // newSearchFake returns a Fake with the search and help commands registered,

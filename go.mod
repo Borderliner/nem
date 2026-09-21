@@ -1,4 +1,4 @@
-module github.com/hajianpour/nem
+module github.com/Borderliner/nem
 
 go 1.27.1
 

@@ -1,6 +1,6 @@
 package command
 
-import "github.com/hajianpour/nem/text"
+import "github.com/Borderliner/nem/text"
 
 // RegisterLines adds the line-moving commands.
 //

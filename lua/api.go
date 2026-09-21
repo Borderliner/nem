@@ -6,9 +6,9 @@ import (
 
 	glua "github.com/yuin/gopher-lua"
 
-	"github.com/hajianpour/nem/command"
-	"github.com/hajianpour/nem/keymap"
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/command"
+	"github.com/Borderliner/nem/keymap"
+	"github.com/Borderliner/nem/text"
 )
 
 // installAPI builds the nem table. This is the entire surface a script can

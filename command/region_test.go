@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hajianpour/nem/command"
-	"github.com/hajianpour/nem/command/commandtest"
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/command"
+	"github.com/Borderliner/nem/command/commandtest"
+	"github.com/Borderliner/nem/text"
 )
 
 // regionSetup returns a registry holding only the region commands, plus a fake

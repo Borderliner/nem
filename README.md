@@ -28,7 +28,7 @@ Download a binary for your platform from the
 [latest release](https://github.com/Borderliner/nem/releases/latest), or:
 
 ```sh
-go install github.com/hajianpour/nem/cmd/nem@latest
+go install github.com/Borderliner/nem/cmd/nem@latest
 ```
 
 From source:

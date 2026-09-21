@@ -4,9 +4,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/hajianpour/nem/lua"
-	"github.com/hajianpour/nem/text"
-	"github.com/hajianpour/nem/ui"
+	"github.com/Borderliner/nem/lua"
+	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/ui"
 )
 
 // configTimeout bounds a single entry into Lua.

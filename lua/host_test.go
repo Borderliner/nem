@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hajianpour/nem/command"
-	"github.com/hajianpour/nem/command/commandtest"
-	"github.com/hajianpour/nem/keymap"
-	nemlua "github.com/hajianpour/nem/lua"
+	"github.com/Borderliner/nem/command"
+	"github.com/Borderliner/nem/command/commandtest"
+	"github.com/Borderliner/nem/keymap"
+	nemlua "github.com/Borderliner/nem/lua"
 )
 
 // newHost builds a host over a scratch config file. An empty script means no

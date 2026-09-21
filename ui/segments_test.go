@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/view"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/hajianpour/nem/text"
-	"github.com/hajianpour/nem/view"
 )
 
 // segInfo builds a modelineInfo returning fixed answers.

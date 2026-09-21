@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/text"
 )
 
 // The modeline shows which branch a file sits on, which means reading .git.

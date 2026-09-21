@@ -5,7 +5,7 @@ import (
 
 	glua "github.com/yuin/gopher-lua"
 
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/text"
 )
 
 // Line-addressable buffer access for scripts.

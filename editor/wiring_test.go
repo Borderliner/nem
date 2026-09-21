@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Borderliner/nem/lua"
+	"github.com/Borderliner/nem/ui"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/lua"
-	"github.com/hajianpour/nem/ui"
 )
 
 // The clipboard read path is dead unless HandleEvent routes the terminal's

@@ -4,11 +4,11 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Borderliner/nem/command"
+	"github.com/Borderliner/nem/keymap"
+	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/view"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/command"
-	"github.com/hajianpour/nem/keymap"
-	"github.com/hajianpour/nem/text"
-	"github.com/hajianpour/nem/view"
 )
 
 // The minibuffer is a real text.Buffer shown in a real view.Window, exactly as

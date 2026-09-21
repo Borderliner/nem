@@ -1,9 +1,9 @@
 package ui
 
 import (
+	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/view"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/text"
-	"github.com/hajianpour/nem/view"
 )
 
 // A panel is a box drawn over the tiled frame: the completion list, the

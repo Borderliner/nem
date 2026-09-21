@@ -1,9 +1,9 @@
 package ui
 
 import (
+	"github.com/Borderliner/nem/syntax"
+	"github.com/Borderliner/nem/text"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/syntax"
-	"github.com/hajianpour/nem/text"
 	"os"
 	"strings"
 )

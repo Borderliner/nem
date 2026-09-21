@@ -6,8 +6,8 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 
-	"github.com/hajianpour/nem/text"
-	"github.com/hajianpour/nem/view"
+	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/view"
 )
 
 // The frame reserves the bottom row for the echo area, so a screen of height h

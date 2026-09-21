@@ -32,9 +32,9 @@ package command
 import (
 	"errors"
 
-	"github.com/hajianpour/nem/keymap"
-	"github.com/hajianpour/nem/text"
-	"github.com/hajianpour/nem/view"
+	"github.com/Borderliner/nem/keymap"
+	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/view"
 )
 
 // Func is the signature every command implementation has. A returned error is

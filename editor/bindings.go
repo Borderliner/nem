@@ -3,7 +3,7 @@ package editor
 import (
 	"fmt"
 
-	"github.com/hajianpour/nem/keymap"
+	"github.com/Borderliner/nem/keymap"
 )
 
 // defaultBindings is the built-in keymap, as documented in

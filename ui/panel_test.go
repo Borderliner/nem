@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Borderliner/nem/view"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/view"
 )
 
 // panelOn draws p into a fresh screen and flushes it, so assertions read the

@@ -3,8 +3,8 @@ package ui
 import (
 	"strconv"
 
+	"github.com/Borderliner/nem/view"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hajianpour/nem/view"
 )
 
 // The line-number gutter is drawn to the left of a pane's text, in columns the

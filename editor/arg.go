@@ -1,6 +1,6 @@
 package editor
 
-import "github.com/hajianpour/nem/keymap"
+import "github.com/Borderliner/nem/keymap"
 
 // argState collects a universal argument between C-u and the command it
 // modifies.

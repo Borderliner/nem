@@ -3,7 +3,7 @@ package editor
 import (
 	"testing"
 
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/text"
 )
 
 // Point lives in the window, and a buffer has no idea which windows are showing

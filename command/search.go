@@ -15,8 +15,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/hajianpour/nem/keymap"
-	"github.com/hajianpour/nem/text"
+	"github.com/Borderliner/nem/keymap"
+	"github.com/Borderliner/nem/text"
 )
 
 // RegisterSearch adds the search, replace and help commands to r.

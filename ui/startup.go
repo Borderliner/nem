@@ -1,8 +1,8 @@
 package ui
 
 import (
+	"github.com/Borderliner/nem/view"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/hajianpour/nem/view"
 )
 
 // Starting nem with no file used to drop you straight into an empty *scratch*:
