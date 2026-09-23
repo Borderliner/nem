@@ -101,8 +101,12 @@ Backspace deletes it, and that undoes in one step.
 the region covers, keeping the selection so the key repeats.
 
 **System clipboard** — `C-w` and `M-w` also put the text on your system
-clipboard over OSC 52, which works through SSH. Reading it back is supported by
-far fewer terminals than writing, so a yank falls back to nem's own kill ring.
+clipboard over OSC 52, which works through SSH. `C-y` pastes what you copied in
+other applications, through `wl-paste`, `xclip`, `xsel` or `pbpaste`, and falls
+back to nem's own kill ring when there is no text to be had.
+
+**Pasting** — the terminal's paste key inserts text verbatim, without
+re-indenting it, as a single undo step.
 
 **Your work is kept** — a backup of the previous contents on first save, an
 autosave every 30 seconds while modified, and a refusal to overwrite a file that

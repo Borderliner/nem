@@ -35,6 +35,9 @@ func newTestEditor(t *testing.T, lines ...string) (*Editor, tcell.SimulationScre
 	// any test that saves over an existing file would write into the developer's
 	// home directory.
 	e.SetBackupRoot(t.TempDir())
+	// Likewise the system clipboard: an empty one unless a test installs
+	// its own. See TestMain.
+	e.clip.read = noSystemClipboard
 
 	if len(lines) > 0 {
 		b := e.Buf()

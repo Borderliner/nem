@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/gdamore/tcell/v2"
@@ -162,4 +163,177 @@ func TestRequestClipboardAsksTheTerminal(t *testing.T) {
 	e, _ := newTestEditor(t)
 	e.RequestClipboard()
 	wantEcho(t, e, "Asked the terminal")
+}
+
+// --- C-y and text copied elsewhere ---------------------------------------
+
+// fakeClipboard stands in for the desktop's clipboard tools.
+type fakeClipboard struct {
+	text  string
+	reads int
+}
+
+func (f *fakeClipboard) read() (string, bool) {
+	f.reads++
+	return f.text, f.text != ""
+}
+
+// withClipboard installs a fake system clipboard holding s ("" for one with no
+// text on it, as when it holds an image).
+func withClipboard(e *Editor, s string) *fakeClipboard {
+	f := &fakeClipboard{text: s}
+	e.clip.read = f.read
+	return f
+}
+
+// The reported bug: text copied in a browser, C-y in nem, and "kill ring is
+// empty" with the text sitting right there on the clipboard.
+func TestYankPastesTextCopiedInAnotherApplication(t *testing.T) {
+	e, _ := newTestEditor(t)
+	withClipboard(e, "copied in the browser")
+
+	press(t, e, "C-y")
+
+	wantText(t, e, "copied in the browser")
+	if strings.Contains(e.Message(), "empty") {
+		t.Errorf("echo = %q after yanking the clipboard", e.Message())
+	}
+}
+
+// A copy made elsewhere after a kill is the newer of the two, so C-y takes it -
+// and the kill is still one M-y away rather than lost.
+func TestANewerCopyIsYankedAndOlderKillsStayReachable(t *testing.T) {
+	e, _ := newTestEditor(t, "killed here")
+	press(t, e, "C-k")
+	wantText(t, e, "")
+
+	withClipboard(e, "copied elsewhere")
+	press(t, e, "C-y")
+	wantText(t, e, "copied elsewhere")
+
+	press(t, e, "M-y")
+	wantText(t, e, "killed here")
+}
+
+// Text nem put on the clipboard itself comes straight back when it is read. It
+// is already the ring's newest entry, and adding it again would leave M-y
+// cycling through a duplicate.
+func TestYankDoesNotReaddOurOwnKill(t *testing.T) {
+	e, _ := newTestEditor(t, "mine")
+	press(t, e, "C-k")
+	before := e.Ring().Len()
+
+	withClipboard(e, "mine") // the kill reached the clipboard over OSC 52
+	press(t, e, "C-y")
+
+	wantText(t, e, "mine")
+	if got := e.Ring().Len(); got != before {
+		t.Errorf("ring grew from %d to %d yanking our own kill back", before, got)
+	}
+}
+
+// An unchanged clipboard is taken once. Taking it on every C-y would push a
+// copy each time, and M-y would have to wade through them.
+//
+// It matters most on a terminal that ignores OSC 52: there the clipboard keeps
+// its old text after a kill, and re-reading it must not bury the kill under a
+// second copy of text the ring already holds.
+func TestAnUnchangedClipboardIsTakenOnlyOnce(t *testing.T) {
+	e, _ := newTestEditor(t)
+	withClipboard(e, "external")
+
+	wantYank(t, e, "external")
+	wantYank(t, e, "external")
+	if got := e.Ring().Len(); got != 1 {
+		t.Errorf("ring holds %d entries after two yanks of one copy, want 1", got)
+	}
+
+	e.KillForward("a fresh kill") // the clipboard still says "external"
+	e.Ring().BreakRun()
+	wantYank(t, e, "a fresh kill")
+}
+
+// wantYank asserts what Yank returns: the clipboard rule on its own, without
+// the buffer editing a yank command does around it.
+func wantYank(t *testing.T, e *Editor, want string) {
+	t.Helper()
+	got, err := e.Yank()
+	if err != nil {
+		t.Fatalf("Yank: %v", err)
+	}
+	if got != want {
+		t.Errorf("Yank = %q, want %q", got, want)
+	}
+}
+
+// When the clipboard holds no text - an image, say, which the tools refuse to
+// hand over as text - C-y yanks from the ring exactly as before.
+func TestYankFallsBackToTheRingWhenTheClipboardHasNoText(t *testing.T) {
+	e, _ := newTestEditor(t, "kept")
+	press(t, e, "C-k")
+	withClipboard(e, "")
+
+	press(t, e, "C-y")
+	wantText(t, e, "kept")
+}
+
+func TestYankWithNothingAnywhereStillSaysSo(t *testing.T) {
+	e, _ := newTestEditor(t)
+	withClipboard(e, "")
+	press(t, e, "C-y")
+	wantEcho(t, e, "kill ring is empty")
+}
+
+// clipboard = "off" means nem leaves the clipboard alone in both directions.
+func TestClipboardOffNeverReadsTheClipboard(t *testing.T) {
+	e, _ := newTestEditor(t, "ring text")
+	press(t, e, "C-k")
+	e.SetClipboardMode(ClipboardOff)
+	f := withClipboard(e, "outside")
+
+	press(t, e, "C-y")
+
+	wantText(t, e, "ring text")
+	if f.reads != 0 {
+		t.Errorf("the clipboard was read %d times with clipboard = off", f.reads)
+	}
+}
+
+// M-y walks what the ring already holds. Reading the clipboard there could push
+// a new entry mid-cycle and shift everything M-y is stepping through.
+func TestYankPopDoesNotReadTheClipboard(t *testing.T) {
+	e, _ := newTestEditor(t)
+	e.KillForward("one")
+	e.Ring().BreakRun()
+	e.KillForward("two")
+	e.Ring().BreakRun()
+	f := withClipboard(e, "")
+
+	press(t, e, "C-y")
+	reads := f.reads
+	press(t, e, "M-y")
+
+	wantText(t, e, "one")
+	if f.reads != reads {
+		t.Errorf("M-y read the clipboard")
+	}
+}
+
+// C-y at a prompt reaches the clipboard too, which is how a path copied from a
+// file manager gets into C-x C-f.
+func TestYankAtAPromptTakesTheClipboard(t *testing.T) {
+	e, scr := newTestEditor(t)
+	withClipboard(e, "/tmp/elsewhere")
+	go func() {
+		scr.InjectKey(tcell.KeyCtrlY, 0, tcell.ModCtrl)
+		scr.InjectKey(tcell.KeyEnter, 0, tcell.ModNone)
+	}()
+
+	got, err := e.ReadString(readOpts("Find file: ", nil))
+	if err != nil {
+		t.Fatalf("ReadString: %v", err)
+	}
+	if got != "/tmp/elsewhere" {
+		t.Errorf("ReadString = %q, want the clipboard's text", got)
+	}
 }

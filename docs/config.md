@@ -145,10 +145,27 @@ asking first rather than clobbering it silently.
 ### Clipboard
 
 `C-w` and `M-w` also put the text on your system clipboard using OSC 52, which
-works over SSH. Reading the clipboard back is supported by far fewer terminals
-than writing it, so a yank falls back to nem's own kill ring when no reply
-arrives. Inside tmux you need `set -g allow-passthrough on` for it to leave the
-pane. Set `clipboard = "off"` if you would rather nem never touched it.
+works over SSH. Inside tmux you need `set -g allow-passthrough on` for it to
+leave the pane.
+
+`C-y` reads the clipboard back, so text copied in another application is what it
+pastes; `M-y` then steps back through nem's own kills as usual. Reading goes
+through the desktop's clipboard tool rather than the terminal, because few
+terminals answer an OSC 52 read: `wl-paste` on Wayland, `xclip` or `xsel` on X11,
+`pbpaste` on macOS. With no tool installed, no display (a plain SSH session), or
+something other than text on the clipboard, `C-y` yanks from the kill ring alone.
+
+Set `clipboard = "off"` if you would rather nem never touched the clipboard in
+either direction.
+
+### Pasting with the terminal
+
+Pasting with the terminal's own paste key (`Ctrl-Shift-V`, `Cmd-V`) inserts the
+text exactly as it was copied: nem turns on bracketed paste, so pasted lines are
+not re-indented and pasted characters are never taken as commands. One `C-/`
+undoes the whole paste, and pasting over a selection replaces it. In a prompt a
+paste stays on one line: a trailing newline is dropped and any other newline
+becomes a space.
 
 ## Rebinding keys
 

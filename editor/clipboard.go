@@ -1,6 +1,7 @@
 package editor
 
-// System clipboard integration over OSC 52.
+// System clipboard integration: out over OSC 52, back in through the desktop's
+// own clipboard tools (see sysclip.go).
 //
 // tcell does the hard part: Screen.SetClipboard base64-encodes the payload and
 // emits the escape under tcell's own lock, so it cannot interleave with a frame
@@ -17,10 +18,11 @@ package editor
 type ClipboardMode int
 
 const (
-	// ClipboardOSC52 mirrors every kill to the terminal's clipboard. The zero
-	// value, so this is on unless something turns it off.
+	// ClipboardOSC52 mirrors every kill to the terminal's clipboard, and lets
+	// C-y take in text copied elsewhere. The zero value, so this is on unless
+	// something turns it off.
 	ClipboardOSC52 ClipboardMode = iota
-	// ClipboardOff leaves the system clipboard alone.
+	// ClipboardOff leaves the system clipboard alone, in both directions.
 	ClipboardOff
 )
 
@@ -38,6 +40,16 @@ type clipboard struct {
 	// sent is the last payload handed to the terminal, so a reply quoting our
 	// own text back at us is not mistaken for a new copy made elsewhere.
 	sent string
+
+	// seen is the last clipboard text taken into the ring. A C-y with the
+	// clipboard unchanged since then yanks the ring's front instead of pushing
+	// the same text again - otherwise every C-y would add a copy and M-y would
+	// have to wade through duplicates to reach anything older.
+	seen string
+
+	// read fetches the system clipboard's text for C-y. New installs
+	// defaultClipboardReader; tests install a fake.
+	read clipboardReader
 }
 
 // SetClipboardMode chooses whether kills reach the system clipboard.
@@ -97,9 +109,10 @@ func (e *Editor) pushClipboard(s string) {
 // widely implemented than writes, and terminals that do support writing often
 // refuse to read on the grounds that a program should not be able to exfiltrate
 // whatever you last copied. So this cannot be made to look synchronous, and
-// yanking does not wait on it — C-y takes nem's own kill ring, which always
-// works. When a reply does arrive, SetClipboardReply puts it at the front of the
-// ring so the next C-y picks it up.
+// yanking does not wait on it — C-y reads through the desktop's clipboard tools
+// instead (see takeSystemClipboard). When a reply does arrive,
+// SetClipboardReply puts it at the front of the ring so the next C-y picks it
+// up.
 func (e *Editor) RequestClipboard() {
 	if e.clip.mode != ClipboardOSC52 || e.scr == nil {
 		e.Echo("System clipboard reads are off")
@@ -117,9 +130,34 @@ func (e *Editor) RequestClipboard() {
 // put on the clipboard is ignored: terminals echo it straight back, and adding it
 // again would duplicate an entry the ring already holds.
 func (e *Editor) SetClipboardReply(data []byte) {
-	s := string(data)
-	if s == "" || s == e.clip.sent {
+	if e.takeClipboardText(string(data)) {
+		e.Echo("Clipboard contents added to the kill ring")
+	}
+}
+
+// takeSystemClipboard puts text copied in another application at the front of
+// the ring, so the C-y about to read the ring yanks it. This is emacs's
+// interprogram-paste-function.
+//
+// It asks every time rather than watching for changes, because nothing tells a
+// terminal program that the clipboard changed. When there is no text to be had
+// - an image, no display, no tool installed - the ring is left as it was and C-y
+// yanks from it as it always did.
+func (e *Editor) takeSystemClipboard() {
+	if e.clip.mode == ClipboardOff || e.clip.read == nil {
 		return
+	}
+	if s, ok := e.clip.read(); ok {
+		e.takeClipboardText(s)
+	}
+}
+
+// takeClipboardText makes s the newest kill-ring entry, unless the ring already
+// has it: text nem itself sent, which terminals and clipboards hand straight
+// back, or text an earlier read already took. It reports whether s was added.
+func (e *Editor) takeClipboardText(s string) bool {
+	if s == "" || s == e.clip.sent || s == e.clip.seen {
+		return false
 	}
 	// A fresh entry, not an extension of whatever kill run was open: this text
 	// came from somewhere else entirely.
@@ -127,5 +165,6 @@ func (e *Editor) SetClipboardReply(data []byte) {
 	e.ring.KillForward(s)
 	e.ring.BreakRun()
 	e.clip.accum = ""
-	e.Echo("Clipboard contents added to the kill ring")
+	e.clip.seen = s
+	return true
 }

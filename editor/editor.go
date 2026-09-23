@@ -116,13 +116,6 @@ type Editor struct {
 	// config path and the tests use the same door.
 	delSel bool
 
-	// paste collects a bracketed paste between its markers. See paste.go.
-	paste pasteState
-
-	// frames counts what Redraw has painted, so a test can tell one redraw per
-	// paste from one per pasted character without timing anything.
-	frames int
-
 	// mini is the innermost active prompt, or nil when none is. miniDepth
 	// counts nesting for the recursion guard.
 	mini      *miniState
@@ -145,6 +138,13 @@ type Editor struct {
 
 	// clip mirrors kills to the system clipboard over OSC 52. See clipboard.go.
 	clip clipboard
+
+	// paste collects a bracketed paste between its markers. See paste.go.
+	paste pasteState
+
+	// frames counts what Redraw has painted, so a test can tell one redraw per
+	// paste from one per pasted character without timing anything.
+	frames int
 
 	before map[string][]func()
 	after  map[string][]func()
@@ -186,6 +186,7 @@ func New(scr tcell.Screen) (*Editor, error) {
 		vcs:    map[*text.Buffer]branchEntry{},
 		before: map[string][]func(){},
 		after:  map[string][]func(){},
+		clip:   clipboard{read: defaultClipboardReader},
 	}
 
 	// recover-file closes over the editor rather than going through Env. It is
@@ -204,7 +205,6 @@ func New(scr tcell.Screen) (*Editor, error) {
 	if err := registerDisplayCommands(e, reg); err != nil {
 		return nil, fmt.Errorf("registering display commands: %w", err)
 	}
-
 	if err := registerPasteCommand(e, reg); err != nil {
 		return nil, fmt.Errorf("registering %s: %w", pasteCommand, err)
 	}
@@ -273,7 +273,14 @@ func (e *Editor) Arg() (int, bool) { return e.arg.value() }
 // noteKill for why the whole accumulated entry is sent rather than the fragment.
 func (e *Editor) KillForward(s string)  { e.noteKill(s, false) }
 func (e *Editor) KillBackward(s string) { e.noteKill(s, true) }
-func (e *Editor) Yank() (string, error) { return e.ring.Yank() }
+
+// Yank consults the system clipboard first, so text copied in another
+// application is what C-y pastes. See takeSystemClipboard. YankPop does not: M-y
+// walks back through what the ring already holds.
+func (e *Editor) Yank() (string, error) {
+	e.takeSystemClipboard()
+	return e.ring.Yank()
+}
 
 func (e *Editor) YankPop() (string, error) { return e.ring.YankPop() }
 
