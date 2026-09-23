@@ -3,6 +3,7 @@ package editor
 import (
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Borderliner/nem/command"
 	"github.com/Borderliner/nem/keymap"
@@ -177,7 +178,9 @@ func (e *Editor) readLoop(ms *miniState) {
 			return
 		}
 		e.HandleEvent(ev)
-		e.Redraw()
+		if !e.paste.active {
+			e.Redraw()
+		}
 	}
 }
 
@@ -382,12 +385,18 @@ func (e *Editor) ReadChar(prompt string, valid []rune) (rune, error) {
 	savedEcho := e.echo
 	defer func() { e.miniDepth--; e.echo = savedEcho }()
 
+	var gate pasteGate
 	for {
-		e.Echo("%s", prompt)
-		e.Redraw()
+		if !gate.on {
+			e.Echo("%s", prompt)
+			e.Redraw()
+		}
 		ev := e.nextEvent()
 		if ev == nil {
 			return 0, command.ErrQuit
+		}
+		if gate.swallow(ev, time.Now()) {
+			continue
 		}
 		ke, ok := ev.(*tcell.EventKey)
 		if !ok {
@@ -422,12 +431,20 @@ func (e *Editor) ReadKey(prompt string) (keymap.Key, error) {
 	savedEcho := e.echo
 	defer func() { e.miniDepth--; e.echo = savedEcho }()
 
+	// describe-key wants the key that was pressed, not the first byte of a
+	// paste, so a paste is swallowed here just as at a y/n prompt.
+	var gate pasteGate
 	for {
-		e.Echo("%s", prompt)
-		e.Redraw()
+		if !gate.on {
+			e.Echo("%s", prompt)
+			e.Redraw()
+		}
 		ev := e.nextEvent()
 		if ev == nil {
 			return keymap.Key{}, command.ErrQuit
+		}
+		if gate.swallow(ev, time.Now()) {
+			continue
 		}
 		ke, ok := ev.(*tcell.EventKey)
 		if !ok {

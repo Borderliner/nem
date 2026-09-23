@@ -116,6 +116,13 @@ type Editor struct {
 	// config path and the tests use the same door.
 	delSel bool
 
+	// paste collects a bracketed paste between its markers. See paste.go.
+	paste pasteState
+
+	// frames counts what Redraw has painted, so a test can tell one redraw per
+	// paste from one per pasted character without timing anything.
+	frames int
+
 	// mini is the innermost active prompt, or nil when none is. miniDepth
 	// counts nesting for the recursion guard.
 	mini      *miniState
@@ -196,6 +203,10 @@ func New(scr tcell.Screen) (*Editor, error) {
 
 	if err := registerDisplayCommands(e, reg); err != nil {
 		return nil, fmt.Errorf("registering display commands: %w", err)
+	}
+
+	if err := registerPasteCommand(e, reg); err != nil {
+		return nil, fmt.Errorf("registering %s: %w", pasteCommand, err)
 	}
 
 	scratch := e.NewBuffer(ui.ScratchName)

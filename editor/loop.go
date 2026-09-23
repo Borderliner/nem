@@ -54,6 +54,14 @@ func (e *Editor) Loop() error {
 		tick = t.C
 	}
 
+	// A paste whose end marker never arrives is landed once it has been quiet
+	// for pasteStall, even if no further key comes along to trigger that. One
+	// timer re-armed per event rather than a new one each time: a paste is
+	// thousands of events in a burst.
+	stall := time.NewTimer(pasteStall)
+	stall.Stop()
+	defer stall.Stop()
+
 	e.Redraw()
 	for !e.quit {
 		var fire <-chan time.Time
@@ -61,6 +69,11 @@ func (e *Editor) Loop() error {
 		if e.whichKeyArmed() {
 			timer = time.NewTimer(e.whichKeyDelay())
 			fire = timer.C
+		}
+		if e.paste.active {
+			stall.Reset(time.Until(e.paste.last.Add(pasteStall)) + time.Millisecond)
+		} else {
+			stall.Stop()
 		}
 
 		select {
@@ -75,6 +88,10 @@ func (e *Editor) Loop() error {
 			e.HandleEvent(ev)
 		case <-fire:
 			e.fireWhichKey()
+		case now := <-stall.C:
+			if e.pasteStalled(now) {
+				e.endPaste()
+			}
 		case now := <-tick:
 			// Reported through the echo area by RunAutosave itself; a failure
 			// must not stop the loop.
@@ -82,7 +99,12 @@ func (e *Editor) Loop() error {
 				_ = e.RunAutosave(now)
 			}
 		}
-		e.Redraw()
+		// Nothing is drawn while a paste streams in: the text lands at the end
+		// marker, and a frame per pasted character was most of why a paste
+		// crawled.
+		if !e.paste.active {
+			e.Redraw()
+		}
 	}
 	return nil
 }
@@ -112,6 +134,11 @@ func (e *Editor) nextEvent() tcell.Event {
 // HandleEvent processes one terminal event. Exported so tests can drive the
 // editor a keystroke at a time without a real loop.
 func (e *Editor) HandleEvent(ev tcell.Event) {
+	// A paste is claimed before anything else sees a key: between the markers
+	// nothing may reach the keymap. See paste.go.
+	if e.pasteEvent(ev, time.Now()) {
+		return
+	}
 	switch ev := ev.(type) {
 	case *tcell.EventKey:
 		k := DecodeKey(ev, e.keys.TreatCtrlHAsBackspace)
@@ -417,6 +444,7 @@ func (e *Editor) Redraw() {
 	if e.scr == nil {
 		return
 	}
+	e.frames++
 	ui.Render(e.scr, e.frame(), e.th)
 	e.scr.Show()
 }

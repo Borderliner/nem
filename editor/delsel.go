@@ -48,6 +48,7 @@ var delSelCommands = map[string]delSelKind{
 	"self-insert-command":  delSelReplace,
 	"newline":              delSelReplace,
 	"yank":                 delSelReplace,
+	"bracketed-paste":      delSelReplace,
 }
 
 // SetDeleteSelection turns delete-selection behaviour on or off. It is on by

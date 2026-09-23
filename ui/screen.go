@@ -20,6 +20,11 @@ func NewScreen() (*Screen, error) {
 	if err := scr.Init(); err != nil {
 		return nil, err
 	}
+	// Bracketed paste makes the terminal mark where a paste begins and ends.
+	// Without it pasted text is indistinguishable from typing and runs through
+	// the keymap a character at a time: auto-indent re-indents every pasted
+	// line, and every character costs a redraw. Fini turns it off again.
+	scr.EnablePaste()
 	return Wrap(scr), nil
 }
 
