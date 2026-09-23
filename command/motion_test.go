@@ -375,6 +375,56 @@ func TestBufferEndJumpsPushTheMark(t *testing.T) {
 	}
 }
 
+// The mark M-< and M-> leave is a bookmark, not a selection. If it were active,
+// the next keystroke would replace everything between the old and new point,
+// which on M-> M-< is the whole file.
+func TestBufferEndJumpsDoNotActivateTheMark(t *testing.T) {
+	for _, command := range []string{"beginning-of-buffer", "end-of-buffer"} {
+		t.Run(command, func(t *testing.T) {
+			f := newMotionFake(t, "first", "middle", "last line")
+			f.SetPoint(text.Pos{Line: 1, Col: 3})
+
+			run(t, f, command)
+
+			if f.Buf().MarkActive() {
+				t.Errorf("%s activated the region", command)
+			}
+		})
+	}
+}
+
+// With a region already active, M-< and M-> extend it, as any motion does.
+// Pushing a fresh mark would silently re-anchor the selection at the old point.
+func TestBufferEndJumpsExtendAnActiveRegion(t *testing.T) {
+	for _, tc := range []struct {
+		command  string
+		wantLine int
+		wantCol  text.RuneIdx
+	}{
+		{"beginning-of-buffer", 0, 0},
+		{"end-of-buffer", 2, 9},
+	} {
+		t.Run(tc.command, func(t *testing.T) {
+			f := newMotionFake(t, "first", "middle", "last line")
+			anchor := text.Pos{Line: 1, Col: 1}
+			f.Buf().SetMark(anchor)
+			f.Buf().ActivateMark()
+			f.SetPoint(text.Pos{Line: 1, Col: 4})
+
+			run(t, f, tc.command)
+			wantPoint(t, f, tc.wantLine, tc.wantCol)
+
+			if got := f.Buf().Mark(); !got.Equal(anchor) {
+				t.Errorf("mark = {%d,%d}, want it kept at the selection's anchor {%d,%d}",
+					got.Line, got.Col, anchor.Line, anchor.Col)
+			}
+			if !f.Buf().MarkActive() {
+				t.Error("the region is no longer active")
+			}
+		})
+	}
+}
+
 // --- scrolling --------------------------------------------------------------
 
 func TestScrollUpMovesPointByScreenfulLessTwo(t *testing.T) {

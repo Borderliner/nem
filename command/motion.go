@@ -237,10 +237,21 @@ func lineOffset(w *view.Window, n int) {
 // does, so that C-x C-x takes the reader back to where they were. A jump across
 // a whole buffer is exactly the motion worth being able to undo, and losing your
 // place to it is immediately noticeable.
+//
+// The mark is pushed without being activated - a jump is navigation, not a
+// selection. When these set an active mark, M-> M-< followed by one typed
+// character deleted the entire file.
+//
+// With a region already active the mark is left alone and the jump extends the
+// selection instead, which is how emacs does "select from here to the end":
+// C-SPC then M->. Re-anchoring the mark would silently discard where the user
+// started selecting.
 
 func beginningOfBuffer(e Env) error {
 	w := e.Win()
-	w.Buf.SetMark(w.Pt)
+	if !w.Buf.MarkActive() {
+		w.Buf.SetMark(w.Pt)
+	}
 	w.Pt = text.Pos{}
 	clearGoal(w)
 	return nil
@@ -248,7 +259,9 @@ func beginningOfBuffer(e Env) error {
 
 func endOfBuffer(e Env) error {
 	w := e.Win()
-	w.Buf.SetMark(w.Pt)
+	if !w.Buf.MarkActive() {
+		w.Buf.SetMark(w.Pt)
+	}
 	w.Pt = w.Buf.End()
 	clearGoal(w)
 	return nil

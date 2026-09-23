@@ -80,7 +80,10 @@ func (e *Editor) consumeSelection(name string) (skip bool, done func()) {
 		return false, nil
 	}
 	b := w.Buf
-	if !b.HasMark() {
+	// Only an ACTIVE region is a selection. Using HasMark here is what made
+	// typing after C-y delete the paste, and M-> M-< x delete the whole file:
+	// both leave a mark behind without selecting anything.
+	if !b.MarkActive() {
 		return false, nil
 	}
 
@@ -101,7 +104,9 @@ func (e *Editor) consumeSelection(name string) (skip bool, done func()) {
 		return false, nil
 	}
 	w.Pt = lo
-	b.ClearMark()
+	// The selection is consumed, so it ends. The mark itself is kept, as emacs
+	// keeps it: deactivating is what stops the next keystroke seeing a region.
+	b.DeactivateMark()
 
 	return kind == delSelSupersede, b.EndUndoGroup
 }

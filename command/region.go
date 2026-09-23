@@ -135,7 +135,9 @@ func advance(at text.Pos, rs []rune) text.Pos {
 // Its binding C-SPC reaches the terminal as NUL and is folded to C-@ by
 // keymap.Normalize, so nothing here has to know about that encoding.
 func setMarkCommand(e Env) error {
-	e.Buf().SetMark(e.Win().Pt)
+	b := e.Buf()
+	b.SetMark(e.Win().Pt)
+	b.ActivateMark() // C-SPC is the deliberate act of starting a selection
 	e.Echo("Mark set")
 	return nil
 }
@@ -148,6 +150,10 @@ func exchangePointAndMark(e Env) error {
 	mark := b.Mark()
 	b.SetMark(w.Pt)
 	w.Pt = b.ClampPos(mark)
+	// Activating here is what makes C-y C-x C-x select the yanked text: the
+	// yank sets the mark without selecting anything, and this is how the user
+	// says they want it selected.
+	b.ActivateMark()
 	return nil
 }
 
@@ -166,6 +172,7 @@ func killRegion(e Env) error {
 		return err
 	}
 	e.Win().Pt = lo
+	b.DeactivateMark()
 	return nil
 }
 
@@ -177,6 +184,10 @@ func killRingSave(e Env) error {
 	}
 	lo, hi := region(e)
 	e.KillForward(string(e.Buf().Text(lo, hi)))
+	// M-w changes nothing, so the rule in dispatch that ends a selection after an
+	// edit does not apply - but a copy is still the end of the selection, as in
+	// emacs, and leaving it highlighted would invite typing over it.
+	e.Buf().DeactivateMark()
 	return nil
 }
 
@@ -230,7 +241,8 @@ func yankPop(e Env) error {
 // following yank-pop can replace exactly this text.
 //
 // The mark is left at the start of the insertion, as emacs does, so C-x C-x
-// selects what was just yanked.
+// selects what was just yanked. It is set but NOT activated: the yanked text is
+// not a selection. Activating it here made typing after C-y delete the paste.
 func insertYanked(e Env, at text.Pos, s string) error {
 	rs := []rune(s)
 	b := e.Buf()
@@ -302,6 +314,7 @@ func undoOrRedo(e Env, backward bool) error {
 func markWholeBuffer(e Env) error {
 	b := e.Buf()
 	b.SetMark(b.End())
+	b.ActivateMark()
 	e.Win().Pt = text.Pos{}
 	e.Echo("Mark set")
 	return nil

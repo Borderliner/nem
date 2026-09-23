@@ -2,6 +2,7 @@ package editor
 
 import (
 	"errors"
+	"github.com/Borderliner/nem/text"
 	"time"
 
 	"github.com/Borderliner/nem/command"
@@ -329,6 +330,8 @@ func (e *Editor) dispatchReporting(name string) {
 //     clampWindowPoints: this one prevents a crash, not a misbehaviour.
 //   - An active region, consumed by the handful of commands that replace it.
 //     See delsel.go.
+//   - An active region, ended by any command that changes the buffer. See
+//     endsSelection.
 //
 // It is re-entrant: M-x and Lua's nem.run come through here too. Only the
 // innermost dispatch does the bookkeeping, so M-x kill-line leaves the kill run
@@ -341,6 +344,14 @@ func (e *Editor) dispatch(name string) error {
 	}
 
 	e.childDispatched = false
+
+	// Recorded before anything runs, so an edit made by the command - or by the
+	// selection it consumed - is visible afterwards.
+	var edited *text.Buffer
+	var revBefore uint64
+	if w := e.Win(); w != nil && w.Buf != nil {
+		edited, revBefore = w.Buf, w.Buf.Revision()
+	}
 
 	// A region the command is about to replace is deleted first, inside an undo
 	// group that stays open across the command so the two undo together. skip
@@ -364,12 +375,42 @@ func (e *Editor) dispatch(name string) error {
 
 	if !e.childDispatched {
 		e.bookkeep(name)
+		e.endsSelection(name, edited, revBefore)
 	}
 	e.arg.reset()
 
 	// Tell our caller that a nested dispatch handled the bookkeeping.
 	e.childDispatched = true
 	return err
+}
+
+// keepsSelection names the commands that change the buffer yet must leave an
+// active region active. Moving lines is the case: the selection has to survive
+// the move so that holding the key keeps moving the same block.
+var keepsSelection = map[string]bool{
+	"move-lines-up":   true,
+	"move-lines-down": true,
+}
+
+// endsSelection deactivates the region after a command that changed the buffer,
+// as emacs does.
+//
+// A selection is a statement about the text as it was; once the text has
+// changed, a still-highlighted region would invite the next keystroke to
+// replace something the user did not re-select. Centralised for the same reason
+// as the rules above - sixty commands cannot each be relied on to remember it -
+// and keyed on the buffer's revision rather than on command names, so a new
+// editing command is covered without being listed anywhere.
+//
+// Only the innermost dispatch applies it, so M-x move-lines-up keeps its
+// exemption rather than losing it to the enclosing execute-extended-command.
+func (e *Editor) endsSelection(name string, b *text.Buffer, revBefore uint64) {
+	if b == nil || keepsSelection[name] {
+		return
+	}
+	if b.Revision() != revBefore {
+		b.DeactivateMark()
+	}
 }
 
 // bookkeep applies the three cross-command rules. See dispatch.

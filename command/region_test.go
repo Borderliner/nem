@@ -122,6 +122,93 @@ func TestExchangePointAndMark(t *testing.T) {
 	}
 }
 
+// C-SPC and C-x C-x are how the user asks for a selection, so both make the
+// region live. Yank sets the mark too, but only as a bookmark: if it activated,
+// the next keystroke would replace the text just yanked.
+func TestWhichMarkCommandsActivateTheRegion(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		setup    func(f *commandtest.Fake)
+		command  string
+		activate bool
+	}{
+		{"set-mark-command", func(*commandtest.Fake) {}, "set-mark-command", true},
+		{"exchange-point-and-mark", func(f *commandtest.Fake) {
+			f.Buf().SetMark(text.Pos{Line: 0, Col: 2})
+		}, "exchange-point-and-mark", true},
+		{"mark-whole-buffer", func(*commandtest.Fake) {}, "mark-whole-buffer", true},
+		{"yank", func(f *commandtest.Fake) { regionEntries(f, "XY") }, "yank", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, f := regionSetup(t, "hello world")
+			f.SetPoint(text.Pos{Line: 0, Col: 6})
+			tc.setup(f)
+
+			runRegion(t, r, f, tc.command)
+
+			if !f.Buf().HasMark() {
+				t.Fatalf("%s left no mark", tc.command)
+			}
+			if got := f.Buf().MarkActive(); got != tc.activate {
+				t.Errorf("MarkActive() = %v after %s, want %v", got, tc.command, tc.activate)
+			}
+		})
+	}
+}
+
+// yank-pop replaces the yanked text and moves the mark with it, but the text is
+// still only yanked, not selected.
+func TestYankPopDoesNotActivateTheRegion(t *testing.T) {
+	r, f := regionSetup(t, "ab")
+	regionEntries(f, "one", "two")
+	f.SetPoint(text.Pos{Line: 0, Col: 1})
+	runRegion(t, r, f, "yank")
+
+	runRegion(t, r, f, "yank-pop")
+
+	if got, want := f.Text(), "aoneb"; got != want {
+		t.Fatalf("text = %q after yank-pop, want %q", got, want)
+	}
+	if !f.Buf().HasMark() {
+		t.Fatal("yank-pop left no mark at the start of the yanked text")
+	}
+	if f.Buf().MarkActive() {
+		t.Error("MarkActive() = true after yank-pop, want false")
+	}
+}
+
+// C-w and M-w work on the region whether or not it is highlighted - that is how
+// C-y C-w takes back what was just yanked - and both leave it inactive.
+func TestKillAndCopyWorkOnAnInactiveRegion(t *testing.T) {
+	for _, tc := range []struct {
+		command, wantText string
+	}{
+		{"kill-region", "hello"},
+		{"kill-ring-save", "hello world"},
+	} {
+		t.Run(tc.command, func(t *testing.T) {
+			r, f := regionSetup(t, "hello world")
+			f.Buf().SetMark(text.Pos{Line: 0, Col: 5})
+			f.SetPoint(text.Pos{Line: 0, Col: 11})
+			if f.Buf().MarkActive() {
+				t.Fatal("precondition: the region should be inactive")
+			}
+
+			runRegion(t, r, f, tc.command)
+
+			if got := f.Text(); got != tc.wantText {
+				t.Errorf("text = %q, want %q", got, tc.wantText)
+			}
+			if regionHasEcho(f, "No mark set") {
+				t.Errorf("%s refused an inactive region: %q", tc.command, f.Echoes)
+			}
+			if f.Buf().MarkActive() {
+				t.Errorf("MarkActive() = true after %s, want false", tc.command)
+			}
+		})
+	}
+}
+
 // --- kill-region and kill-ring-save ---
 
 // The region is [point, mark] normalised, so the user may set the mark on

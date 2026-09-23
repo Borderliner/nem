@@ -229,8 +229,8 @@ func TestTheMarkIsInactiveAfterwards(t *testing.T) {
 	press(t, e, "C-x", "h")
 	press(t, e, "x")
 
-	if e.Buf().HasMark() {
-		t.Error("the mark is still active after the selection was replaced")
+	if e.Buf().MarkActive() {
+		t.Error("the region is still active after the selection was replaced")
 	}
 }
 

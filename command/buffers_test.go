@@ -907,16 +907,25 @@ func TestKeyboardQuitDeactivatesTheMarkAndTouchesNothingElse(t *testing.T) {
 	e := newEnv("first line", "second line", "third line")
 	e.SetPoint(text.Pos{Line: 1, Col: 4})
 	e.Buf().SetMark(text.Pos{Line: 2, Col: 2})
-	if !e.Buf().HasMark() {
-		t.Fatal("precondition: mark was not set")
+	e.Buf().ActivateMark()
+	if !e.Buf().MarkActive() {
+		t.Fatal("precondition: region was not active")
 	}
 	textBefore := e.Text()
 	pointBefore := e.Point()
 
 	mustRun(t, e, "keyboard-quit")
 
-	if e.Buf().HasMark() {
-		t.Error("the mark is still active after C-g")
+	if e.Buf().MarkActive() {
+		t.Error("the region is still active after C-g")
+	}
+	// C-g ends the selection but keeps the mark, so C-x C-x can still return to
+	// it. Clearing it would discard a position the user set deliberately.
+	if !e.Buf().HasMark() {
+		t.Error("C-g discarded the mark instead of only deactivating the region")
+	}
+	if got, want := e.Buf().Mark(), (text.Pos{Line: 2, Col: 2}); got != want {
+		t.Errorf("mark moved to %v, want it kept at %v", got, want)
 	}
 	if got := e.Text(); got != textBefore {
 		t.Errorf("buffer text changed to %q, want %q", got, textBefore)
@@ -926,19 +935,20 @@ func TestKeyboardQuitDeactivatesTheMarkAndTouchesNothingElse(t *testing.T) {
 	}
 }
 
-// A mark deliberately set at the origin is still a mark, so C-g must clear it.
+// A region anchored at the origin is still a region, so C-g must deactivate it.
 // This is the case a bare Mark() == Pos{} check gets wrong.
-func TestKeyboardQuitClearsAMarkAtTheOrigin(t *testing.T) {
+func TestKeyboardQuitDeactivatesARegionAtTheOrigin(t *testing.T) {
 	e := newEnv("text")
 	e.Buf().SetMark(text.Pos{})
-	if !e.Buf().HasMark() {
-		t.Fatal("precondition: a mark at the origin should count as set")
+	e.Buf().ActivateMark()
+	if !e.Buf().MarkActive() {
+		t.Fatal("precondition: a region anchored at the origin should be active")
 	}
 
 	mustRun(t, e, "keyboard-quit")
 
-	if e.Buf().HasMark() {
-		t.Error("a mark at the origin survived C-g")
+	if e.Buf().MarkActive() {
+		t.Error("a region anchored at the origin survived C-g")
 	}
 }
 

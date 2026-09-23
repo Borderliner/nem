@@ -39,6 +39,7 @@ func lnSelect(t *testing.T, f *commandtest.Fake, from, to text.Pos) {
 	t.Helper()
 	f.SetPoint(from)
 	f.Buf().SetMark(f.Buf().ClampPos(from))
+	f.Buf().ActivateMark() // C-SPC selects; a bare SetMark only sets the mark
 	f.SetPoint(to)
 }
 
@@ -56,7 +57,7 @@ func lnEchoed(f *commandtest.Fake, want string) bool {
 // user sees highlighted.
 func lnRegionText(f *commandtest.Fake) string {
 	b := f.Buf()
-	if !b.HasMark() {
+	if !b.MarkActive() {
 		return ""
 	}
 	lo, hi := text.OrderPos(f.Point(), b.Mark())

@@ -33,11 +33,13 @@ func selectionRow(t *testing.T, scr tcell.SimulationScreen, y, width int) string
 	return b.String()
 }
 
-// marked returns a frame whose buffer has the mark at markPos and point at pt.
+// marked returns a frame whose buffer has an active region from markPos to pt,
+// as C-SPC and a motion would leave it.
 func marked(t *testing.T, markPos, pt text.Pos, lines ...string) (Frame, *view.Window) {
 	t.Helper()
 	f, w := singleFrame(t, lines...)
 	w.Buf.SetMark(markPos)
+	w.Buf.ActivateMark()
 	w.Pt = pt
 	return f, w
 }
@@ -93,6 +95,7 @@ func TestRegionSpansMultipleLines(t *testing.T) {
 func TestRegionSpanningTheWholeBuffer(t *testing.T) {
 	f, w := marked(t, text.Pos{}, text.Pos{}, "one", "two", "three")
 	w.Buf.SetMark(text.Pos{})
+	w.Buf.ActivateMark()
 	w.Pt = w.Buf.End()
 	scr := drawPlain(t, 7, 5, f)
 
@@ -140,6 +143,7 @@ func TestNoMarkHighlightsNothing(t *testing.T) {
 func TestInactiveWindowShowsNoRegion(t *testing.T) {
 	b := bufferOf(t, "alpha beta", "second line")
 	b.SetMark(text.Pos{Line: 0, Col: 0})
+	b.ActivateMark()
 
 	w1 := view.NewWindow(b)
 	w1.Pt = text.Pos{Line: 0, Col: 5}
@@ -221,6 +225,7 @@ func TestRegionContinuesOffTheTop(t *testing.T) {
 	const scrW, scrH = 10, 8
 	f, w := singleFrame(t, linesOf(40)...)
 	w.Buf.SetMark(text.Pos{Line: 0, Col: 0})
+	w.Buf.ActivateMark()
 	w.Pt = text.Pos{Line: 30, Col: 0}
 	scr := drawPlain(t, scrW, scrH, f)
 
@@ -261,6 +266,7 @@ func TestRegionContinuesOffTheBottom(t *testing.T) {
 	f, w := singleFrame(t, linesOf(40)...)
 	w.Pt = text.Pos{Line: 0, Col: 0}
 	w.Buf.SetMark(text.Pos{Line: 39, Col: 0})
+	w.Buf.ActivateMark()
 	scr := drawPlain(t, scrW, scrH, f)
 
 	textH := view.TextHeight(f.Tree.Layout(scrW, scrH-1)[w])
@@ -280,6 +286,7 @@ func TestRegionBeyondTheHorizontalScrollOffset(t *testing.T) {
 	long := strings.Repeat("abcdefghij", 8) // 80 columns
 	f, w := singleFrame(t, long)
 	w.Buf.SetMark(text.Pos{Line: 0, Col: 0})
+	w.Buf.ActivateMark()
 	w.Pt = text.Pos{Line: 0, Col: 70}
 	scr := drawPlain(t, scrW, 3, f)
 
@@ -331,6 +338,7 @@ func TestRegionInADegenerateWindowDoesNotPanic(t *testing.T) {
 func TestRegionAndBracketMatchCompose(t *testing.T) {
 	f, w := singleFrame(t, "(ab)")
 	w.Buf.SetMark(text.Pos{Line: 0, Col: 0})
+	w.Buf.ActivateMark()
 	w.Pt = text.Pos{Line: 0, Col: 4} // point just after ')', so both brackets match
 	scr := drawPlain(t, 8, 3, f)
 
@@ -352,6 +360,7 @@ func TestRegionFillDoesNotEatWideGlyphsAtTheEndOfALine(t *testing.T) {
 	// 日本語 occupies columns 0-5, x column 6: width 7, but only 4 runes.
 	f, w := singleFrame(t, "日本語x", "second")
 	w.Buf.SetMark(text.Pos{Line: 0, Col: 0})
+	w.Buf.ActivateMark()
 	w.Pt = text.Pos{Line: 1, Col: 2}
 	scr := drawPlain(t, 10, 4, f)
 
@@ -395,9 +404,29 @@ func TestRegionCoversAClusterStraddlingItsBoundary(t *testing.T) {
 // zero-width one. Asserted on regionFor directly: downstream the two happen to
 // draw identically, so a test on the rendered output cannot tell them apart and
 // would let the distinction rot.
+// A mark that is set but not active - the one yank or M-< leaves - is a
+// bookmark, not a selection, so nothing is highlighted. Otherwise the reader
+// would see text marked for replacement that is not.
+func TestAnInactiveMarkHighlightsNothing(t *testing.T) {
+	f, w := singleFrame(t, "alpha beta")
+	w.Buf.SetMark(text.Pos{Line: 0, Col: 0})
+	w.Pt = text.Pos{Line: 0, Col: 5}
+
+	if got := regionFor(w.Buf, w.Pt, true, DefaultTheme()); got.on {
+		t.Errorf("regionFor with an inactive mark = %+v, want no selection", got)
+	}
+	scr := drawPlain(t, 12, 3, f)
+	for x := 0; x < 12; x++ {
+		if reversedAt(t, scr, x, 0) {
+			t.Errorf("cell x=%d is highlighted though the region is inactive", x)
+		}
+	}
+}
+
 func TestRegionForReportsNothingWhenPointIsAtTheMark(t *testing.T) {
 	b := bufferOf(t, "alpha")
 	b.SetMark(text.Pos{Line: 0, Col: 2})
+	b.ActivateMark()
 
 	if got := regionFor(b, text.Pos{Line: 0, Col: 2}, true, DefaultTheme()); got.on {
 		t.Errorf("regionFor with point at the mark = %+v, want no selection", got)

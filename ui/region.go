@@ -53,7 +53,10 @@ func (r regionHL) covers(start, end text.RuneIdx) bool {
 // is what makes C-SPC followed by no movement look like nothing happened rather
 // than like a one-cell selection.
 func regionFor(b *text.Buffer, pt text.Pos, active bool, th Theme) regionSpan {
-	if !active || b == nil || b.NumLines() == 0 || !b.HasMark() {
+	// MarkActive, not HasMark: a mark left by a yank or a buffer jump is not a
+	// selection, and drawing it as one is what told the user the pasted text was
+	// selected - and then typing replaced it.
+	if !active || b == nil || b.NumLines() == 0 || !b.MarkActive() {
 		return regionSpan{}
 	}
 	lo, hi := text.OrderPos(b.ClampPos(pt), b.ClampPos(b.Mark()))

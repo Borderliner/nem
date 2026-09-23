@@ -45,3 +45,68 @@ func TestEditsDoNotResurrectClearedMark(t *testing.T) {
 		t.Error("HasMark() = true after an edit on an unmarked buffer, want false")
 	}
 }
+
+// Setting the mark is not selecting. Yank and M-< set the mark as a bookmark,
+// and if that alone made the region live, the next keystroke would replace
+// everything between it and point.
+func TestSetMarkDoesNotActivateTheRegion(t *testing.T) {
+	b := NewBuffer()
+	b.SetMark(Pos{Line: 0, Col: 0})
+	if !b.HasMark() {
+		t.Fatal("HasMark() = false after SetMark, want true")
+	}
+	if b.MarkActive() {
+		t.Error("MarkActive() = true after a bare SetMark, want false")
+	}
+}
+
+// Deactivating ends the selection but keeps the mark, so C-x C-x can still
+// return to it.
+func TestActivateAndDeactivateKeepTheMark(t *testing.T) {
+	b := bufFrom("hello")
+	b.SetMark(Pos{Line: 0, Col: 3})
+
+	b.ActivateMark()
+	if !b.MarkActive() {
+		t.Fatal("MarkActive() = false after ActivateMark, want true")
+	}
+
+	b.DeactivateMark()
+	if b.MarkActive() {
+		t.Error("MarkActive() = true after DeactivateMark, want false")
+	}
+	if !b.HasMark() {
+		t.Error("DeactivateMark discarded the mark, want it kept")
+	}
+	if got, want := b.Mark(), (Pos{Line: 0, Col: 3}); got != want {
+		t.Errorf("Mark() = %v after DeactivateMark, want %v", got, want)
+	}
+}
+
+// There is no region without a mark, so activating one must not invent it.
+func TestActivateMarkWithoutAMarkDoesNothing(t *testing.T) {
+	b := NewBuffer()
+	b.ActivateMark()
+	if b.MarkActive() || b.HasMark() {
+		t.Errorf("ActivateMark on an unmarked buffer: MarkActive() = %v, HasMark() = %v, want both false",
+			b.MarkActive(), b.HasMark())
+	}
+}
+
+// Clearing the mark ends the selection too, and a later SetMark must not bring
+// the old active state back with it.
+func TestClearMarkDeactivates(t *testing.T) {
+	b := NewBuffer()
+	b.SetMark(Pos{})
+	b.ActivateMark()
+
+	b.ClearMark()
+	if b.MarkActive() {
+		t.Error("MarkActive() = true after ClearMark, want false")
+	}
+
+	b.SetMark(Pos{})
+	if b.MarkActive() {
+		t.Error("SetMark after ClearMark revived the old active region")
+	}
+}

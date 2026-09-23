@@ -94,6 +94,7 @@ func TestGutterLeavesRowsPastTheBufferBlank(t *testing.T) {
 func TestRegionNeverStylesTheGutter(t *testing.T) {
 	f, w := singleFrame(t, "alpha", "beta", "gamma")
 	w.Buf.SetMark(text.Pos{Line: 0, Col: 0})
+	w.Buf.ActivateMark()
 	w.Pt = text.Pos{Line: 2, Col: 5} // whole buffer selected
 	th := gutterTheme(true)
 	scr := drawTh(t, 30, 8, f, th)

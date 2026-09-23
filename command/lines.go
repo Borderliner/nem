@@ -52,7 +52,10 @@ func moveLinesDown(e Env) error { return moveLines(e, +1) }
 func lineBlock(e Env) (first, last int) {
 	b := e.Buf()
 	pt := b.ClampPos(e.Win().Pt)
-	if !b.HasMark() {
+	// Only an ACTIVE region is a block to move. An inactive mark - left behind by
+	// a yank or a buffer jump - may be anywhere in the file, and using it would
+	// drag every line between it and point.
+	if !b.MarkActive() {
 		return pt.Line, pt.Line
 	}
 	lo, hi := text.OrderPos(pt, b.ClampPos(b.Mark()))
@@ -152,7 +155,10 @@ func moveLinesOnce(e Env, dir int) error {
 	// a second press then moved the wrong lines. Setting both ends explicitly is
 	// predictable and does not depend on that boundary rule.
 	ptBefore, markBefore := w.Pt, b.Mark()
-	hadMark := b.HasMark()
+	// Only an active region's mark travels with the block. An inactive mark is
+	// not part of what moved, so it is left to the primitives' own adjustment
+	// rather than shifted along with lines it has nothing to do with.
+	hadMark := b.MarkActive()
 
 	if err := deleteLine(b, donor); err != nil {
 		return err

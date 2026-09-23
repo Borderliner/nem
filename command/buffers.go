@@ -317,11 +317,12 @@ func otherWindow(e Env) error {
 // the time any command runs neither is pending. What remains for this command
 // is the buffer-level case, which is the mark.
 //
-// The mark is cleared rather than collapsed onto point: ClearMark deactivates
-// the region while leaving point exactly where the user left it, whereas
-// moving the mark would both destroy it and silently relocate the region.
+// The region is deactivated and the mark kept, as emacs does: the selection
+// ends, point stays exactly where the user left it, and C-x C-x can still return
+// to the mark. Clearing the mark instead would throw away a position the user
+// set deliberately just to stop it being highlighted.
 func keyboardQuit(e Env) error {
-	e.Buf().ClearMark()
+	e.Buf().DeactivateMark()
 	e.Echo("Quit")
 	return nil
 }

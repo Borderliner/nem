@@ -192,6 +192,7 @@ func TestSpansFollowHorizontalScroll(t *testing.T) {
 func TestSyntaxRegionAndBracketCompose(t *testing.T) {
 	b := bufferOf(t, "f(x)")
 	b.SetMark(text.Pos{Line: 0, Col: 0})
+	b.ActivateMark()
 	win := view.NewWindow(b)
 	win.Pt = text.Pos{Line: 0, Col: 4} // region covers the whole line
 

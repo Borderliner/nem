@@ -15,8 +15,11 @@ type Buffer struct {
 	lines   []Line
 	mark    Pos
 	hasMark bool
-	savePt  Pos
-	undo    *UndoLog
+	// markActive says the region is live - highlighted, and replaced by typing.
+	// It is separate from hasMark on purpose; see MarkActive.
+	markActive bool
+	savePt     Pos
+	undo       *UndoLog
 
 	path    string
 	crlf    bool // file used \r\n line endings
@@ -53,6 +56,12 @@ func (b *Buffer) SetPath(p string) { b.path = p }
 func (b *Buffer) Mark() Pos { return b.mark }
 
 // SetMark sets the buffer's mark and records that a mark now exists.
+//
+// It does NOT activate the region. Setting a mark and selecting text are
+// different acts: yank sets the mark so C-x C-x can select what was yanked, and
+// the buffer-edge jumps set it so C-x C-x can return, but in neither case is the
+// text between mark and point a selection. Commands that mean to select call
+// ActivateMark as well.
 func (b *Buffer) SetMark(p Pos) { b.mark, b.hasMark = p, true }
 
 // HasMark reports whether a mark has been set in this buffer.
@@ -63,8 +72,35 @@ func (b *Buffer) SetMark(p Pos) { b.mark, b.hasMark = p, true }
 // the distinction C-w would silently kill from the buffer start to point.
 func (b *Buffer) HasMark() bool { return b.hasMark }
 
-// ClearMark forgets the mark, as C-g does when it deactivates the region.
-func (b *Buffer) ClearMark() { b.mark, b.hasMark = Pos{}, false }
+// ClearMark forgets the mark entirely, which also deactivates the region.
+func (b *Buffer) ClearMark() { b.mark, b.hasMark, b.markActive = Pos{}, false, false }
+
+// MarkActive reports whether the region is live: drawn as a selection, and
+// replaced by typing, Backspace or a yank.
+//
+// A mark can exist without the region being active, and the difference matters.
+// When the two were conflated, every command that set a mark for navigation
+// silently created a selection: M-> M-< then typing a character deleted the
+// whole file, and typing after C-y deleted what had just been pasted. This is
+// emacs's transient-mark-mode distinction between the mark and mark-active.
+//
+// Region commands that consume the region themselves - C-w, M-w, C-x C-x - use
+// HasMark instead, so C-y then C-w still kills what was yanked, as emacs does by
+// default.
+func (b *Buffer) MarkActive() bool { return b.hasMark && b.markActive }
+
+// ActivateMark makes the region live. With no mark set there is no region, so
+// it does nothing.
+func (b *Buffer) ActivateMark() {
+	if b.hasMark {
+		b.markActive = true
+	}
+}
+
+// DeactivateMark ends the selection but keeps the mark, so C-x C-x can still
+// return to it. This is what C-g does, and what any buffer-changing command does
+// afterwards.
+func (b *Buffer) DeactivateMark() { b.markActive = false }
 
 // SavePoint returns the point stored for when a window next visits this buffer.
 func (b *Buffer) SavePoint() Pos { return b.savePt }
