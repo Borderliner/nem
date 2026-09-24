@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/Borderliner/nem/keymap"
 	"github.com/Borderliner/nem/lua"
 	"github.com/Borderliner/nem/text"
 	"github.com/Borderliner/nem/ui"
@@ -51,10 +52,11 @@ func (e *Editor) LoadConfig(path string) error {
 	}
 
 	h, err := lua.New(lua.Options{
-		Registry:   e.reg,
-		Keymap:     e.keys,
-		ConfigPath: path,
-		Timeout:    configTimeout,
+		Registry:    e.reg,
+		Keymap:      e.keys,
+		ModeKeymaps: map[string]*keymap.Map{"dired": e.diredKeys},
+		ConfigPath:  path,
+		Timeout:     configTimeout,
 	})
 	if err != nil {
 		e.Echo("config: %v", err)

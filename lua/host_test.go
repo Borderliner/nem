@@ -915,3 +915,35 @@ func TestV2SettingsRejectBadValues(t *testing.T) {
 		})
 	}
 }
+
+// A third argument binds in a mode's keymap rather than the global one, and a
+// mode nem does not have is an error rather than a silently dead key.
+func TestBindInAMode(t *testing.T) {
+	f := commandtest.New("x")
+	global, dired := keymap.New(), keymap.New()
+	path := filepath.Join(t.TempDir(), "init.lua")
+	if err := os.WriteFile(path, []byte(`nem.bind("k", "undo", "dired")`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h, err := nemlua.New(nemlua.Options{
+		Registry: f.Reg, Keymap: global, ConfigPath: path,
+		ModeKeymaps: map[string]*keymap.Map{"dired": dired},
+	})
+	if err != nil {
+		t.Fatalf("lua.New: %v", err)
+	}
+	t.Cleanup(h.Close)
+	mustLoad(t, h)
+
+	if got := lookup(t, dired, "k"); got.Command != "undo" {
+		t.Errorf("dired map: k = %q, want undo", got.Command)
+	}
+	if got := lookup(t, global, "k"); got.Kind != keymap.Undefined {
+		t.Errorf("global map: k = %q, want it left alone", got.Command)
+	}
+
+	h2, _, _ := newHost(t, `nem.bind("k", "undo", "nosuchmode")`)
+	if err := h2.LoadConfig(); err == nil || !strings.Contains(err.Error(), "nosuchmode") {
+		t.Errorf("binding in an unknown mode gave %v, want an error naming it", err)
+	}
+}

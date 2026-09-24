@@ -183,6 +183,15 @@ Binding a new sequence whose prefix is already bound to a command is an error,
 and nem will tell you which two bindings conflict. Rebinding an existing exact
 sequence simply replaces it.
 
+A third argument binds a key in a mode instead, where it applies only in that
+mode's buffers and takes precedence over the global binding. The one mode is
+`"dired"`:
+
+```lua
+nem.bind("k", "dired-do-delete", "dired")   -- k deletes, as D does
+nem.bind("-", "dired-up-directory", "dired")
+```
+
 ## Defining your own commands
 
 ```lua

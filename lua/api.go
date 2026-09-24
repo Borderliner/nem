@@ -83,6 +83,16 @@ func (h *Host) apiBind(L *glua.LState) int {
 	if cmd == "" {
 		L.RaiseError("nem.bind(%q): command name must not be empty", spec)
 	}
+	// An optional third argument names a mode, whose keymap is consulted
+	// before the global one only in that mode's buffers.
+	km := h.keys
+	if mode := L.OptString(3, ""); mode != "" {
+		m, ok := h.modeKeys[mode]
+		if !ok {
+			L.RaiseError("nem.bind(%q): no mode called %q", spec, mode)
+		}
+		km = m
+	}
 
 	seq, err := keymap.ParseSpec(spec)
 	if err != nil {
@@ -94,7 +104,7 @@ func (h *Host) apiBind(L *glua.LState) int {
 	// actually pressed. Normalizing again here would be a second source of
 	// truth for the same rule. The end-to-end behaviour is pinned by
 	// TestBoundKeysMatchWhatTheDecoderProduces.
-	if err := h.keys.Bind(seq, cmd); err != nil {
+	if err := km.Bind(seq, cmd); err != nil {
 		L.RaiseError("nem.bind(%q): %v", spec, err)
 	}
 	h.binds = append(h.binds, bindRecord{Spec: spec, Command: cmd})

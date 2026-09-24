@@ -77,6 +77,11 @@ type Options struct {
 	// Keymap receives bindings made with nem.bind. Required.
 	Keymap *keymap.Map
 
+	// ModeKeymaps are the keymaps of the editor's modes, by name, for
+	// nem.bind's optional third argument: nem.bind("k", "dired-do-delete",
+	// "dired"). Optional; a mode not listed here is an error to bind in.
+	ModeKeymaps map[string]*keymap.Map
+
 	// ConfigPath is the script to load. Injectable so tests never touch a real
 	// ~/.config.
 	ConfigPath string
@@ -105,6 +110,7 @@ type Host struct {
 	l        *glua.LState
 	reg      *command.Registry
 	keys     *keymap.Map
+	modeKeys map[string]*keymap.Map
 	cfgPath  string
 	timeout  time.Duration
 	settings Settings
@@ -141,6 +147,7 @@ func New(opts Options) (*Host, error) {
 		l:        glua.NewState(glua.Options{SkipOpenLibs: true}),
 		reg:      opts.Registry,
 		keys:     opts.Keymap,
+		modeKeys: opts.ModeKeymaps,
 		cfgPath:  opts.ConfigPath,
 		timeout:  opts.Timeout,
 		settings: DefaultSettings(),
