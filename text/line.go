@@ -2,6 +2,7 @@ package text
 
 import (
 	"sort"
+	"unicode/utf8"
 
 	"github.com/rivo/uniseg"
 )
@@ -49,6 +50,15 @@ func NewLine(rs []rune) Line {
 }
 
 // build recomputes the segment cache if it is stale.
+//
+// Plain ASCII takes a shortcut past the grapheme segmenter, which costs tens
+// of nanoseconds a rune and was most of what a keystroke cost on a long line.
+// Between two ASCII runes there is always a cluster boundary - no ASCII
+// character extends, prepends or joins, and the one exception, CR LF, cannot
+// occur inside a line - so a printable ASCII rune followed by another ASCII
+// rune is a cluster of its own, one column wide. Everything else goes through
+// uniseg a run at a time, each run ending at such a boundary, so segmenting
+// can restart there exactly as it would have continued.
 func (l *Line) build() {
 	tw := effectiveTabWidth()
 	if l.valid && l.tabW == tw {
@@ -60,17 +70,51 @@ func (l *Line) build() {
 		l.segs = make([]segment, 0, len(l.runes))
 	}
 
-	rest := string(l.runes)
-	state := -1
+	rs := l.runes
+	n := len(rs)
 	col := ColIdx(0)
-	idx := RuneIdx(0)
+	for i := 0; i < n; {
+		r := rs[i]
+		switch {
+		case r >= 0x20 && r < 0x7f && (i+1 == n || rs[i+1] < 0x80):
+			l.segs = append(l.segs, segment{start: RuneIdx(i), n: 1, col: col, w: 1})
+			col++
+			i++
+			continue
+		case r == '\t':
+			// A control is always a cluster of its own, and tab stops are
+			// ours to apply: uniseg reports a tab as zero-width.
+			w := tw - (col % tw)
+			l.segs = append(l.segs, segment{start: RuneIdx(i), n: 1, col: col, w: w})
+			col += w
+			i++
+			continue
+		}
+		// The run up to the next boundary the fast path can vouch for.
+		j := i + 1
+		for j < n && (rs[j-1] >= 0x80 || rs[j] >= 0x80) {
+			j++
+		}
+		col = l.segmentRun(i, j, col, tw)
+		i = j
+	}
+	l.width = col
+	l.valid = true
+	l.tabW = tw
+}
+
+// segmentRun appends the clusters of runes [from, to) starting at display
+// column col, and returns the column after them.
+func (l *Line) segmentRun(from, to int, col, tw ColIdx) ColIdx {
+	rest := string(l.runes[from:to])
+	state := -1
+	idx := RuneIdx(from)
 	for len(rest) > 0 {
 		var cl string
 		var w int
 		cl, rest, w, state = uniseg.FirstGraphemeClusterInString(rest, state)
-		n := len([]rune(cl))
+		n := utf8.RuneCountInString(cl)
 		cw := ColIdx(w)
-		// uniseg reports tabs as zero-width; tab stops are ours to apply.
 		if cl == "\t" {
 			cw = tw - (col % tw)
 		}
@@ -78,9 +122,7 @@ func (l *Line) build() {
 		col += cw
 		idx += RuneIdx(n)
 	}
-	l.width = col
-	l.valid = true
-	l.tabW = tw
+	return col
 }
 
 // setRunes replaces the line's content and invalidates the cache.
