@@ -1,6 +1,9 @@
 package text
 
-import "errors"
+import (
+	"errors"
+	"slices"
+)
 
 // ErrOutOfRange is returned when a Pos does not name a location in the buffer.
 var ErrOutOfRange = errors.New("text: position out of range")
@@ -254,30 +257,31 @@ func (b *Buffer) insertRaw(at Pos, rs []rune) error {
 	if len(rs) == 0 {
 		return nil
 	}
+	// In place, not rebuilt. Rebuilding copied the line three times per
+	// keystroke, and - on a newline - the whole slice of lines, which in a
+	// file of a million lines is tens of megabytes for one RET. A line's runes
+	// belong to that line alone, so its array can be grown or reused here.
 	cur := b.lines[at.Line].runes
-	head := append([]rune(nil), cur[:at.Col]...)
-	tail := append([]rune(nil), cur[at.Col:]...)
 	parts := splitRuneLines(rs)
 
 	if len(parts) == 1 {
-		nw := make([]rune, 0, len(head)+len(parts[0])+len(tail))
-		nw = append(nw, head...)
-		nw = append(nw, parts[0]...)
-		nw = append(nw, tail...)
-		b.lines[at.Line].setRunes(nw)
+		b.lines[at.Line].setRunes(slices.Insert(cur, int(at.Col), parts[0]...))
 	} else {
+		// The line splits. The text after the cut moves to the last new line,
+		// and is copied out before the head reuses its array.
+		last := parts[len(parts)-1]
+		tail := make([]rune, 0, len(last)+len(cur)-int(at.Col))
+		tail = append(append(tail, last...), cur[at.Col:]...)
+
 		built := make([]Line, 0, len(parts))
-		built = append(built, NewLine(append(head, parts[0]...)))
+		head := b.lines[at.Line]
+		head.setRunes(append(cur[:at.Col], parts[0]...))
+		built = append(built, head)
 		for _, p := range parts[1 : len(parts)-1] {
 			built = append(built, NewLine(p))
 		}
-		built = append(built, NewLine(append(append([]rune(nil), parts[len(parts)-1]...), tail...)))
-
-		nl := make([]Line, 0, len(b.lines)+len(built)-1)
-		nl = append(nl, b.lines[:at.Line]...)
-		nl = append(nl, built...)
-		nl = append(nl, b.lines[at.Line+1:]...)
-		b.lines = nl
+		built = append(built, Line{runes: tail})
+		b.lines = slices.Replace(b.lines, at.Line, at.Line+1, built...)
 	}
 
 	b.noteEdit(at.Line, len(parts)-1)
@@ -301,15 +305,16 @@ func (b *Buffer) deleteRaw(from, to Pos) ([]rune, error) {
 	}
 	removed := b.Text(from, to)
 
-	head := append([]rune(nil), b.lines[from.Line].runes[:from.Col]...)
-	tail := append([]rune(nil), b.lines[to.Line].runes[to.Col:]...)
-	b.lines[from.Line].setRunes(append(head, tail...))
-
-	if to.Line > from.Line {
-		nl := make([]Line, 0, len(b.lines)-(to.Line-from.Line))
-		nl = append(nl, b.lines[:from.Line+1]...)
-		nl = append(nl, b.lines[to.Line+1:]...)
-		b.lines = nl
+	// In place, for the reasons insertRaw gives.
+	first := &b.lines[from.Line]
+	if to.Line == from.Line {
+		first.setRunes(slices.Delete(first.runes, int(from.Col), int(to.Col)))
+	} else {
+		// The last line's remainder joins the first; that line is about to be
+		// dropped, so its runes can be read while the first line's array is
+		// overwritten from the cut onwards.
+		first.setRunes(append(first.runes[:from.Col], b.lines[to.Line].runes[to.Col:]...))
+		b.lines = slices.Delete(b.lines, from.Line+1, to.Line+1)
 	}
 
 	b.noteEdit(from.Line, -(to.Line - from.Line))
