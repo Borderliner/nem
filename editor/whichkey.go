@@ -185,6 +185,17 @@ func (e *Editor) buildWhichKey(cs []keymap.Continuation) (*whichKeyView, bool) {
 	if cols == 0 || rows == 0 {
 		return nil, false
 	}
+	// Before any key is left out, long command names are cut short to make
+	// room for another column, as emacs's which-key cuts them: a name ending
+	// in an ellipsis still says what its key does, and a key left out says
+	// nothing at all.
+	if cols*rows < len(cells) {
+		need := (len(cells) + maxRows - 1) / maxRows
+		if w := (width - (need-1)*whichKeyGutter) / need; w < cellW && w >= wkMinCell(cells) {
+			cells, cellW = wkShorten(cells, w), w
+			cols, rows = whichKeyGrid(len(cells), cellW, width, maxRows)
+		}
+	}
 
 	// A frame too short for every continuation drops some, and dropping them
 	// silently would let the panel claim to be the whole answer. One row is
@@ -309,6 +320,41 @@ func whichKeyCells(cs []keymap.Continuation) []wkCell {
 				{Start: arrow + 2, End: arrow + 2 + utf8.RuneCountInString(desc), Class: class},
 			},
 		})
+	}
+	return out
+}
+
+// wkMinCell is the narrowest a cell may be cut to: the key and arrow, and
+// enough of the name to tell what it is.
+func wkMinCell(cells []wkCell) int {
+	const nameMin = 10
+	if len(cells) == 0 || len(cells[0].spans) < 3 {
+		return 1 << 30
+	}
+	return cells[0].spans[2].Start + nameMin
+}
+
+// wkShorten cuts every cell wider than w down to it, ending in an ellipsis.
+func wkShorten(cells []wkCell, w int) []wkCell {
+	out := make([]wkCell, len(cells))
+	for i, c := range cells {
+		out[i] = c
+		if wkWidth(c.text) <= w {
+			continue
+		}
+		rs := []rune(c.text)
+		for len(rs) > 0 && wkWidth(string(rs)) > w-1 {
+			rs = rs[:len(rs)-1]
+		}
+		n := len(rs) + 1
+		out[i].text = string(rs) + "…"
+		out[i].spans = nil
+		for _, sp := range c.spans {
+			if sp.Start < n {
+				sp.End = min(sp.End, n)
+				out[i].spans = append(out[i].spans, sp)
+			}
+		}
 	}
 	return out
 }

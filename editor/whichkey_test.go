@@ -418,7 +418,7 @@ func TestWhichKeyListsAModesKeys(t *testing.T) {
 	press(t, e, "C-x")
 	e.fireWhichKey()
 	body := wkText(t, e)
-	for _, want := range []string{"wdired-change-to-wdired-mode", "find-file"} {
+	for _, want := range []string{"C-q → wdired-change", "find-file"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("C-x in a listing does not offer %q:\n%s", want, body)
 		}
@@ -431,6 +431,42 @@ func TestWhichKeyListsAModesKeys(t *testing.T) {
 	for _, want := range []string{"wdired-finish-edit", "wdired-abort-changes"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("C-c while editing names does not offer %q:\n%s", want, body)
+		}
+	}
+}
+
+// Long command names are cut short to fit another column before any key is
+// left out.
+func TestWhichKeyShortensNamesBeforeDroppingKeys(t *testing.T) {
+	scr := tcell.NewSimulationScreen("UTF-8")
+	if err := scr.Init(); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	t.Cleanup(scr.Fini)
+	scr.SetSize(80, 24)
+	e, err := New(scr)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	// More long names under C-x than two columns of an 80-column screen hold.
+	for _, k := range []string{"4", "5", "6", "7", "8", "9"} {
+		if err := bindSpec(e.keys, "C-x "+k, "kmacro-start-macro-or-insert-counter"); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	press(t, e, "C-x")
+	e.fireWhichKey()
+	body := wkText(t, e)
+	if strings.Contains(body, "more") {
+		t.Errorf("keys were left out:\n%s", body)
+	}
+	if !strings.Contains(body, "save-buffers-kill…") {
+		t.Errorf("the longest name was not cut short:\n%s", body)
+	}
+	for _, want := range []string{"find-file", "9   → kmacro-start", "undo"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("panel does not mention %q:\n%s", want, body)
 		}
 	}
 }
