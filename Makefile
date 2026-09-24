@@ -16,8 +16,10 @@ build:
 install:
 	go install -trimpath -ldflags "$(LDFLAGS)" ./cmd/nem
 
+# The race detector needs cgo, so the tests turn it back on. The test binary
+# is never shipped, so how it links does not matter.
 test:
-	go test ./... -race -count=1
+	CGO_ENABLED=1 go test ./... -race -count=1
 
 lint:
 	gofmt -l .
