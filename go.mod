@@ -2,6 +2,13 @@ module github.com/Borderliner/nem
 
 go 1.27.1
 
+// Both were published and then deleted; the module proxy keeps what it once
+// served, so they are withdrawn here to keep them away from @latest.
+retract (
+	v0.1.1
+	v0.1.0
+)
+
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/charmbracelet/colorprofile v0.2.3-0.20250311203215-f60798e515dc // indirect
