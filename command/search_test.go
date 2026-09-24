@@ -673,6 +673,35 @@ func TestExecuteExtendedCommandUnknownEchoesNoMatch(t *testing.T) {
 	}
 }
 
+// M-x shows each command's keys beside it: the two shortest, shortest first,
+// and nothing for a command bound to no key.
+func TestExecuteExtendedCommandAnnotatesKeys(t *testing.T) {
+	f := newSearchFake(t, "abc")
+	f.BindingMap = map[string]string{
+		"C-x C-f": "find-file",
+		"C-p":     "previous-line",
+		"<up>":    "previous-line",
+		"M-p":     "previous-line",
+		"C-x C-p": "previous-line",
+	}
+	f.Replies = []string{commandtest.Quit}
+	_ = f.Run("execute-extended-command")
+
+	if len(f.Reads) == 0 || f.Reads[0].Annotate == nil {
+		t.Fatal("M-x does not annotate its candidates")
+	}
+	note := f.Reads[0].Annotate
+	for cmd, want := range map[string]string{
+		"find-file":     "C-x C-f",
+		"previous-line": "C-p, M-p",
+		"kill-line":     "",
+	} {
+		if got := note(cmd); got != want {
+			t.Errorf("note for %s = %q, want %q", cmd, got, want)
+		}
+	}
+}
+
 func TestCompleteFromOffersEveryName(t *testing.T) {
 	names := []string{"isearch-backward", "isearch-forward", "kill-line"}
 	complete := command.CompleteFrom(names)

@@ -11,6 +11,7 @@ package command
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -439,10 +440,37 @@ func CompleteFrom(names []string) CompleteFunc {
 	}
 }
 
+// keysOf annotates a command with the keys that run it, for M-x: as many as
+// two, shortest first, from wherever M-x was opened - so in a directory
+// listing dired's own keys are the ones shown. The bindings are read once for
+// the prompt, not once per candidate per frame.
+func keysOf(e Env) func(string) string {
+	byCmd := map[string][]string{}
+	for spec, cmd := range e.Bindings() {
+		byCmd[cmd] = append(byCmd[cmd], spec)
+	}
+	for _, specs := range byCmd {
+		slices.SortFunc(specs, func(a, b string) int {
+			if len(a) != len(b) {
+				return len(a) - len(b)
+			}
+			return strings.Compare(a, b)
+		})
+	}
+	return func(cmd string) string {
+		specs := byCmd[cmd]
+		if len(specs) > 2 {
+			specs = specs[:2]
+		}
+		return strings.Join(specs, ", ")
+	}
+}
+
 func executeExtendedCommand(e Env) error {
 	name, err := e.ReadString(ReadOpts{
 		Prompt:       "M-x ",
 		Complete:     CompleteFrom(e.CommandNames()),
+		Annotate:     keysOf(e),
 		RequireMatch: true,
 		History:      "command",
 		HistoryFirst: true,

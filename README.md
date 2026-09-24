@@ -141,7 +141,8 @@ walks point back, and `C-g` returns you to where you started. `M-%` is
 query-replace with `y`/`n`/`!`/`q`.
 
 **Prefix keys, `M-x`, and `C-u`** — `C-x` is a real prefix keymap, `M-x` completes
-over every command by name, and `C-u` takes numeric and negative arguments.
+over every command by name, with the keys that run each one shown beside it,
+and `C-u` takes numeric and negative arguments.
 
 **Undo** — linear undo and redo (`C-/` and `M-_`). Typing coalesces into one
 undo unit; a new edit after undoing discards the redo branch.
