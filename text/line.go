@@ -141,6 +141,16 @@ func (l *Line) Runes() []rune {
 	return cp
 }
 
+// At returns the rune at index i, which must be in range. Reading one rune
+// through Runes copied the whole line, which made stepping along a line by
+// runes cost the square of its length.
+func (l *Line) At(i RuneIdx) rune { return l.runes[i] }
+
+// View lends the line's runes without copying them, for code that only reads
+// - a search scanning every line of a file, say. Like Cluster.Runes it is
+// valid only until the line is edited, and must not be modified or kept.
+func (l *Line) View() []rune { return l.runes }
+
 // String returns the line's text.
 func (l *Line) String() string { return string(l.runes) }
 

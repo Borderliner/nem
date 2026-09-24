@@ -312,3 +312,30 @@ func BenchmarkNewlineInHugeFile(b *testing.B) {
 		e.Redraw()
 	}
 }
+
+// M-f across a 20KB line of words.
+func BenchmarkForwardWordOnALongLine(b *testing.B) {
+	e := benchScreen(b, 120, 40)
+	if err := e.Buf().Insert(text.Pos{}, []rune(strings.Repeat("lorem ipsum dolor ", 1200))); err != nil {
+		b.Fatal(err)
+	}
+	f := specKeysB(b, "M-f")[0]
+	b.ReportAllocs()
+	for b.Loop() {
+		e.active.Pt = text.Pos{}
+		for range 100 {
+			e.HandleKey(f)
+		}
+	}
+}
+
+// A search that finds nothing in a 700,000-line file: every line scanned.
+func BenchmarkSearchMissInHugeFile(b *testing.B) {
+	e := benchEditor(b, 120, 40, 700000)
+	b.ReportAllocs()
+	for b.Loop() {
+		if _, _, ok := command.SearchForward(e.Buf(), "no such text", text.Pos{}, true); ok {
+			b.Fatal("found")
+		}
+	}
+}

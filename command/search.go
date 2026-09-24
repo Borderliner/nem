@@ -93,7 +93,7 @@ func SearchForward(b *text.Buffer, pat string, from text.Pos, fold bool) (start,
 	}
 	from = b.ClampPos(from)
 	for ln := from.Line; ln < b.NumLines(); ln++ {
-		hay := b.Line(ln).Runes()
+		hay := b.Line(ln).View()
 		first := 0
 		if ln == from.Line {
 			first = int(from.Col)
@@ -117,7 +117,7 @@ func SearchBackward(b *text.Buffer, pat string, from text.Pos, fold bool) (start
 	}
 	from = b.ClampPos(from)
 	for ln := from.Line; ln >= 0; ln-- {
-		hay := b.Line(ln).Runes()
+		hay := b.Line(ln).View()
 		// last is one past the greatest start index we may consider.
 		last := len(hay) - len(needle) + 1
 		if ln == from.Line && int(from.Col) < last {

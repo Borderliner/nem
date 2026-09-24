@@ -74,7 +74,7 @@ func runeAt(b *text.Buffer, p text.Pos) rune {
 	if p.Col >= l.Len() {
 		return '\n'
 	}
-	return l.Runes()[p.Col]
+	return l.At(p.Col)
 }
 
 func nextRune(b *text.Buffer, p text.Pos) text.Pos {

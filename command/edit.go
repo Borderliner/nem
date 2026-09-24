@@ -332,12 +332,14 @@ func openLine(e Env) error {
 
 // edLeadingIndent returns the leading whitespace of line i.
 func edLeadingIndent(b *text.Buffer, i int) []rune {
-	rs := b.Line(i).Runes()
+	rs := b.Line(i).View()
 	end := 0
 	for end < len(rs) && (rs[end] == ' ' || rs[end] == '\t') {
 		end++
 	}
-	return rs[:end]
+	// A copy of the indent alone: the caller inserts it, into this same line
+	// among others, and must not be handed the line's own array.
+	return append([]rune(nil), rs[:end]...)
 }
 
 // newline inserts a newline and copies the current line's indentation onto the
