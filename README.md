@@ -31,32 +31,32 @@ Download a binary for your platform from the
 go install github.com/Borderliner/nem/cmd/nem@latest
 ```
 
-From source:
+From source, with [xmake](https://xmake.io) and Go 1.27 or later:
 
 ```sh
 git clone https://github.com/Borderliner/nem
-cd nem && make build
-./nem file.txt
+cd nem && xmake
+xmake run nem file.txt
 ```
-
-Or with [xmake](https://xmake.io), which also runs the checks and the
-benchmarks:
 
 ```sh
 xmake                                  # static, stripped build/<plat>/<arch>/release/nem
 xmake f -m debug && xmake              # with symbols, for a debugger
 xmake f --goos=windows --goarch=arm64 && xmake   # cross-compile
+xmake install                          # into the install prefix's bin
 xmake test                             # gofmt, go vet, tests with the race detector
 xmake bench -p ./editor -f Redraw      # benchmarks; xmake bench --help
 ```
 
-Go 1.27 or later, and nothing else.
+The build sets `CGO_ENABLED=0`, which matters: Go turns cgo on by default when
+a C compiler is present, and a dependency pulls in `os/user`, which links libc
+for NSS lookups. With it off the binary is **fully static** — no libc, no glibc
+version skew, runs on musl and Alpine — and strips to about 5 MB. Without
+xmake, the same build is:
 
-`make build` sets `CGO_ENABLED=0`, which matters: Go turns cgo on by default
-when a C compiler is present, and a dependency pulls in `os/user`, which links
-libc for NSS lookups. With it off the binary is **fully static** — no libc, no
-glibc version skew, runs on musl and Alpine — and strips to about 5 MB. A plain
-`go build` still works but gives you a dynamically linked binary.
+```sh
+CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o nem ./cmd/nem
+```
 
 Being cgo-free is also why every platform cross-compiles from any other, so
 releases for Linux, macOS and Windows on both amd64 and arm64 all come off one
