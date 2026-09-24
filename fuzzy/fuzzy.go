@@ -11,7 +11,11 @@
 // reasons the user cannot see is worse than one that ranks imperfectly.
 package fuzzy
 
-import "sort"
+import (
+	"runtime"
+	"slices"
+	"sync"
+)
 
 // Match describes how a query matched one candidate.
 type Match struct {
@@ -57,11 +61,17 @@ type Ranked struct {
 	Match     Match
 }
 
+// parallelMin is how many candidates it takes for Rank to share the scoring
+// out across the CPUs. Below it one core finishes before the others would have
+// started; above it - every file in a large project - scoring on one core took
+// a tenth of a second a keystroke.
+const parallelMin = 4096
+
 // Rank returns the matching candidates, best first.
 //
 // The order is total: by score descending, then by shorter candidate, then by
 // the candidate's position in the input. That last tie-break comes free from
-// sort.SliceStable over a slice built in input order - an explicit position map
+// a stable sort over a slice built in input order - an explicit position map
 // would cost an allocation per candidate on every keystroke for nothing.
 func Rank(query string, candidates []string) []Ranked {
 	out := make([]Ranked, 0, len(candidates))
@@ -78,6 +88,34 @@ func Rank(query string, candidates []string) []Ranked {
 
 	q := []rune(query)
 	ignoreCase := smartCaseFold(q)
+	if workers := runtime.GOMAXPROCS(0); len(candidates) >= parallelMin && workers > 1 {
+		// Each worker scores a run of the candidates, and the runs are joined
+		// in input order, so the result is exactly the one-core result.
+		parts := make([][]Ranked, workers)
+		size := (len(candidates) + workers - 1) / workers
+		var wg sync.WaitGroup
+		for w := range workers {
+			lo, hi := min(w*size, len(candidates)), min((w+1)*size, len(candidates))
+			wg.Go(func() { parts[w] = score(q, candidates[lo:hi], ignoreCase, nil) })
+		}
+		wg.Wait()
+		for _, p := range parts {
+			out = append(out, p...)
+		}
+	} else {
+		out = score(q, candidates, ignoreCase, out)
+	}
+	slices.SortStableFunc(out, func(x, y Ranked) int {
+		if x.Match.Score != y.Match.Score {
+			return y.Match.Score - x.Match.Score
+		}
+		return len(x.Candidate) - len(y.Candidate)
+	})
+	return out
+}
+
+// score appends to out the candidates q matches, in input order.
+func score(q []rune, candidates []string, ignoreCase bool, out []Ranked) []Ranked {
 	var cbuf []rune
 	for _, cand := range candidates {
 		cbuf = decodeInto(cbuf, cand)
@@ -85,12 +123,5 @@ func Rank(query string, candidates []string) []Ranked {
 			out = append(out, Ranked{Candidate: cand, Match: m})
 		}
 	}
-	sort.SliceStable(out, func(a, b int) bool {
-		x, y := out[a], out[b]
-		if x.Match.Score != y.Match.Score {
-			return x.Match.Score > y.Match.Score
-		}
-		return len(x.Candidate) < len(y.Candidate)
-	})
 	return out
 }
