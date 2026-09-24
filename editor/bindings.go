@@ -54,6 +54,9 @@ var defaultBindings = []struct{ Spec, Command string }{
 	{"M-{", "backward-paragraph"},
 	{"M-}", "forward-paragraph"},
 	{"M-q", "fill-paragraph"},
+	{"C-M-f", "forward-sexp"},
+	{"C-M-b", "backward-sexp"},
+	{"C-M-k", "kill-sexp"},
 
 	// Line movement. Not an emacs binding: emacs has no native line move, and
 	// M-<up>/M-<down> is the convention every other editor uses.
