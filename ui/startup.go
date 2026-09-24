@@ -21,8 +21,8 @@ const startupTitle = "nem"
 //
 // Short on purpose. A first screen that has to be read is a first screen that
 // gets dismissed unread, so this is one line of what nem is and the smallest
-// set of keys that makes it usable: open, save, quit, find any command, and
-// find every key. Everything else is discoverable from M-x and <f1> b, which is
+// set of keys that makes it usable: open, browse, save, quit, find any
+// command, and find every key. Everything else is discoverable from M-x and <f1> b, which is
 // exactly why those two are here.
 //
 // No ASCII art. The border and the palette are the presentation, and a banner
@@ -31,6 +31,7 @@ var startupLines = []string{
 	"a terminal editor with emacs keys",
 	"",
 	"  C-x C-f    open a file",
+	"  C-x d      browse a directory",
 	"  C-x C-s    save",
 	"  C-x C-c    exit",
 	"  M-x        run a command by name",

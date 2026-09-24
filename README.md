@@ -69,6 +69,25 @@ prepend, so `M-DEL M-DEL` over "foo bar" yanks as `foo bar`, not `bar foo`.
 `C-x 2`/`C-x 3` split, `C-x o` move between windows. Two windows onto one buffer
 keep independent cursors and viewports.
 
+**Dired** — `C-x d` lists a directory, `C-x C-j` lists the one the current file
+is in with point on it, and `nem .` or `C-x C-f` on a directory does too. The
+listing is aligned and coloured by kind, directories first and dotfiles hidden
+until you press `.`; `(` hides the permissions, sizes and dates, and `s` sorts
+by name, time or size.
+
+| Key | Does |
+|---|---|
+| `RET` `^` | open the file or directory at point · go up a level |
+| `n` `p` | next and previous file |
+| `m` `u` `t` `U` | mark · unmark · invert the marks · unmark all |
+| `d` `x` | flag for deletion · delete the flagged files |
+| `D` `R` `C` | delete · rename or move · copy — the marked files, or the one at point |
+| `+` `g` `w` `o` `q` | new directory · re-read · copy the name · open in the other window · leave |
+
+Deleting asks you to type `yes`, nothing is replaced without asking, and a
+rename carries any buffer visiting the file along with it. One listing follows
+you around the tree rather than a new buffer piling up per directory.
+
 **Search** — `C-s` is genuinely incremental: it moves as you type, backspace
 walks point back, and `C-g` returns you to where you started. `M-%` is
 query-replace with `y`/`n`/`!`/`q`.
@@ -85,9 +104,10 @@ prefix like `C-x` and a panel shows everything that can follow it.
 **Completion** — `M-x`, `C-x C-f` and `C-x b` open a centred panel that filters
 as you type, fuzzily: `fwc` finds `forward-char`. Matched characters are
 highlighted so you can see why something matched. `RET` takes the highlighted
-entry, and on a directory it opens that directory's listing instead. `M-RET`
-takes exactly what you typed, for a new file or buffer whose name happens to
-match an existing one. Buffers are listed most recently visited first, so
+entry, and on a directory it walks into it and lists what is inside. The
+directory itself comes first, as `./` before you have typed anything, so
+`C-x C-f RET` opens it in dired. `M-RET` takes exactly what you typed, for a new
+file or buffer whose name happens to match an existing one. Buffers are listed most recently visited first, so
 `C-x b RET` flips back to the previous one.
 
 **Line numbers** — shown by default, and drawn outside the text so they can
@@ -169,6 +189,7 @@ Layered so the hard parts are testable without a terminal:
 | `keymap` | Key parsing and the prefix tree — standard library only |
 | `view` | Windows, the split tree, layout arithmetic |
 | `command` | Named commands and the `Env` they act through |
+| `dired` | Directory listings and the file operations dired performs |
 | `ui` | tcell rendering; Lip Gloss for chrome |
 | `lua` | Config and scripting host |
 | `editor` | The event loop that wires it together |
