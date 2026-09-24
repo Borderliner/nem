@@ -98,6 +98,7 @@ func newMiniState(opts command.ReadOpts, buf *text.Buffer, win *view.Window) *mi
 	}
 	if opts.Complete != nil {
 		ms.comp = newCompletion(opts.Complete, ms.contents())
+		ms.comp.icon = opts.Icon
 	}
 	return ms
 }

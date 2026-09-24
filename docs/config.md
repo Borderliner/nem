@@ -55,6 +55,11 @@ nem.set("delete-selection", true)-- typing replaces the selection; default true
 nem.set("syntax", true)          -- colour code; default true
 nem.set("theme", "auto")         -- syntax palette: "auto", "dark" or "light"
 
+-- Icons beside file names in dired and the file and buffer prompts. They need
+-- a Nerd Font, or a terminal that ships its symbols (Ghostty, Kitty, WezTerm);
+-- without one they draw as empty boxes.
+nem.set("icons", true)           -- default true
+
 -- Files that are not text (a PDF, an image, a song)
 nem.set("open-binary", "ask")    -- "ask", "system" (open with the system's app)
                                  -- or "text"; default "ask"

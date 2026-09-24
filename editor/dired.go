@@ -11,6 +11,7 @@ import (
 
 	"github.com/Borderliner/nem/command"
 	"github.com/Borderliner/nem/dired"
+	"github.com/Borderliner/nem/icons"
 	"github.com/Borderliner/nem/keymap"
 	"github.com/Borderliner/nem/syntax"
 	"github.com/Borderliner/nem/text"
@@ -152,6 +153,7 @@ func (e *Editor) Dired(dir string) (*text.Buffer, error) {
 	b := text.NewBuffer()
 	b.SetReadOnly(true)
 	st := &diredState{dir: abs, entries: entries, marks: map[string]rune{}}
+	st.opts.Icons = e.icons
 	e.adopt(b, e.uniqueName(diredName(abs)))
 	e.dired[b] = st
 	e.diredRender(b, st, "")
@@ -537,6 +539,7 @@ func (e *Editor) diredPrompt() error {
 		Initial:  promptDir(e.bufferDir(e.active.Buf)),
 		Complete: command.CompleteDirectory,
 		Descend:  command.IsDirCandidate,
+		Icon:     icons.ForCandidate,
 	})
 	if err != nil {
 		return err
@@ -820,6 +823,7 @@ func (e *Editor) diredTransfer(b *text.Buffer, st *diredState, copying bool) err
 		Initial:  promptDir(st.dir),
 		Complete: command.CompleteDirectory,
 		Descend:  command.IsDirCandidate,
+		Icon:     icons.ForCandidate,
 	})
 	if err != nil {
 		return err
@@ -1007,6 +1011,19 @@ func (e *Editor) quitWindow() error {
 	}
 	e.Echo("No other buffer")
 	return nil
+}
+
+// SetIcons turns file icons on or off, in the prompts and in every listing,
+// open ones included. They need a Nerd Font, or a terminal that carries its
+// symbols; without one each icon is an empty box, which is what this is for.
+func (e *Editor) SetIcons(on bool) {
+	e.icons = on
+	for _, b := range e.buffers {
+		if st := e.dired[b]; st != nil && st.opts.Icons != on {
+			st.opts.Icons = on
+			e.diredRender(b, st, "")
+		}
+	}
 }
 
 // plural is "s" unless n is one.

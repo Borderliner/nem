@@ -151,6 +151,10 @@ type Editor struct {
 	// ext decides what happens to files that are not text. See external.go.
 	ext externalState
 
+	// icons shows a file's icon beside its name in dired and in the file and
+	// buffer prompts. See SetIcons.
+	icons bool
+
 	// frames counts what Redraw has painted, so a test can tell one redraw per
 	// paste from one per pasted character without timing anything.
 	frames int
@@ -204,6 +208,7 @@ func New(scr tcell.Screen) (*Editor, error) {
 		after:     map[string][]func(){},
 		clip:      clipboard{read: defaultClipboardReader},
 		ext:       newExternalState(),
+		icons:     true,
 	}
 
 	// recover-file closes over the editor rather than going through Env. It is

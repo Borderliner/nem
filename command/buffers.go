@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Borderliner/nem/icons"
 	"github.com/Borderliner/nem/text"
 )
 
@@ -59,6 +60,7 @@ func findFile(e Env) error {
 		Prompt:   "Find file: ",
 		Complete: completeFilename,
 		Descend:  IsDirCandidate,
+		Icon:     icons.ForCandidate,
 	})
 	if err != nil {
 		return err
@@ -106,6 +108,7 @@ func writeFile(e Env) error {
 		Initial:  b.Path(),
 		Complete: completeWritePath,
 		Descend:  IsDirCandidate,
+		Icon:     icons.ForCandidate,
 	})
 	if err != nil {
 		return err
@@ -220,6 +223,7 @@ func switchToBuffer(e Env) error {
 	name, err := e.ReadString(ReadOpts{
 		Prompt:   "Switch to buffer: ",
 		Complete: completeBufferName(e),
+		Icon:     icons.ForBuffer,
 	})
 	if err != nil {
 		return err

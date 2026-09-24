@@ -118,6 +118,7 @@ func (e *Editor) applySettings(s lua.Settings) {
 		e.th.UseSyntaxPalette(ui.TerminalIsLight())
 	}
 	e.SetOpenBinary(s.OpenBinary)
+	e.SetIcons(s.Icons)
 	e.SetCompletionStyle(s.CompletionStyle)
 	e.SetCompletionRows(s.CompletionRows)
 	// Zero disables each of these, which is why they are passed through

@@ -7,7 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Borderliner/nem/command"
 	"github.com/Borderliner/nem/dired"
+	"github.com/Borderliner/nem/icons"
 	"github.com/Borderliner/nem/text"
 )
 
@@ -78,7 +80,7 @@ func TestOpenFileOnADirectoryListsIt(t *testing.T) {
 	if got := atEntry(t, e); got != "sub" {
 		t.Errorf("point is on %q, want the first entry, sub", got)
 	}
-	if got := int(e.active.Pt.Col); got != dired.NameColumn(dired.Options{}) {
+	if got := int(e.active.Pt.Col); got != dired.NameColumn(e.dired[b].opts) {
 		t.Errorf("point is in column %d, want the name column", got)
 	}
 	if got := e.FileType(b); got != "dired" {
@@ -364,7 +366,7 @@ func TestDiredToggles(t *testing.T) {
 	}
 
 	press(t, e, "(")
-	if got, want := int(e.active.Pt.Col), dired.NameColumn(dired.Options{HideDetails: true}); got != want {
+	if got, want := int(e.active.Pt.Col), dired.NameColumn(dired.Options{HideDetails: true, Icons: true}); got != want {
 		t.Errorf("after (, point is in column %d, want the new name column %d", got, want)
 	}
 	if got := atEntry(t, e); got != "shown" {
@@ -536,5 +538,48 @@ func TestDiredParentEntry(t *testing.T) {
 	}
 	if got := atEntry(t, e); got != "sub" {
 		t.Errorf("after RET on .., point is on %q, want sub", got)
+	}
+}
+
+// Icons are on by default, in listings and beside file and buffer candidates,
+// and turning them off takes them out of open listings too.
+func TestIcons(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, "main.go")
+	e, _ := newTestEditor(t)
+	b, st := listed(t, e, dir)
+	line, _ := st.list.LineOf("main.go")
+	if got := b.Line(line).String(); !strings.Contains(got, " main.go") {
+		t.Errorf("listing line = %q, want the Go icon before the name", got)
+	}
+
+	e.SetIcons(false)
+	if got := b.Line(line).String(); strings.Contains(got, "") {
+		t.Errorf("after turning icons off the listing still has one: %q", got)
+	}
+	if got := atEntry(t, e); got != "main.go" {
+		t.Errorf("point moved off main.go to %q when the icons went", got)
+	}
+}
+
+// A file prompt's candidates carry their icons; the prompt's answer does not.
+func TestPromptCandidatesCarryIcons(t *testing.T) {
+	names := []string{"src/", "main.go"}
+	e, _ := promptOn(t, 60, 20, command.ReadOpts{
+		Prompt:   "Find file: ",
+		Complete: command.CompleteFrom(names),
+		Icon:     icons.ForCandidate,
+	}, "")
+	rows := e.frame().MiniRows
+	if len(rows) != 2 || rows[0].Icon != '' || rows[1].Icon != '' {
+		t.Fatalf("rows = %+v, want a folder and the Go mark", rows)
+	}
+	if rows[1].Text != "main.go" {
+		t.Errorf("candidate text = %q; the icon must not be part of it", rows[1].Text)
+	}
+
+	e.SetIcons(false)
+	if rows := e.frame().MiniRows; rows[0].Icon != 0 {
+		t.Error("icons switched off, but candidates still carry them")
 	}
 }

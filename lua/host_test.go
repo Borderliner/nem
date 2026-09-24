@@ -869,6 +869,7 @@ func TestV2SettingsApplyAndValidate(t *testing.T) {
 		nem.set("theme", "light")
 		nem.set("delete-selection", false)
 		nem.set("open-binary", "system")
+		nem.set("icons", false)
 	`)
 	mustLoad(t, h)
 	got := h.Settings()
@@ -888,6 +889,7 @@ func TestV2SettingsApplyAndValidate(t *testing.T) {
 		{"theme", got.Theme, "light"},
 		{"delete-selection", got.DeleteSelection, false},
 		{"open-binary", got.OpenBinary, "system"},
+		{"icons", got.Icons, false},
 	} {
 		if c.got != c.want {
 			t.Errorf("%s = %v, want %v", c.name, c.got, c.want)

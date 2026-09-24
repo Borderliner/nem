@@ -32,6 +32,7 @@ package command
 import (
 	"errors"
 
+	"github.com/Borderliner/nem/icons"
 	"github.com/Borderliner/nem/keymap"
 	"github.com/Borderliner/nem/text"
 	"github.com/Borderliner/nem/view"
@@ -155,6 +156,11 @@ type ReadOpts struct {
 	// name is given when it happens to fuzzy-match an existing one. It is
 	// refused where RequireMatch holds.
 	RequireMatch bool
+
+	// Icon, when non-nil, gives each candidate an icon to show beside it: a
+	// folder, the Go mark, a picture. Display only - the candidate is still
+	// the answer - and ignored when the icons setting is off.
+	Icon func(candidate string) icons.Icon
 
 	// Descend, when non-nil, reports whether candidate is somewhere to walk
 	// into rather than an answer. RET on such a candidate puts it in the prompt

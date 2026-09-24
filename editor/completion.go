@@ -6,6 +6,7 @@ import (
 
 	"github.com/Borderliner/nem/command"
 	"github.com/Borderliner/nem/fuzzy"
+	"github.com/Borderliner/nem/icons"
 	"github.com/Borderliner/nem/text"
 	"github.com/Borderliner/nem/ui"
 	"github.com/Borderliner/nem/view"
@@ -63,6 +64,8 @@ type completion struct {
 
 	rows  int
 	style completionStyle
+	// icon gives each candidate its icon, when the prompt offers one.
+	icon func(string) icons.Icon
 	// peak is the most candidate rows this prompt has shown. At the bottom of
 	// the screen the list keeps that height as it narrows, as emacs's
 	// grow-only minibuffer does: were it to shrink with every keystroke, the
@@ -226,10 +229,15 @@ func (e *Editor) panelFor(ms *miniState) (ui.Panel, int, int, bool) {
 	promptLine := ms.line()
 	rows := c.visibleRows()
 
-	// Width is the widest thing that must fit, plus the border.
+	// Width is the widest thing that must fit, plus the border. An icon and
+	// its space come before each candidate.
+	pad := 0
+	if e.icons && c.icon != nil {
+		pad = 2
+	}
 	wide := displayWidth(promptLine)
 	for _, r := range c.ranked[c.top : c.top+rows] {
-		if w := displayWidth(r.Candidate); w > wide {
+		if w := displayWidth(r.Candidate) + pad; w > wide {
 			wide = w
 		}
 	}
@@ -252,11 +260,7 @@ func (e *Editor) panelFor(ms *miniState) (ui.Panel, int, int, bool) {
 	lines := make([]ui.PanelLine, 0, rows+1)
 	lines = append(lines, ui.PanelLine{Text: promptLine})
 	for i := c.top; i < c.top+rows; i++ {
-		lines = append(lines, ui.PanelLine{
-			Text:     c.ranked[i].Candidate,
-			Match:    c.ranked[i].Match.Indices,
-			Selected: i == c.sel,
-		})
+		lines = append(lines, e.candidateLine(c, i))
 	}
 
 	title := c.countNote()
@@ -296,14 +300,24 @@ func (e *Editor) bottomRows(c *completion, sh int) ([]ui.PanelLine, bool) {
 	c.peak = max(c.peak, shown)
 	lines := make([]ui.PanelLine, min(c.peak, c.rows))
 	for i := range shown {
-		idx := c.top + i
-		lines[i] = ui.PanelLine{
-			Text:     c.ranked[idx].Candidate,
-			Match:    c.ranked[idx].Match.Indices,
-			Selected: idx == c.sel,
-		}
+		lines[i] = e.candidateLine(c, c.top+i)
 	}
 	return lines, true
+}
+
+// candidateLine is the row for candidate idx, with its icon when the prompt
+// has them and they are switched on.
+func (e *Editor) candidateLine(c *completion, idx int) ui.PanelLine {
+	ln := ui.PanelLine{
+		Text:     c.ranked[idx].Candidate,
+		Match:    c.ranked[idx].Match.Indices,
+		Selected: idx == c.sel,
+	}
+	if e.icons && c.icon != nil {
+		ic := c.icon(ln.Text)
+		ln.Icon, ln.IconClass = ic.Glyph, ic.Class
+	}
+	return ln
 }
 
 // displayWidth measures s in screen columns.

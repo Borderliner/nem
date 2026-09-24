@@ -68,6 +68,10 @@ type Settings struct {
 	// OpenBinary decides what opening a file that is not text does: "ask"
 	// each time, hand it to the "system" app, or open it as "text" anyway.
 	OpenBinary string
+
+	// Icons shows file icons in dired and the file and buffer prompts. They
+	// need a Nerd Font, or a terminal that ships its symbols.
+	Icons bool
 }
 
 // DefaultSettings returns the built-in defaults, which are what the editor uses
@@ -80,7 +84,7 @@ func DefaultSettings() Settings {
 		Backup: true, Clipboard: "osc52", LineNumbers: true,
 		DeleteSelection: true,
 		Syntax:          true, Theme: "auto",
-		OpenBinary: "ask",
+		OpenBinary: "ask", Icons: true,
 	}
 }
 
@@ -101,7 +105,7 @@ const (
 // why it has no effect.
 var knownSettings = []string{
 	"autosave-idle", "backup", "clipboard", "completion-rows", "completion-style",
-	"delete-selection", "line-numbers", "open-binary", "scroll-margin", "syntax", "tab-width",
+	"delete-selection", "icons", "line-numbers", "open-binary", "scroll-margin", "syntax", "tab-width",
 	"theme", "undo-style", "which-key-delay",
 }
 
@@ -183,6 +187,12 @@ func (s *Settings) set(key string, v glua.LValue) error {
 			return fmt.Errorf("line-numbers must be true or false, got %s", v.Type())
 		}
 		s.LineNumbers = bool(b)
+	case "icons":
+		b, ok := v.(glua.LBool)
+		if !ok {
+			return fmt.Errorf("icons must be true or false, got %s", v.Type())
+		}
+		s.Icons = bool(b)
 	case "open-binary":
 		str, err := checkEnum(key, v, "ask", "system", "text")
 		if err != nil {
