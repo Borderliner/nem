@@ -71,6 +71,20 @@ machine. Windows binaries are published but lightly tested; state lives under
 Cursor motion stops at grapheme boundaries, so a decomposed `é` or a ZWJ family
 emoji is one press, not seven.
 
+**The rest of the editing set** — `M-;` comments or uncomments the line or the
+region in the file's own syntax, `M-/` completes a word from words already in
+the text (again for the next), `M-q` re-wraps a paragraph - a comment block
+stays a comment block - and `M-{`/`M-}` move by paragraph. `C-M-f`/`C-M-b` jump
+over a bracketed group, string or word and `C-M-k` kills one. `M-z` kills up to
+a character, `M-SPC` and `M-\` squeeze or delete the spaces around point, `M-^`
+joins a line to the one above and `M-m` goes to its first non-blank character.
+`M-=` counts words and `C-x =` describes the character under point.
+
+**Brackets and quotes pair themselves** — `(` gives `()` with point between,
+typing `)` steps over it, and Backspace between the two removes both. Over a
+selection, `(` or `"` wraps it. It holds back in front of a word, and an
+apostrophe stays single; `nem.set("auto-pair", false)` turns it off.
+
 **Mark and kill ring** — `C-SPC` sets the mark, `C-x h` selects the whole
 buffer, `C-w` kills the region, `M-w`
 copies it, `C-y` yanks and `M-y` rotates. Consecutive kills accumulate into one
