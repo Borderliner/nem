@@ -41,7 +41,7 @@ func RegisterSexp(r *Registry) error {
 	return nil
 }
 
-func isSymbolRune(r rune) bool { return isWordRune(r) || r == '_' }
+func isSymbolRune(r rune) bool  { return isWordRune(r) || r == '_' }
 func isStringQuote(r rune) bool { return r == '"' || r == '`' }
 
 // isSexpFiller is what separates expressions: blanks, line ends, and
