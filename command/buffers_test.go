@@ -411,6 +411,23 @@ func TestSaveBufferWithNoPathPrompts(t *testing.T) {
 	}
 }
 
+// An unmodified buffer with no file has nothing to save, so C-x C-s says so
+// instead of asking for a name - in a directory listing that would offer to
+// write the listing out.
+func TestSaveBufferUnmodifiedWithNoPathDoesNotPrompt(t *testing.T) {
+	e := newEnv("listing")
+	e.Buf().SetModified(false)
+
+	mustRun(t, e, "save-buffer")
+
+	if len(e.Prompts) != 0 {
+		t.Errorf("prompted %q for an unmodified buffer", e.Prompts)
+	}
+	if len(e.Echoes) == 0 || !strings.Contains(e.Echoes[len(e.Echoes)-1], "No changes") {
+		t.Errorf("Echoes = %q, want one saying nothing needs saving", e.Echoes)
+	}
+}
+
 func TestSaveBufferWithNoPathQuitWritesNothing(t *testing.T) {
 	e := newEnv("content")
 	e.Buf().SetModified(true)

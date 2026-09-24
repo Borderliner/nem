@@ -79,14 +79,17 @@ func findFile(e Env) error {
 // saveBuffer writes the current buffer, asking for a name if it has none.
 func saveBuffer(e Env) error {
 	b := e.Buf()
+	// Checked before the name, as emacs does: an untouched buffer has nothing
+	// to save whether or not it has a file. Asked the other way round, C-x C-s
+	// in a directory listing offered to write the listing out as a file.
+	if !b.Modified() {
+		e.Echo("(No changes need to be saved)")
+		return nil
+	}
 	// A buffer with no file cannot be saved silently; asking for a name is
 	// exactly write-file's job, so defer to it rather than failing.
 	if b.Path() == "" {
 		return writeFile(e)
-	}
-	if !b.Modified() {
-		e.Echo("(No changes need to be saved)")
-		return nil
 	}
 	if err := e.SaveBuffer(b, ""); err != nil {
 		return err
