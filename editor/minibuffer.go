@@ -215,39 +215,59 @@ func (ms *miniState) control(e *Editor, name string) {
 
 // accept resolves what RET means for this prompt.
 //
-// The rule is emacs's completing-read rather than Vertico's always-take-the-
-// selection: with RequireMatch the answer must name something real, and without
-// it the answer is exactly what was typed. That asymmetry is the whole point.
-// Vertico's rule would make C-x C-f newfile.go impossible whenever the new name
-// happens to fuzzy-match an existing file, which it often does — the selection
-// would win and open the wrong thing.
+// The rule is Vertico's: the highlighted candidate is the answer. The popup
+// shows what RET will take, and a prompt that returned the fragment typed
+// instead - which is what emacs's completing-read does without a required
+// match - opened a new file called "rea" with readme.txt highlighted directly
+// under it. A name typed out in full cannot lose to a better-scoring neighbour,
+// because refresh ranks an exact match first.
 //
-// So TAB is how a candidate is chosen, and RET accepts the line. For a prompt
-// without RequireMatch that makes RET and M-RET agree, which is intended: the
-// literal gesture is available at every prompt rather than only some.
+// The cost of the rule is that a new name which fuzzy-matches an existing one
+// cannot be given with RET. That is what M-RET is for.
+//
+// RequireMatch decides only what happens with nothing highlighted: return the
+// text as typed, or refuse it.
 func (ms *miniState) accept(e *Editor) {
 	c := ms.comp
-	if c == nil || !ms.opts.RequireMatch {
-		ms.done = true
-		return
-	}
-
-	cur := ms.contents()
-	if c.isCandidate(cur) {
+	if c == nil {
 		ms.done = true
 		return
 	}
 	if sel, ok := c.selected(); ok {
-		ms.replace(e, sel)
+		ms.take(e, sel)
+		return
+	}
+	if ms.opts.RequireMatch {
+		// Nothing matches and nothing may be invented. Refusing keeps the
+		// prompt open with the text intact, so the user can edit rather than
+		// retype.
+		e.Echo("No match")
+		return
+	}
+	ms.done = true
+}
+
+// take answers the prompt with cand, or walks into it when the prompt says it
+// is somewhere to descend into, such as a directory at find-file.
+//
+// Descending replaces the input and leaves the prompt open, and replace
+// refreshes the list, so the next RET chooses among what is inside. A candidate
+// already equal to the input is taken even so: descending would change nothing,
+// and RET would become a key that does nothing at all.
+func (ms *miniState) take(e *Editor, cand string) {
+	if cand == ms.contents() {
 		ms.done = true
 		return
 	}
-	// Nothing matches and nothing may be invented. Refusing keeps the prompt
-	// open with the text intact, so the user can edit rather than retype.
-	e.Echo("No match")
+	ms.replace(e, cand)
+	if ms.opts.Descend == nil || !ms.opts.Descend(cand) {
+		ms.done = true
+	}
 }
 
-// acceptLiteral ends the prompt with exactly what was typed.
+// acceptLiteral ends the prompt with exactly what was typed, ignoring the
+// highlight and any Descend hook - it is the way to give a new name that
+// fuzzy-matches an existing one, and the way to name a directory itself.
 //
 // It is refused where RequireMatch holds: the flag exists to stop a command name
 // being invented, and a second key that bypassed it would make it decorative.

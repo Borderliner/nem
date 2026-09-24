@@ -84,7 +84,10 @@ prefix like `C-x` and a panel shows everything that can follow it.
 
 **Completion** — `M-x`, `C-x C-f` and `C-x b` open a centred panel that filters
 as you type, fuzzily: `fwc` finds `forward-char`. Matched characters are
-highlighted so you can see why something matched.
+highlighted so you can see why something matched. `RET` takes the highlighted
+entry, and on a directory it opens that directory's listing instead. `M-RET`
+takes exactly what you typed, for a new file or buffer whose name happens to
+match an existing one.
 
 **Line numbers** — shown by default, and drawn outside the text so they can
 never be selected or copied. `C-x n` toggles them.

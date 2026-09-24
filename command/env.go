@@ -131,21 +131,35 @@ type ReadOpts struct {
 	// incremental search prompt wants.
 	Complete CompleteFunc
 
-	// RequireMatch governs what RET accepts.
+	// RequireMatch governs what RET does when no candidate is highlighted.
 	//
-	// When true, RET accepts only a candidate — the selected one, or an exact
-	// match for what was typed. Typed text that matches nothing is refused with
-	// a message rather than returned. execute-extended-command sets this,
-	// because inventing a command name is meaningless.
+	// Whenever one is highlighted, RET takes it, whatever this says: that is
+	// what the highlight is for, and a prompt that returned the fragment typed
+	// instead would open a new file called "rea" with readme.txt highlighted
+	// right under it. A candidate typed out in full is always ranked first, so
+	// typing main.go never opens domain.go.
 	//
-	// When false, RET accepts exactly what was typed whenever it is not an exact
-	// candidate, so find-file and switch-to-buffer can still name something that
-	// does not exist yet. This is why the flag exists instead of Vertico's
-	// always-take-the-selection rule: without it, C-x C-f newfile.go could never
-	// create a file, because the selection would win and open an existing one.
+	// The flag decides only the case where the typed text matches nothing. When
+	// false, RET returns it as typed, so find-file and switch-to-buffer can name
+	// something that does not exist yet. When true, RET refuses it with a
+	// message; execute-extended-command sets this, because inventing a command
+	// name is meaningless.
 	//
-	// M-RET forces literal input where RequireMatch is false.
+	// M-RET returns the typed text whatever is highlighted, which is how a new
+	// name is given when it happens to fuzzy-match an existing one. It is
+	// refused where RequireMatch holds.
 	RequireMatch bool
+
+	// Descend, when non-nil, reports whether candidate is somewhere to walk
+	// into rather than an answer. RET on such a candidate puts it in the prompt
+	// and keeps the prompt open, so the list shows what is inside it.
+	//
+	// find-file sets it for directories, so RET on a highlighted src/ lists
+	// src/ instead of trying to visit a directory. It is a hook rather than a
+	// rule about trailing slashes because the minibuffer cannot know what its
+	// candidates are: a buffer name may end in a slash and mean nothing by it.
+	// M-RET ignores it, as it ignores the highlight.
+	Descend func(candidate string) bool
 
 	// OnChange, when non-nil, is called with the full contents after every
 	// edit of the minibuffer — typed, backspaced, killed or yanked alike.

@@ -73,9 +73,23 @@ func newCompletion(f command.CompleteFunc, input string) *completion {
 // previously selected candidate: after a keystroke the ranking has changed, and
 // a selection that chased its old entry would land somewhere the user did not
 // choose while the top of the list is what they are looking at.
+//
+// A candidate equal to the input goes first, whatever it scored. The scorer
+// rewards word boundaries, so for "foobar" it ranks fooBar above foobar itself,
+// and since RET takes the highlight, a name typed out in full would otherwise
+// open a different one. Promoting it here rather than special-casing it at RET
+// keeps the two in agreement: what is highlighted is what RET takes, and C-n
+// off the exact match is still honoured.
 func (c *completion) refresh(input string) {
 	c.ranked = fuzzy.Rank(input, c.complete(input))
 	c.sel, c.top = 0, 0
+	for i, r := range c.ranked {
+		if r.Candidate == input {
+			copy(c.ranked[1:i+1], c.ranked[:i])
+			c.ranked[0] = r
+			break
+		}
+	}
 }
 
 // count reports how many candidates match.
@@ -131,20 +145,6 @@ func (c *completion) visibleRows() int {
 		return c.rows
 	}
 	return len(c.ranked)
-}
-
-// isCandidate reports whether s is exactly one of the candidates.
-//
-// It searches the whole candidate set rather than the ranked list, because a
-// value can be an exact candidate while ranking poorly, and RequireMatch asks
-// whether the text names something real rather than whether it ranks well.
-func (c *completion) isCandidate(s string) bool {
-	for _, r := range c.ranked {
-		if r.Candidate == s {
-			return true
-		}
-	}
-	return false
 }
 
 // panelFor builds the panel for a prompt, and reports where the cursor belongs.

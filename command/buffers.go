@@ -57,6 +57,7 @@ func findFile(e Env) error {
 	path, err := e.ReadString(ReadOpts{
 		Prompt:   "Find file: ",
 		Complete: completeFilename,
+		Descend:  isDirCandidate,
 	})
 	if err != nil {
 		return err
@@ -100,6 +101,7 @@ func writeFile(e Env) error {
 		Prompt:   "Write file: ",
 		Initial:  b.Path(),
 		Complete: completeFilename,
+		Descend:  isDirCandidate,
 	})
 	if err != nil {
 		return err
@@ -422,6 +424,13 @@ func completeFilename(prefix string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// isDirCandidate reports whether a completeFilename candidate is a directory,
+// which completeFilename marks with a trailing separator. It is the Descend
+// hook for the filename prompts, so RET on a directory lists it.
+func isDirCandidate(s string) bool {
+	return s != "" && os.IsPathSeparator(s[len(s)-1])
 }
 
 func plural(n int) string {

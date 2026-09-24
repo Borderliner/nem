@@ -63,6 +63,21 @@ func TestCompletionMatchesASubsequence(t *testing.T) {
 	}
 }
 
+// An exact match goes first even where the scorer prefers another. It rewards
+// a camelCase boundary, so fooBar outscores foobar for the input "foobar";
+// without the promotion RET would take fooBar, a name nobody typed.
+func TestCompletionRanksAnExactMatchFirst(t *testing.T) {
+	c := from("fooBar", "foobar", "foo_bar")
+	c.refresh("foobar")
+	if got, _ := c.selected(); got != "foobar" {
+		t.Errorf("input %q highlights %q (ranked %q), want the exact match first",
+			"foobar", got, candidates(c))
+	}
+	if got := c.count(); got != 3 {
+		t.Errorf("promoting the exact match left %d candidates, want all 3", got)
+	}
+}
+
 // The selection resets to the best match whenever the list changes, and can
 // never address a candidate that has stopped existing.
 func TestCompletionSelectionIsClampedWhenTheListShrinks(t *testing.T) {
@@ -343,11 +358,10 @@ func TestTabCompletesToTheSelection(t *testing.T) {
 	wantPt(t, e, 0, 1)
 }
 
-// Without RequireMatch, RET accepts exactly what was typed, so a name that does
-// not exist yet can still be created. This is why the flag exists rather than
-// Vertico's always-take-the-selection rule: the selection would open something
-// else instead.
-func TestRetAcceptsTypedTextWhenNoMatchRequired(t *testing.T) {
+// With nothing highlighted and no match required, RET accepts exactly what was
+// typed, so a name that does not exist yet can still be created. That is all
+// RequireMatch decides now: a highlighted candidate wins either way.
+func TestRetAcceptsTypedTextWhenNothingMatches(t *testing.T) {
 	e, scr := newTestEditor(t, "hello")
 	feed(t, scr, txt("brand-new-buffer"), key(t, "RET"))
 	press(t, e, "C-x", "b")
@@ -373,6 +387,45 @@ func TestMetaRetIsRefusedWhenAMatchIsRequired(t *testing.T) {
 	press(t, e, "M-x")
 	wantEcho(t, e, "requires an existing match")
 	wantPt(t, e, 0, 0)
+}
+
+// Descending only makes sense when it changes the input. A candidate that is
+// already exactly what was typed is taken even if Descend says to walk into
+// it; otherwise RET would leave the prompt exactly as it was, a key that does
+// nothing.
+func TestRetOnAnExactDescendCandidateAccepts(t *testing.T) {
+	e, ms := promptOn(t, 80, 24, command.ReadOpts{
+		Prompt:   "Find file: ",
+		Complete: command.CompleteFrom([]string{"src/", "srv/"}),
+		Descend:  func(string) bool { return true },
+	}, "src/")
+
+	ms.accept(e)
+	if !ms.done {
+		t.Error("RET on an exact candidate kept the prompt open")
+	}
+	if got := ms.contents(); got != "src/" {
+		t.Errorf("accepted %q, want %q", got, "src/")
+	}
+}
+
+// With nothing highlighted and a match required, RET refuses and keeps the
+// prompt open with the text intact.
+func TestRetRefusesWhenNothingMatchesAndAMatchIsRequired(t *testing.T) {
+	e, ms := promptOn(t, 80, 24, command.ReadOpts{
+		Prompt:       "M-x ",
+		Complete:     command.CompleteFrom([]string{"alpha", "beta"}),
+		RequireMatch: true,
+	}, "zzz")
+
+	ms.accept(e)
+	if ms.done {
+		t.Error("RET accepted text that matches nothing at a RequireMatch prompt")
+	}
+	wantEcho(t, e, "No match")
+	if got := ms.contents(); got != "zzz" {
+		t.Errorf("prompt holds %q, want the typed text kept", got)
+	}
 }
 
 // The prompt is still a real buffer, so the ordinary editing commands work in it

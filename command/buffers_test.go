@@ -221,6 +221,53 @@ func TestFilenameCompletionListsMatchingEntries(t *testing.T) {
 	}
 }
 
+// RET on a directory walks into it at the filename prompts. The hook is judged
+// against the candidates completion really returns, where a directory keeps
+// its trailing separator, rather than against strings written to suit it.
+func TestFilenamePromptsDescendIntoDirectories(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "file.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sep := string(filepath.Separator)
+
+	for _, cmd := range []string{"find-file", "write-file"} {
+		t.Run(cmd, func(t *testing.T) {
+			e := newEnv("body")
+			e.Replies = []string{""}
+			mustRun(t, e, cmd)
+
+			opts := lastOpts(t, e)
+			if opts.Descend == nil {
+				t.Fatalf("%s sets no Descend hook, so RET on a directory tries to visit it", cmd)
+			}
+			cands := opts.Complete(dir + sep)
+			if len(cands) != 2 {
+				t.Fatalf("setup: completion gave %q, want file.txt and sub", cands)
+			}
+			for _, c := range cands {
+				if got, want := opts.Descend(c), strings.HasSuffix(c, sep); got != want {
+					t.Errorf("Descend(%q) = %v, want %v", c, got, want)
+				}
+			}
+		})
+	}
+}
+
+// A buffer name ending in a slash is only a name. Descending is a filename
+// prompt's business, and the other prompts must not acquire it.
+func TestSwitchToBufferDoesNotDescend(t *testing.T) {
+	e := newEnv("scratch")
+	e.Replies = []string{""}
+	mustRun(t, e, "switch-to-buffer")
+	if lastOpts(t, e).Descend != nil {
+		t.Error("switch-to-buffer sets a Descend hook")
+	}
+}
+
 // --- save-buffer and write-file ------------------------------------------
 
 func TestSaveBufferSavesThroughEnv(t *testing.T) {
