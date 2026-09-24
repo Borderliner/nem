@@ -80,6 +80,13 @@ a character, `M-SPC` and `M-\` squeeze or delete the spaces around point, `M-^`
 joins a line to the one above and `M-m` goes to its first non-blank character.
 `M-=` counts words and `C-x =` describes the character under point.
 
+**It remembers** — `M-p` and `M-n` bring back what you typed at a prompt, in
+this session or an earlier one, and `M-x` lists the commands you used last
+first. `C-x C-r` opens a recent file, and a file opens again where you left
+it. `C-u C-SPC` jumps back to where the mark was - where a search started,
+where `M->` jumped from - and again for the place before that. It is all kept
+in `~/.local/state/nem/memory.json`.
+
 **Keyboard macros** — `F3` starts recording, `F4` stops, and `F4` plays it
 back; `C-u 3 F4` plays it three times and `C-u 0 F4` until it fails, which is
 how a macro runs down the rest of a file. `F3` while recording inserts a
