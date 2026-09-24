@@ -196,6 +196,21 @@ func (b *Buffer) SetReadOnly(ro bool) { b.readOnly = ro }
 // whose history is clear - one just regenerated.
 func (b *Buffer) SetEditGuard(g EditGuard) { b.guard = g }
 
+// Vet reports whether an edit would be made, without making it: the deletion
+// of the text between from and to, or, with from equal to to, the insertion of
+// ins there. It is for a command that should pass over what it may not change
+// rather than stop at it - a replace across a buffer read-only in parts.
+func (b *Buffer) Vet(from, to Pos, ins []rune) error {
+	if b.readOnly {
+		return ErrReadOnly
+	}
+	if b.guard == nil {
+		return nil
+	}
+	from, to = OrderPos(from, to)
+	return b.guard(from, to, ins)
+}
+
 // Regenerate replaces the whole text of a buffer whose contents are generated,
 // such as a directory listing. It works on a read-only buffer, leaves it
 // unmodified, and discards the undo history: undoing back to an old listing

@@ -330,6 +330,13 @@ func TestEditGuardVetsEdits(t *testing.T) {
 		t.Errorf("text = %q, want only the allowed edits made", got)
 	}
 
+	if b.Vet(Pos{0, 8}, Pos{0, 9}, nil) != nil || b.Vet(Pos{0, 2}, Pos{0, 2}, []rune("x")) == nil {
+		t.Error("Vet does not answer as the guard would")
+	}
+	if got := b.String(); got != "fixed: ames" {
+		t.Errorf("Vet changed the text to %q", got)
+	}
+
 	b.Regenerate([]rune("other"))
 	if got := b.String(); got != "other" {
 		t.Errorf("Regenerate under a guard gave %q", got)
