@@ -45,6 +45,7 @@ var defaultBindings = []struct{ Spec, Command string }{
 	{"M-u", "upcase-word"},
 	{"M-l", "downcase-word"},
 	{"M-c", "capitalize-word"},
+	{"M-;", "comment-dwim"},
 
 	// Line movement. Not an emacs binding: emacs has no native line move, and
 	// M-<up>/M-<down> is the convention every other editor uses.
