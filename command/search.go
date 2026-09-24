@@ -383,7 +383,7 @@ func queryReplace(e Env) error {
 		// file listing that is not a name, say - is passed over rather than
 		// offered, as emacs does with query-replace-skip-read-only. Stopping
 		// there would leave every match after it unreplaced.
-		if b.Vet(start, end, nil) != nil || (to != "" && b.Vet(start, start, []rune(to)) != nil) {
+		if !CanReplace(b, start, end, to) {
 			skipped++
 			at = end
 			continue
@@ -412,20 +412,10 @@ func queryReplace(e Env) error {
 		}
 
 		if replace {
-			was := b.Text(start, end)
-			if err := b.Delete(start, end); err != nil {
+			if at, err = ReplaceMatch(b, start, end, to); err != nil {
 				return err
 			}
-			if to != "" {
-				if err := b.Insert(start, []rune(to)); err != nil {
-					_ = b.Insert(start, was) // not half a replacement
-					return err
-				}
-			}
 			n++
-			// Resume after the text just inserted. Without this, replacing
-			// "a" with "aa" would find what it had written and never finish.
-			at = posAfter(start, to)
 		} else {
 			at = end
 		}
@@ -434,6 +424,31 @@ func queryReplace(e Env) error {
 
 	done()
 	return nil
+}
+
+// CanReplace reports whether b would let the text between start and end be
+// replaced with to.
+func CanReplace(b *text.Buffer, start, end text.Pos, to string) bool {
+	return b.Vet(start, end, nil) == nil && (to == "" || b.Vet(start, start, []rune(to)) == nil)
+}
+
+// ReplaceMatch replaces the text between start and end with to, as
+// query-replace does, and returns where searching goes on from: just past the
+// replacement. Without that, replacing "a" with "aa" would find what it had
+// written and never finish. A replacement the buffer refuses leaves the text
+// as it was rather than half replaced.
+func ReplaceMatch(b *text.Buffer, start, end text.Pos, to string) (text.Pos, error) {
+	was := b.Text(start, end)
+	if err := b.Delete(start, end); err != nil {
+		return start, err
+	}
+	if to != "" {
+		if err := b.Insert(start, []rune(to)); err != nil {
+			_ = b.Insert(start, was)
+			return start, err
+		}
+	}
+	return posAfter(start, to), nil
 }
 
 // posAfter returns the position just past s, had s been inserted at p.
