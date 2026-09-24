@@ -572,6 +572,25 @@ func TestUndoWithNothingLeftIsReported(t *testing.T) {
 	}
 }
 
+// In a read-only buffer undo says why it did nothing, rather than claiming
+// there is no history.
+func TestUndoInAReadOnlyBufferSaysSo(t *testing.T) {
+	r, f := regionSetup(t, "hello")
+	if err := f.Buf().Insert(text.Pos{Line: 0, Col: 5}, []rune("!")); err != nil {
+		t.Fatalf("Insert: %v", err)
+	}
+	f.Buf().SetReadOnly(true)
+
+	for _, name := range []string{"undo", "redo"} {
+		if err := r.Run(name, f); !errors.Is(err, text.ErrReadOnly) {
+			t.Errorf("%s returned %v, want text.ErrReadOnly", name, err)
+		}
+	}
+	if got, want := f.Text(), "hello!"; got != want {
+		t.Errorf("text = %q, want %q", got, want)
+	}
+}
+
 func TestRedoRestoresAnUndoneChange(t *testing.T) {
 	r, f := regionSetup(t, "hello")
 	if err := f.Buf().Insert(text.Pos{Line: 0, Col: 5}, []rune("!")); err != nil {

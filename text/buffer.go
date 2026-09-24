@@ -5,6 +5,9 @@ import "errors"
 // ErrOutOfRange is returned when a Pos does not name a location in the buffer.
 var ErrOutOfRange = errors.New("text: position out of range")
 
+// ErrReadOnly is returned by an edit to a read-only buffer.
+var ErrReadOnly = errors.New("buffer is read-only")
+
 // Buffer is a sequence of lines plus the editing state that belongs to the
 // text itself rather than to any view of it.
 //
@@ -29,6 +32,11 @@ type Buffer struct {
 	rev       uint64
 	dirtyFrom int
 	lineDelta int
+
+	// readOnly refuses every edit. It is enforced here, in the two primitives,
+	// rather than by commands: sixty commands would each have to remember it,
+	// and the one that forgot would quietly corrupt a directory listing.
+	readOnly bool
 }
 
 // NewBuffer returns an empty buffer holding a single empty line.
@@ -115,6 +123,27 @@ func (b *Buffer) Modified() bool { return b.undo.modified() }
 // current undo position, so undoing back to it clears the flag again.
 func (b *Buffer) SetModified(m bool) { b.undo.setModified(m) }
 
+// ReadOnly reports whether the buffer refuses edits.
+func (b *Buffer) ReadOnly() bool { return b.readOnly }
+
+// SetReadOnly makes the buffer refuse or accept edits. Undo is refused too while
+// it is set, since undoing is editing.
+func (b *Buffer) SetReadOnly(ro bool) { b.readOnly = ro }
+
+// Regenerate replaces the whole text of a buffer whose contents are generated,
+// such as a directory listing. It works on a read-only buffer, leaves it
+// unmodified, and discards the undo history: undoing back to an old listing
+// would show files that are no longer there.
+func (b *Buffer) Regenerate(rs []rune) {
+	ro := b.readOnly
+	b.readOnly = false
+	// Neither can fail: both positions come from the buffer itself.
+	_ = b.Delete(Pos{}, b.End())
+	_ = b.Insert(Pos{}, rs)
+	b.readOnly = ro
+	b.undo = newUndoLog()
+}
+
 // End returns the position just past the last rune in the buffer.
 func (b *Buffer) End() Pos {
 	last := len(b.lines) - 1
@@ -174,6 +203,9 @@ func (b *Buffer) String() string { return string(b.Text(Pos{0, 0}, b.End())) }
 // Insert inserts rs at at, splitting the line at any newline in rs.
 // It is one of the two primitives every edit composes from.
 func (b *Buffer) Insert(at Pos, rs []rune) error {
+	if b.readOnly {
+		return ErrReadOnly
+	}
 	if err := b.checkPos(at); err != nil {
 		return err
 	}
@@ -187,6 +219,9 @@ func (b *Buffer) Insert(at Pos, rs []rune) error {
 // Delete removes the runes between from and to, joining lines as needed.
 // The endpoints may be given in either order. It is the other primitive.
 func (b *Buffer) Delete(from, to Pos) error {
+	if b.readOnly {
+		return ErrReadOnly
+	}
 	from, to = OrderPos(from, to)
 	if err := b.checkPos(from); err != nil {
 		return err
@@ -274,11 +309,23 @@ func (b *Buffer) deleteRaw(from, to Pos) ([]rune, error) {
 	return removed, nil
 }
 
-// Undo reverts the most recent edit, returning where point should land.
-func (b *Buffer) Undo() (Pos, bool) { return b.undo.undo(b) }
+// Undo reverts the most recent edit, returning where point should land. A
+// read-only buffer reports nothing to undo; callers that want to say why check
+// ReadOnly first.
+func (b *Buffer) Undo() (Pos, bool) {
+	if b.readOnly {
+		return Pos{}, false
+	}
+	return b.undo.undo(b)
+}
 
 // Redo reapplies the most recently undone edit, returning where point lands.
-func (b *Buffer) Redo() (Pos, bool) { return b.undo.redo(b) }
+func (b *Buffer) Redo() (Pos, bool) {
+	if b.readOnly {
+		return Pos{}, false
+	}
+	return b.undo.redo(b)
+}
 
 // BreakUndo ends the current undo unit, so subsequent typing starts a new one.
 // The editor calls it on movement, on any non-inserting command, and on save.

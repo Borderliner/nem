@@ -282,6 +282,11 @@ func undoOrRedo(e Env, backward bool) error {
 	}
 
 	b, w := e.Buf(), e.Win()
+	// Said outright: the buffer's own Undo just reports nothing to undo, and
+	// "No further undo information" over a listing with history would mislead.
+	if b.ReadOnly() {
+		return text.ErrReadOnly
+	}
 	for range n {
 		var (
 			pos text.Pos

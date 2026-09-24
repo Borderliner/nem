@@ -1,6 +1,9 @@
 package text
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func bufFrom(s string) *Buffer {
 	b := NewBuffer()
@@ -257,5 +260,62 @@ func TestSetPath(t *testing.T) {
 	b.SetPath("/tmp/x.txt")
 	if b.Path() != "/tmp/x.txt" {
 		t.Errorf("Path() = %q, want /tmp/x.txt", b.Path())
+	}
+}
+
+// A read-only buffer refuses both primitives, and undo, and is left exactly as
+// it was: a listing that half-applied a keystroke would no longer describe the
+// directory it claims to.
+func TestReadOnlyBufferRefusesEdits(t *testing.T) {
+	b := NewBuffer()
+	if err := b.Insert(Pos{}, []rune("one\ntwo")); err != nil {
+		t.Fatal(err)
+	}
+	b.BreakUndo()
+	b.SetReadOnly(true)
+
+	if err := b.Insert(Pos{0, 1}, []rune("x")); !errors.Is(err, ErrReadOnly) {
+		t.Errorf("Insert returned %v, want ErrReadOnly", err)
+	}
+	if err := b.Delete(Pos{0, 0}, Pos{1, 0}); !errors.Is(err, ErrReadOnly) {
+		t.Errorf("Delete returned %v, want ErrReadOnly", err)
+	}
+	if _, ok := b.Undo(); ok {
+		t.Error("Undo reported success in a read-only buffer")
+	}
+	if got := b.String(); got != "one\ntwo" {
+		t.Errorf("text = %q, want it untouched", got)
+	}
+
+	// Lifting it restores editing, and the history from before is intact.
+	b.SetReadOnly(false)
+	if _, ok := b.Undo(); !ok || b.String() != "" {
+		t.Errorf("after SetReadOnly(false), undo gave %q, want the insert undone", b.String())
+	}
+}
+
+// Regenerate rewrites a read-only buffer without lifting the flag, and leaves
+// nothing to undo and nothing unsaved.
+func TestRegenerateReplacesGeneratedText(t *testing.T) {
+	b := NewBuffer()
+	if err := b.Insert(Pos{}, []rune("old listing")); err != nil {
+		t.Fatal(err)
+	}
+	b.SetReadOnly(true)
+
+	b.Regenerate([]rune("new\nlisting"))
+
+	if got := b.String(); got != "new\nlisting" {
+		t.Errorf("text = %q, want the new listing", got)
+	}
+	if !b.ReadOnly() {
+		t.Error("Regenerate lifted the read-only flag")
+	}
+	if b.Modified() {
+		t.Error("a regenerated buffer reports unsaved changes")
+	}
+	b.SetReadOnly(false)
+	if _, ok := b.Undo(); ok {
+		t.Errorf("undo after Regenerate restored %q; the history should be gone", b.String())
 	}
 }
