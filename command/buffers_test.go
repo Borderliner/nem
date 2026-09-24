@@ -221,6 +221,40 @@ func TestFilenameCompletionListsMatchingEntries(t *testing.T) {
 	}
 }
 
+// Dotfiles come after everything else. With nothing typed RET takes the first
+// candidate, and a plain name sort put .git/ there in every repository.
+func TestFilenameCompletionListsHiddenEntriesLast(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{".env", "Makefile", "main.go"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range []string{".git", "cmd"} {
+		if err := os.Mkdir(filepath.Join(dir, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	e := newEnv()
+	e.Replies = []string{""}
+	mustRun(t, e, "find-file")
+	complete := lastOpts(t, e).Complete
+
+	sep := string(filepath.Separator)
+	in := dir + sep
+	want := []string{
+		in + "Makefile",
+		in + "cmd" + sep,
+		in + "main.go",
+		in + ".env",
+		in + ".git" + sep,
+	}
+	if got := complete(in); !slices.Equal(got, want) {
+		t.Errorf("listing gave\n  %q\nwant\n  %q", got, want)
+	}
+}
+
 // RET on a directory walks into it at the filename prompts. The hook is judged
 // against the candidates completion really returns, where a directory keeps
 // its trailing separator, rather than against strings written to suit it.

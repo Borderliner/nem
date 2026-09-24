@@ -463,6 +463,15 @@ func completeFilename(prefix string) []string {
 	// candidates exist, and the minibuffer's fuzzy ranking narrows them. The
 	// split is still needed to know which directory to read.
 	_ = base
+	// Hidden entries last. RET takes the first candidate when nothing has been
+	// typed, and sorted by name that was .git/ in nearly every repository.
+	sort.Slice(entries, func(i, j int) bool {
+		a, b := entries[i].Name(), entries[j].Name()
+		if ha, hb := isHidden(a), isHidden(b); ha != hb {
+			return hb
+		}
+		return a < b
+	})
 	var out []string
 	for _, ent := range entries {
 		full := dir + ent.Name()
@@ -471,9 +480,11 @@ func completeFilename(prefix string) []string {
 		}
 		out = append(out, full)
 	}
-	sort.Strings(out)
 	return out
 }
+
+// isHidden reports whether a directory entry is a dotfile.
+func isHidden(name string) bool { return strings.HasPrefix(name, ".") }
 
 // isDirCandidate reports whether a completeFilename candidate is a directory,
 // which completeFilename marks with a trailing separator. It is the Descend
