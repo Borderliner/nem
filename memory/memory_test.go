@@ -108,3 +108,31 @@ func TestLimits(t *testing.T) {
 		t.Error("the oldest place was kept over newer ones")
 	}
 }
+
+// Projects are kept most recent first and merged like the recent files, and
+// one forgotten here is not brought back by another session's copy.
+func TestProjects(t *testing.T) {
+	dir := t.TempDir()
+	a, _ := Load(dir)
+	a.AddProject("/p")
+	a.AddProject("/q")
+	if err := a.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	b, _ := Load(dir)
+	b.AddProject("/r")
+	b.ForgetProject("/q")
+	if err := b.Save(); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := Load(dir)
+	if !slices.Equal(got.Projects, []string{"/r", "/p"}) {
+		t.Errorf("projects %q, want /r then /p, without the forgotten /q", got.Projects)
+	}
+
+	got.AddProject("/q")
+	if !slices.Equal(got.Projects, []string{"/q", "/r", "/p"}) {
+		t.Errorf("projects %q after adding /q back", got.Projects)
+	}
+}

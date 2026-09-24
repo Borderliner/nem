@@ -1,6 +1,6 @@
 // Package memory is what nem remembers from one session to the next: what was
-// typed at each kind of prompt, the files opened most recently, and where
-// point was in each file when it was left.
+// typed at each kind of prompt, the files opened most recently, where point
+// was in each file when it was left, and the projects worked in.
 //
 // It is one small JSON file in the state directory, beside the backups. Saving
 // merges with what is on disk rather than overwriting it, so two nem windows
@@ -23,9 +23,10 @@ const FileName = "memory.json"
 // How much is kept. A history longer than this is not scrolled through; a
 // place in a file untouched for this many other files is not missed.
 const (
-	historySize = 100
-	recentSize  = 200
-	placesSize  = 1000
+	historySize  = 100
+	recentSize   = 200
+	placesSize   = 1000
+	projectsSize = 100
 )
 
 // Place is where point was in a file, and the first line on screen.
@@ -43,9 +44,14 @@ type Place struct {
 type Memory struct {
 	path string
 
-	History map[string][]string `json:"history"`
-	Recent  []string            `json:"recent"`
-	Places  map[string]Place    `json:"places"`
+	History  map[string][]string `json:"history"`
+	Recent   []string            `json:"recent"`
+	Places   map[string]Place    `json:"places"`
+	Projects []string            `json:"projects"`
+
+	// forgotten are projects forgotten this session, kept so that saving
+	// does not bring them back from the copy on disk.
+	forgotten map[string]bool
 }
 
 // Load reads the memory kept in dir, or starts an empty one there if there is
@@ -62,7 +68,7 @@ func Load(dir string) (*Memory, error) {
 		_ = os.Rename(m.path, m.path+".bad")
 		return m, nil
 	}
-	m.History, m.Recent, m.Places = disk.History, disk.Recent, disk.Places
+	m.History, m.Recent, m.Places, m.Projects = disk.History, disk.Recent, disk.Places, disk.Projects
 	return m, nil
 }
 
@@ -96,6 +102,21 @@ func (m *Memory) HistoryOf(kind string) []string { return m.History[kind] }
 // AddRecent records path as the most recently opened file.
 func (m *Memory) AddRecent(path string) {
 	m.Recent = pushFront(m.Recent, path, recentSize)
+}
+
+// AddProject records root as the project most recently worked in.
+func (m *Memory) AddProject(root string) {
+	m.Projects = pushFront(m.Projects, root, projectsSize)
+	delete(m.forgotten, root)
+}
+
+// ForgetProject takes root off the known projects.
+func (m *Memory) ForgetProject(root string) {
+	m.Projects = slices.DeleteFunc(m.Projects, func(p string) bool { return p == root })
+	if m.forgotten == nil {
+		m.forgotten = map[string]bool{}
+	}
+	m.forgotten[root] = true
 }
 
 // SetPlace records where point was in the file at path.
@@ -138,6 +159,11 @@ func (m *Memory) Save() error {
 		for _, p := range disk.Recent {
 			if !slices.Contains(m.Recent, p) {
 				m.Recent = appendCapped(m.Recent, p, recentSize)
+			}
+		}
+		for _, p := range disk.Projects {
+			if !slices.Contains(m.Projects, p) && !m.forgotten[p] {
+				m.Projects = appendCapped(m.Projects, p, projectsSize)
 			}
 		}
 		for path, p := range disk.Places {
