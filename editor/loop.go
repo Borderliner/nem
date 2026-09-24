@@ -496,9 +496,7 @@ func (e *Editor) frame() ui.Frame {
 	// which-key is another. They are mutually exclusive in practice, since
 	// which-key does not arm while a prompt is open.
 	e.decorateWithCompletion(&f)
-	if p := e.whichKeyPanel(); p != nil {
-		f.Panels = append(f.Panels, *p)
-	}
+	e.decorateWithWhichKey(&f)
 	if p, ok := e.startupPanel(); ok {
 		f.Panels = append(f.Panels, p)
 	}

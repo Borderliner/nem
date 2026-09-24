@@ -56,7 +56,7 @@ func TestWhichKeyDoesNotArmOrShowDuringAPrompt(t *testing.T) {
 		t.Error("armed while a prompt was active; a panel must not cover a prompt")
 	}
 	e.fireWhichKey()
-	if e.whichKeyPanel() != nil {
+	if e.wk.view != nil {
 		t.Error("built a panel while a prompt was active")
 	}
 }
@@ -69,7 +69,7 @@ func TestWhichKeyDelayZeroNeverArmsOrShows(t *testing.T) {
 		t.Error("armed with the delay disabled")
 	}
 	e.fireWhichKey()
-	if e.whichKeyPanel() != nil {
+	if e.wk.view != nil {
 		t.Error("built a panel with the delay disabled")
 	}
 }
@@ -85,7 +85,7 @@ func TestWhichKeyDoesNotReArmWhileShowing(t *testing.T) {
 	e, _ := newTestEditor(t, "hello")
 	press(t, e, "C-x")
 	e.fireWhichKey()
-	if e.whichKeyPanel() == nil {
+	if e.wk.view == nil {
 		t.Fatal("setup: no panel")
 	}
 	if e.whichKeyArmed() {
@@ -108,12 +108,12 @@ func TestWhichKeyArmsAfterAUniversalArgument(t *testing.T) {
 
 func wkText(t *testing.T, e *Editor) string {
 	t.Helper()
-	p := e.whichKeyPanel()
-	if p == nil {
+	v := e.wk.view
+	if v == nil {
 		t.Fatal("no which-key panel")
 	}
 	var b strings.Builder
-	for _, ln := range p.Lines {
+	for _, ln := range v.lines {
 		b.WriteString(ln.Text)
 		b.WriteByte('\n')
 	}
@@ -133,13 +133,21 @@ func TestWhichKeyPanelListsContinuations(t *testing.T) {
 	}
 }
 
+// The popup names the pending sequence in its title; at the bottom the echo
+// row above the rows already says it.
 func TestWhichKeyPanelTitleNamesThePendingSequence(t *testing.T) {
 	e, _ := newTestEditor(t, "hello")
+	e.SetCompletionStyle("popup")
 	press(t, e, "C-x")
 	e.fireWhichKey()
-	if got := e.whichKeyPanel().Title; got != "C-x" {
+	if got := e.wk.view.popup.Title; got != "C-x" {
 		t.Errorf("title = %q, want %q", got, "C-x")
 	}
+
+	e2, _ := newTestEditor(t, "hello")
+	press(t, e2, "C-x")
+	e2.fireWhichKey()
+	wantEcho(t, e2, "C-x-")
 }
 
 // A sub-prefix cannot show a command name, so it must announce that it leads
@@ -181,29 +189,81 @@ func TestWhichKeyNamesLeafCommands(t *testing.T) {
 }
 
 func TestWhichKeyPanelFitsTheFrame(t *testing.T) {
-	for _, size := range [][2]int{{80, 24}, {40, 12}, {200, 60}, {20, 6}, {8, 4}} {
-		scr := tcell.NewSimulationScreen("UTF-8")
-		if err := scr.Init(); err != nil {
-			t.Fatalf("init: %v", err)
-		}
-		scr.SetSize(size[0], size[1])
-		e, err := New(scr)
-		if err != nil {
+	for _, style := range []string{"bottom", "popup"} {
+		for _, size := range [][2]int{{80, 24}, {40, 12}, {200, 60}, {20, 6}, {8, 4}} {
+			scr := tcell.NewSimulationScreen("UTF-8")
+			if err := scr.Init(); err != nil {
+				t.Fatalf("init: %v", err)
+			}
+			scr.SetSize(size[0], size[1])
+			e, err := New(scr)
+			if err != nil {
+				scr.Fini()
+				t.Fatalf("New: %v", err)
+			}
+			e.SetCompletionStyle(style)
+			press(t, e, "C-x")
+			e.fireWhichKey()
+			switch v := e.wk.view; {
+			case v == nil:
+			case v.popup != nil:
+				r := v.popup.Rect
+				if r.X < 0 || r.Y < 0 || r.X+r.W > size[0] || r.Y+r.H > size[1]-1 {
+					t.Errorf("popup %dx%d: panel %v escapes the frame (echo row excluded)", size[0], size[1], r)
+				}
+				if len(v.lines) > r.H-2 {
+					t.Errorf("popup %dx%d: %d lines into a %d-row interior", size[0], size[1], len(v.lines), r.H-2)
+				}
+			default:
+				// Under the echo row, leaving the windows a text row and a
+				// modeline. On a screen narrower than one entry the renderer
+				// clips the row; on any real one it fits.
+				if len(v.lines) > size[1]-3 {
+					t.Errorf("bottom %dx%d: %d rows leave the windows no room", size[0], size[1], len(v.lines))
+				}
+				for _, ln := range v.lines {
+					if w := wkWidth(ln.Text); w > size[0] && size[0] >= 40 {
+						t.Errorf("bottom %dx%d: a row is %d wide", size[0], size[1], w)
+					}
+				}
+			}
 			scr.Fini()
-			t.Fatalf("New: %v", err)
 		}
-		press(t, e, "C-x")
-		e.fireWhichKey()
-		if p := e.whichKeyPanel(); p != nil {
-			r := p.Rect
-			if r.X < 0 || r.Y < 0 || r.X+r.W > size[0] || r.Y+r.H > size[1]-1 {
-				t.Errorf("%dx%d: panel %v escapes the frame (echo row excluded)", size[0], size[1], r)
-			}
-			if len(p.Lines) > r.H-2 {
-				t.Errorf("%dx%d: %d lines into a %d-row interior", size[0], size[1], len(p.Lines), r.H-2)
-			}
+	}
+}
+
+// At the bottom the rows go under the echo row, as M-x's candidates do: the
+// windows shrink, their modelines stay whole, and the rows span the width.
+// Keys and commands are coloured, as emacs's which-key colours them.
+func TestWhichKeyAtTheBottom(t *testing.T) {
+	e, scr := newTestEditor(t, "hello")
+	press(t, e, "C-x")
+	e.fireWhichKey()
+	e.Redraw()
+
+	n := len(e.wk.view.lines)
+	echoY := 24 - 1 - n
+	if got := screenRow(t, scr, echoY); !strings.HasPrefix(got, "C-x-") {
+		t.Errorf("row %d = %q, want the pending prefix above the keys", echoY, got)
+	}
+	if got := screenRow(t, scr, echoY-1); !strings.Contains(got, "*scratch*") {
+		t.Errorf("row above the echo = %q, want the window's modeline", got)
+	}
+	body := strings.Join([]string{screenRow(t, scr, echoY+1), screenRow(t, scr, 23)}, "\n")
+	if !strings.Contains(body, "→") {
+		t.Errorf("the key rows do not read key → command:\n%s", body)
+	}
+	for _, ln := range e.wk.view.lines {
+		if len(ln.Spans) == 0 {
+			t.Errorf("row %q is uncoloured", ln.Text)
 		}
-		scr.Fini()
+	}
+}
+
+// The default delay is emacs's which-key's: a second.
+func TestWhichKeyWaitsASecond(t *testing.T) {
+	if whichKeyDefaultDelay != time.Second {
+		t.Errorf("default delay %v, want 1s", whichKeyDefaultDelay)
 	}
 }
 
@@ -216,12 +276,12 @@ func TestAnyKeyDismissesThePanelAndIsStillProcessed(t *testing.T) {
 	e, _ := newTestEditor(t, "hello")
 	press(t, e, "C-x")
 	e.fireWhichKey()
-	if e.whichKeyPanel() == nil {
+	if e.wk.view == nil {
 		t.Fatal("setup: no panel")
 	}
 
 	press(t, e, "u") // C-x u is undo
-	if e.whichKeyPanel() != nil {
+	if e.wk.view != nil {
 		t.Error("panel still showing after a key")
 	}
 	if got := e.lastCmd; got != "undo" {
@@ -235,7 +295,7 @@ func TestQuitKeyClearsThePrefixAndThePanel(t *testing.T) {
 	e.fireWhichKey()
 	press(t, e, "C-g")
 
-	if e.whichKeyPanel() != nil {
+	if e.wk.view != nil {
 		t.Error("panel still showing after C-g")
 	}
 	if len(e.pending) != 0 {
@@ -248,7 +308,7 @@ func TestFireIsANoOpOnceThePrefixIsGone(t *testing.T) {
 	e, _ := newTestEditor(t, "hello")
 	press(t, e, "C-x", "u") // completes; pending is empty again
 	e.fireWhichKey()
-	if e.whichKeyPanel() != nil {
+	if e.wk.view != nil {
 		t.Error("built a panel with no pending prefix")
 	}
 }

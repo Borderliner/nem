@@ -107,7 +107,9 @@ over every command by name, and `C-u` takes numeric and negative arguments.
 undo unit; a new edit after undoing discards the redo branch.
 
 **Help** — `<f1> b` lists every binding, `<f1> k` describes a key. Pause on a
-prefix like `C-x` and a panel shows everything that can follow it.
+prefix like `C-x` for a second and everything that can follow it is listed
+where completions go - at the bottom, or in the centred panel with
+`completion-style` set to `"popup"`.
 
 **Completion** — `M-x`, `C-x C-f` and `C-x b` list their candidates under the
 prompt at the bottom of the screen, as Vertico does, and filter them as you

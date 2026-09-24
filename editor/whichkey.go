@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Borderliner/nem/keymap"
+	"github.com/Borderliner/nem/syntax"
 	"github.com/Borderliner/nem/text"
 	"github.com/Borderliner/nem/ui"
 	"github.com/Borderliner/nem/view"
@@ -26,12 +28,13 @@ import (
 // whether and what to show lives here, where it can be tested without one.
 
 // whichKeyDefaultDelay is how long a prefix must sit pending before the panel
-// appears. Long enough that deliberate two-key sequences never trigger it,
-// short enough that a pause means the panel arrives before you go looking.
-const whichKeyDefaultDelay = 300 * time.Millisecond
+// appears. A second, as emacs's which-key waits: long enough that a pause to
+// think about the second key does not throw a panel at you, short enough that
+// it arrives when you are plainly stuck.
+const whichKeyDefaultDelay = time.Second
 
 // whichKeyGutter separates columns in a multi-column panel.
-const whichKeyGutter = 2
+const whichKeyGutter = 3
 
 // whichKeyState is which-key's whole state. It is a struct rather than loose
 // fields so that Editor carries one field for the feature.
@@ -43,13 +46,22 @@ type whichKeyState struct {
 	delay    time.Duration
 	delaySet bool
 
-	// panel is non-nil exactly while the panel is showing.
-	panel *ui.Panel
+	// view is non-nil exactly while the panel is showing.
+	view *whichKeyView
 
 	// shows counts panels built. It exists so a test driving the real event loop
 	// can prove the timer is wired without reading editor state while the loop
 	// owns it.
 	shows int
+}
+
+// whichKeyView is the panel as laid out when it was shown: the rows, and, in
+// the popup style, the box they are drawn in. With no box the rows go at the
+// foot of the screen, under the echo row that already says "C-x-", where the
+// bottom completion style puts M-x's candidates.
+type whichKeyView struct {
+	lines []ui.PanelLine
+	popup *ui.Panel
 }
 
 // SetWhichKeyDelay sets how long a prefix sits pending before the panel
@@ -78,15 +90,25 @@ func (e *Editor) whichKeyArmed() bool {
 	return e.whichKeyDelay() > 0 &&
 		len(e.pending) > 0 &&
 		e.mini == nil &&
-		e.wk.panel == nil
+		e.wk.view == nil
 }
 
 // dismissWhichKey hides the panel. Called for every key, before the key is
 // resolved, so dismissal never costs the keystroke that caused it.
-func (e *Editor) dismissWhichKey() { e.wk.panel = nil }
+func (e *Editor) dismissWhichKey() { e.wk.view = nil }
 
-// whichKeyPanel is the panel to draw, or nil.
-func (e *Editor) whichKeyPanel() *ui.Panel { return e.wk.panel }
+// decorateWithWhichKey adds the panel to a frame, in whichever style it was
+// laid out for.
+func (e *Editor) decorateWithWhichKey(f *ui.Frame) {
+	v := e.wk.view
+	switch {
+	case v == nil:
+	case v.popup != nil:
+		f.Panels = append(f.Panels, *v.popup)
+	default:
+		f.MiniRows = v.lines
+	}
+}
 
 // fireWhichKey builds the panel, and is what the loop calls when the timer
 // expires. It re-checks its preconditions rather than trusting them: the timer
@@ -100,38 +122,45 @@ func (e *Editor) fireWhichKey() {
 	if len(cs) == 0 {
 		return
 	}
-	p, ok := e.buildWhichKeyPanel(cs)
+	v, ok := e.buildWhichKey(cs)
 	if !ok {
 		return
 	}
-	e.wk.panel = &p
+	e.wk.view = v
 	e.wk.shows++
 }
 
-// buildWhichKeyPanel lays the continuations out and places the panel.
+// buildWhichKey lays the continuations out for the completion style in force:
+// full width at the foot of the screen, or in a box in the middle of it.
 //
-// Rows are laid in columns when the frame allows, because C-x has fifteen
-// continuations and a single tall column is unreadable in a short frame - and in
-// a frame short enough to force truncation, columns are what decide whether the
-// list fits at all.
-func (e *Editor) buildWhichKeyPanel(cs []keymap.Continuation) (ui.Panel, bool) {
+// Rows are laid in columns when there is room, because C-x has twenty
+// continuations and a single tall column is unreadable in a short frame - and
+// in a frame short enough to force truncation, columns are what decide
+// whether the list fits at all.
+func (e *Editor) buildWhichKey(cs []keymap.Continuation) (*whichKeyView, bool) {
 	if e.scr == nil {
-		return ui.Panel{}, false
+		return nil, false
 	}
 	sw, sh := e.scr.Size()
-	// The echo row is excluded here rather than guarded downstream, which is
-	// what makes "never cover the echo row" reduce to "stay inside Frame".
-	frame := view.Rect{W: sw, H: sh - 1}
+	bottom := e.comp.style == completionBottom
+
+	// At the bottom the rows take the full width, and at most half the height
+	// so the buffer stays in view; the windows always keep a text row and a
+	// modeline. In the popup the border costs two of each, and the echo row is
+	// never covered.
+	width, maxRows := sw-2, sh-1-2
+	if bottom {
+		width, maxRows = sw, min(sh-1-2, max(3, sh/2))
+	}
 
 	cells := whichKeyCells(cs)
 	cellW := 0
-	for _, s := range cells {
-		cellW = max(cellW, wkWidth(s))
+	for _, c := range cells {
+		cellW = max(cellW, wkWidth(c.text))
 	}
-
-	cols, rows := whichKeyGrid(len(cells), cellW, frame)
+	cols, rows := whichKeyGrid(len(cells), cellW, width, maxRows)
 	if cols == 0 || rows == 0 {
-		return ui.Panel{}, false
+		return nil, false
 	}
 
 	// A frame too short for every continuation drops some, and dropping them
@@ -146,6 +175,7 @@ func (e *Editor) buildWhichKeyPanel(cs []keymap.Continuation) (ui.Panel, bool) {
 
 	lines := make([]ui.PanelLine, 0, rows+1)
 	for r := 0; r < rows; r++ {
+		var ln ui.PanelLine
 		var b strings.Builder
 		for c := 0; c < cols; c++ {
 			// Column-major fill, as which-key does: reading down a column keeps
@@ -157,79 +187,105 @@ func (e *Editor) buildWhichKeyPanel(cs []keymap.Continuation) (ui.Panel, bool) {
 			if c > 0 {
 				b.WriteString(strings.Repeat(" ", whichKeyGutter))
 			}
-			b.WriteString(wkPad(cells[i], cellW))
+			at := utf8.RuneCountInString(b.String())
+			for _, sp := range cells[i].spans {
+				ln.Spans = append(ln.Spans, syntax.Span{Start: at + sp.Start, End: at + sp.End, Class: sp.Class})
+			}
+			b.WriteString(wkPad(cells[i].text, cellW))
 		}
-		if s := strings.TrimRight(b.String(), " "); s != "" {
-			lines = append(lines, ui.PanelLine{Text: s})
+		if ln.Text = strings.TrimRight(b.String(), " "); ln.Text != "" {
+			lines = append(lines, ln)
 		}
 	}
-
 	if dropped > 0 {
-		lines = append(lines, ui.PanelLine{Text: fmt.Sprintf("… %d more", dropped)})
+		more := fmt.Sprintf("… %d more", dropped)
+		lines = append(lines, ui.PanelLine{
+			Text:  more,
+			Spans: []syntax.Span{{Start: 0, End: utf8.RuneCountInString(more), Class: syntax.Comment}},
+		})
 	}
 
-	wantW := cols*cellW + (cols-1)*whichKeyGutter + 2 // +2 for the border
+	if bottom {
+		// Only a frame too short to spare a row for it can overflow here, and
+		// there the list is cut rather than the windows squeezed out.
+		return &whichKeyView{lines: lines[:min(len(lines), maxRows)]}, true
+	}
 	rect, ok := view.PlacePanel(view.PanelReq{
-		W: wantW, H: len(lines) + 2,
-		// Bottom, not at point: which-key is describing the keyboard rather than
-		// the text, and a box over the line you are editing is in the way.
-		Anchor: view.AnchorBottom,
-		Frame:  frame,
+		W:      cols*cellW + (cols-1)*whichKeyGutter + 2, // +2 for the border
+		H:      len(lines) + 2,
+		Anchor: view.AnchorCenter,
+		Frame:  view.Rect{W: sw, H: sh - 1},
 	})
 	if !ok {
-		return ui.Panel{}, false
+		return nil, false
 	}
-
 	// PlacePanel may have shrunk the request, and drawPanel silently drops rows
 	// past the interior. Trim here instead so the panel reports what it shows.
 	if n := rect.H - 2; n >= 0 && len(lines) > n {
 		lines = lines[:n]
 	}
-	return ui.Panel{Rect: rect, Title: keymap.SpecString(e.pending), Lines: lines}, true
+	return &whichKeyView{
+		lines: lines,
+		popup: &ui.Panel{Rect: rect, Title: keymap.SpecString(e.pending), Lines: lines},
+	}, true
 }
 
 // whichKeyGrid chooses a column count and row count for n cells of cellW
-// columns each, within frame.
+// columns each, in width columns and at most maxRows rows.
 //
 // Width sets the ceiling on columns; height sets the floor, since more columns
 // is how a long list is made short enough to fit. Where the two conflict the
 // list is truncated, which is a better degradation than not appearing.
-func whichKeyGrid(n, cellW int, frame view.Rect) (cols, rows int) {
-	if n == 0 || cellW <= 0 {
+func whichKeyGrid(n, cellW, width, maxRows int) (cols, rows int) {
+	if n == 0 || cellW <= 0 || width < 1 || maxRows < 1 {
 		return 0, 0
 	}
-	interiorW := frame.W - 2
-	availRows := frame.H - 2
-	if interiorW < 1 || availRows < 1 {
-		return 0, 0
-	}
-
-	maxCols := (interiorW + whichKeyGutter) / (cellW + whichKeyGutter)
+	maxCols := (width + whichKeyGutter) / (cellW + whichKeyGutter)
 	if maxCols < 1 {
 		maxCols = 1 // one column, truncated by the renderer, beats no panel
 	}
-	needCols := (n + availRows - 1) / availRows
+	needCols := (n + maxRows - 1) / maxRows
 	cols = min(max(needCols, 1), maxCols)
 	rows = (n + cols - 1) / cols
-	return cols, min(rows, availRows)
+	return cols, min(rows, maxRows)
 }
 
-// whichKeyCells renders one label per continuation, key column padded so the
-// descriptions line up.
-func whichKeyCells(cs []keymap.Continuation) []string {
+// wkCell is one continuation's label and how to colour it.
+type wkCell struct {
+	text  string
+	spans []syntax.Span
+}
+
+// whichKeyCells renders one label per continuation - the key, an arrow, and
+// what it runs - with the key column padded so the arrows line up.
+//
+// Coloured as emacs's which-key colours them: the key as a constant, the
+// arrow quiet, a command as a function, and a prefix, which leads to more
+// keys rather than running anything, as a keyword.
+func whichKeyCells(cs []keymap.Continuation) []wkCell {
 	keyW := 0
 	for _, c := range cs {
 		keyW = max(keyW, wkWidth(c.Key.String()))
 	}
-	out := make([]string, 0, len(cs))
+	out := make([]wkCell, 0, len(cs))
 	for _, c := range cs {
-		desc := c.Command
+		key := c.Key.String()
+		desc, class := c.Command, syntax.Function
 		if c.IsPrefix {
 			// A prefix has no command to name, so it reports that it leads
 			// somewhere and how much is reachable beneath it.
-			desc = fmt.Sprintf("+prefix (%d)", c.Count)
+			desc, class = fmt.Sprintf("+prefix (%d)", c.Count), syntax.Keyword
 		}
-		out = append(out, wkPad(c.Key.String(), keyW)+"  "+desc)
+		padded := wkPad(key, keyW)
+		arrow := utf8.RuneCountInString(padded) + 1
+		out = append(out, wkCell{
+			text: padded + " → " + desc,
+			spans: []syntax.Span{
+				{Start: 0, End: utf8.RuneCountInString(key), Class: syntax.Constant},
+				{Start: arrow, End: arrow + 1, Class: syntax.Comment},
+				{Start: arrow + 2, End: arrow + 2 + utf8.RuneCountInString(desc), Class: class},
+			},
+		})
 	}
 	return out
 }

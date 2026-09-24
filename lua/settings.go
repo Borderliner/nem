@@ -82,7 +82,7 @@ func DefaultSettings() Settings {
 	return Settings{
 		TabWidth: 8, ScrollMargin: 2, UndoStyle: "linear",
 		CompletionStyle: "bottom", CompletionRows: 10,
-		WhichKeyDelay: 300, AutosaveIdle: 30,
+		WhichKeyDelay: 1000, AutosaveIdle: 30,
 		Backup: true, Clipboard: "osc52", LineNumbers: true,
 		DeleteSelection: true,
 		Syntax:          true, Theme: "auto",

@@ -72,8 +72,9 @@ nem.set("completion-style", "bottom") -- "bottom" (emacs/Vertico) or "popup" (ce
 nem.set("completion-rows", 10)        -- candidates visible at once; default 10
 
 -- Discovery
-nem.set("which-key-delay", 300)  -- ms a prefix waits before listing what follows;
-                                 -- default 300, 0 disables
+nem.set("which-key-delay", 1000) -- ms a prefix waits before listing what follows,
+                                 -- where completion-style puts its list;
+                                 -- default 1000, 0 disables
 
 -- Safety
 nem.set("autosave-idle", 30)     -- seconds of idleness before autosaving; 0 disables
