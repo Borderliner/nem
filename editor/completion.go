@@ -2,6 +2,7 @@ package editor
 
 import (
 	"fmt"
+	"unicode/utf8"
 
 	"github.com/Borderliner/nem/command"
 	"github.com/Borderliner/nem/fuzzy"
@@ -81,7 +82,7 @@ func newCompletion(f command.CompleteFunc, input string) *completion {
 // keeps the two in agreement: what is highlighted is what RET takes, and C-n
 // off the exact match is still honoured.
 func (c *completion) refresh(input string) {
-	c.ranked = fuzzy.Rank(input, c.complete(input))
+	c.ranked = rankPastSharedPrefix(input, c.complete(input))
 	c.sel, c.top = 0, 0
 	for i, r := range c.ranked {
 		if r.Candidate == input {
@@ -90,6 +91,58 @@ func (c *completion) refresh(input string) {
 			break
 		}
 	}
+}
+
+// rankPastSharedPrefix ranks cands against input, leaving out the longest
+// prefix of input that every candidate also begins with.
+//
+// Such a prefix says nothing about which candidate is wanted - at find-file it
+// is the directory being listed - but the scorer would still weigh it, and it
+// breaks ties by length. So walking into a directory highlighted its shortest
+// entry, a dotfile as often as not, when RET should find the first. Ranked on
+// what follows it, a directory just entered keeps its listing order, as a
+// prompt does before the first keystroke. Which candidates match is unchanged:
+// the prefix is literally identical, so it always matches in place.
+func rankPastSharedPrefix(input string, cands []string) []fuzzy.Ranked {
+	n := sharedPrefixLen(input, cands)
+	if n == 0 {
+		return fuzzy.Rank(input, cands)
+	}
+	tails := make([]string, len(cands))
+	for i, cand := range cands {
+		tails[i] = cand[n:]
+	}
+	ranked := fuzzy.Rank(input[n:], tails)
+	head, shift := input[:n], utf8.RuneCountInString(input[:n])
+	for i := range ranked {
+		ranked[i].Candidate = head + ranked[i].Candidate
+		for j := range ranked[i].Match.Indices {
+			ranked[i].Match.Indices[j] += shift
+		}
+	}
+	return ranked
+}
+
+// sharedPrefixLen returns the length in bytes of the longest prefix of input
+// that every candidate begins with, ending on a rune boundary.
+func sharedPrefixLen(input string, cands []string) int {
+	if len(cands) == 0 {
+		return 0
+	}
+	n := len(input)
+	for _, cand := range cands {
+		m := 0
+		for m < n && m < len(cand) && cand[m] == input[m] {
+			m++
+		}
+		if n = m; n == 0 {
+			return 0
+		}
+	}
+	for n < len(input) && n > 0 && !utf8.RuneStart(input[n]) {
+		n--
+	}
+	return n
 }
 
 // count reports how many candidates match.

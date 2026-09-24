@@ -78,6 +78,49 @@ func TestCompletionRanksAnExactMatchFirst(t *testing.T) {
 	}
 }
 
+// A prefix every candidate shares is not scored. At find-file it is the
+// directory just walked into, and scoring it tied every entry, so the length
+// tie-break highlighted the shortest name - often a dotfile - where the listing
+// order, the one RET is expected to take, puts alpha.txt first.
+func TestCompletionIgnoresAPrefixEveryCandidateShares(t *testing.T) {
+	c := from("d/alpha.txt", "d/b.go", "d/.x")
+
+	c.refresh("d/")
+	if got, _ := c.selected(); got != "d/alpha.txt" {
+		t.Errorf("input %q highlights %q (ranked %q), want the listing's first entry",
+			"d/", got, candidates(c))
+	}
+
+	// What follows the prefix still ranks, and the emphasised positions are
+	// still offsets into the whole candidate.
+	c.refresh("d/b")
+	if got := candidates(c); len(got) != 1 || got[0] != "d/b.go" {
+		t.Fatalf("input %q matched %q, want only d/b.go", "d/b", got)
+	}
+	if got := c.ranked[0].Match.Indices; len(got) != 1 || got[0] != 2 {
+		t.Errorf("d/b.go emphasises runes %v, want [2]", got)
+	}
+}
+
+// The shared prefix ends on a rune boundary: é and è share their first byte,
+// and cutting there would hand the scorer half a character.
+func TestSharedPrefixStopsOnARuneBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		input string
+		cands []string
+		want  int
+	}{
+		{"é", []string{"éa", "èb"}, 0},
+		{"xé", []string{"xéa", "xèb"}, 1},
+		{"ab", []string{"abc", "abd"}, 2},
+		{"ab", nil, 0},
+	} {
+		if got := sharedPrefixLen(tc.input, tc.cands); got != tc.want {
+			t.Errorf("sharedPrefixLen(%q, %q) = %d, want %d", tc.input, tc.cands, got, tc.want)
+		}
+	}
+}
+
 // The selection resets to the best match whenever the list changes, and can
 // never address a candidate that has stopped existing.
 func TestCompletionSelectionIsClampedWhenTheListShrinks(t *testing.T) {

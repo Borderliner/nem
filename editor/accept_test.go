@@ -246,3 +246,23 @@ func TestSwitchToBufferRetReturnsToThePreviousBuffer(t *testing.T) {
 		}
 	}
 }
+
+// RET straight after walking into a directory opens its first entry in listing
+// order. Before, every entry tied on the directory's own path and the shortest
+// name won, which put .hidden ahead of notes.txt.
+func TestFindFileRetAfterDescendingOpensTheFirstEntry(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, filepath.Join("sub", "notes.txt"), filepath.Join("sub", ".hidden"))
+
+	e := runKeys(t, "", func(scr tcell.SimulationScreen) {
+		time.Sleep(60 * time.Millisecond)
+		prompted(t, scr, findFileKeys, filepath.Join(dir, "su"), "RET")
+		time.Sleep(40 * time.Millisecond)
+		stroke(t, scr, "RET")
+	})
+
+	want := filepath.Join(dir, "sub", "notes.txt")
+	if got := e.Buf().Path(); got != want {
+		t.Errorf("visiting %q, want %q", got, want)
+	}
+}
