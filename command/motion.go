@@ -115,15 +115,23 @@ func charBackward(w *view.Window, n int) {
 
 // --- vertical motion --------------------------------------------------------
 
+// nextLine and previousLine report running into the end or the start of the
+// buffer, as emacs does, though point still goes as far as it can. The
+// sentinels are silent at the keyboard; what they are for is a keyboard macro,
+// which stops at them - C-u 0 F4 running a C-n macro to the last line.
 func nextLine(e Env) error {
 	n, _ := e.Arg()
-	lineDelta(e.Win(), n)
+	if !lineDelta(e.Win(), n) {
+		return ErrEndOfBuffer
+	}
 	return nil
 }
 
 func previousLine(e Env) error {
 	n, _ := e.Arg()
-	lineDelta(e.Win(), -n)
+	if !lineDelta(e.Win(), -n) {
+		return ErrBeginningOfBuffer
+	}
 	return nil
 }
 
@@ -131,20 +139,25 @@ func previousLine(e Env) error {
 // first if this is the start of a vertical run. RuneAt clamps a goal past the
 // end of a short line to that line's end without losing the goal itself, which
 // is what makes the descend-and-return case work.
-func lineDelta(w *view.Window, n int) {
+//
+// It reports whether point went all n lines, rather than stopping at an end
+// of the buffer.
+func lineDelta(w *view.Window, n int) bool {
 	b := w.Buf
 	if w.GoalCol == view.GoalColUnset {
 		w.GoalCol = b.Line(w.Pt.Line).DisplayCol(w.Pt.Col)
 	}
 	target := w.Pt.Line + n
+	full := true
 	if target < 0 {
-		target = 0
+		target, full = 0, false
 	}
 	if last := b.NumLines() - 1; target > last {
-		target = last
+		target, full = last, false
 	}
 	w.Pt.Line = target
 	w.Pt.Col = b.Line(target).RuneAt(w.GoalCol)
+	return full
 }
 
 // --- word motion ------------------------------------------------------------

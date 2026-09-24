@@ -200,13 +200,28 @@ func TestEveryNonVerticalMotionClearsGoalColumn(t *testing.T) {
 	}
 }
 
+// At an end of the buffer vertical motion goes as far as it can and reports
+// the end, as emacs does: silently at the keyboard, but it is what stops a
+// keyboard macro that walks down the lines.
 func TestVerticalMotionClampsAtBufferEnds(t *testing.T) {
 	f := newMotionFake(t, "one", "two")
-	run(t, f, "previous-line") // already on the first line
+	if err := f.Run("previous-line"); !errors.Is(err, command.ErrBeginningOfBuffer) {
+		t.Errorf("previous-line on the first line: %v, want ErrBeginningOfBuffer", err)
+	}
 	wantPoint(t, f, 0, 0)
 
 	f.SetPoint(text.Pos{Line: 1, Col: 0})
-	run(t, f, "next-line") // already on the last line
+	if err := f.Run("next-line"); !errors.Is(err, command.ErrEndOfBuffer) {
+		t.Errorf("next-line on the last line: %v, want ErrEndOfBuffer", err)
+	}
+	wantPoint(t, f, 1, 0)
+
+	// Part of the way still counts as reaching the end.
+	f.SetPoint(text.Pos{Line: 0, Col: 0})
+	f.ArgN, f.ArgExplicit = 5, true
+	if err := f.Run("next-line"); !errors.Is(err, command.ErrEndOfBuffer) {
+		t.Errorf("C-u 5 C-n from the first of two lines: %v, want ErrEndOfBuffer", err)
+	}
 	wantPoint(t, f, 1, 0)
 }
 
