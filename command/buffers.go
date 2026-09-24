@@ -109,6 +109,9 @@ func writeFile(e Env) error {
 	if path == "" {
 		return nil
 	}
+	if ok, err := confirmReplace(e, b, path); !ok || err != nil {
+		return err
+	}
 	// SaveBuffer adopts the path only on success, so a failed write leaves the
 	// buffer still pointing at wherever it came from.
 	if err := e.SaveBuffer(b, path); err != nil {
@@ -116,6 +119,40 @@ func writeFile(e Env) error {
 	}
 	e.Echo("Wrote %s", path)
 	return nil
+}
+
+// confirmReplace asks before write-file writes over a file other than the
+// buffer's own, and reports whether to go ahead.
+//
+// RET at the prompt takes the highlighted candidate, so a new name that
+// fuzzy-matches an existing file arrives here as that file. Without the
+// question it would be replaced without a word; with it, the mistake costs a
+// keystroke. emacs's write-file asks the same thing.
+func confirmReplace(e Env, b *text.Buffer, path string) (bool, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		abs = path
+	}
+	if abs == b.Path() {
+		return true, nil
+	}
+	// Nothing there, or a directory the write will fail on anyway: there is
+	// nothing to lose, so nothing to ask.
+	if fi, err := os.Stat(abs); err != nil || fi.IsDir() {
+		return true, nil
+	}
+	c, err := e.ReadChar(
+		fmt.Sprintf("File %s exists; overwrite? (y/n) ", path),
+		[]rune{'y', 'n', 'Y', 'N'},
+	)
+	if err != nil {
+		return false, err
+	}
+	if c == 'y' || c == 'Y' {
+		return true, nil
+	}
+	e.Echo("Canceled")
+	return false, nil
 }
 
 // saveSomeBuffers walks the modified buffers, offering to save each.

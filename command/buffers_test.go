@@ -450,6 +450,78 @@ func TestWriteFileQuitWritesNothing(t *testing.T) {
 	}
 }
 
+// RET at the prompt takes the highlighted file, so a new name that fuzzy-
+// matches an existing one arrives here as that file. write-file asks before
+// replacing it: n and C-g leave it untouched, y writes.
+func TestWriteFileAsksBeforeReplacingAnotherFile(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		answer  rune
+		wantErr error
+		saved   bool
+	}{
+		{"no", 'n', nil, false},
+		{"quit", commandtest.QuitChar, command.ErrQuit, false},
+		{"yes", 'y', nil, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			mine, other := filepath.Join(dir, "mine.txt"), filepath.Join(dir, "other.txt")
+			if err := os.WriteFile(other, []byte("precious"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			e := newEnv("body")
+			e.Buf().SetPath(mine)
+			e.Replies = []string{other}
+			e.Chars = []rune{tc.answer}
+
+			if err := runCmd(t, e, "write-file"); !errors.Is(err, tc.wantErr) {
+				t.Fatalf("returned %v, want %v", err, tc.wantErr)
+			}
+			if len(e.CharPrompts) != 1 || !strings.Contains(e.CharPrompts[0], "exists") {
+				t.Errorf("questions %q, want one asking about the existing file", e.CharPrompts)
+			}
+			if tc.saved {
+				if got := savedPaths(e); !slices.Equal(got, []string{other}) {
+					t.Errorf("saved %q, want %q after y", got, other)
+				}
+				return
+			}
+			if len(e.Saves) != 0 {
+				t.Errorf("wrote %q after %q", savedPaths(e), tc.answer)
+			}
+			if got := e.Buf().Path(); got != mine {
+				t.Errorf("buffer path became %q, want it left at %q", got, mine)
+			}
+		})
+	}
+}
+
+// Writing a buffer back to its own file is a save, not a replacement, and a
+// path with nothing there has nothing to lose. Neither asks. The fake has no
+// answer queued, so a question would fail the command.
+func TestWriteFileDoesNotAskWhenNothingIsReplaced(t *testing.T) {
+	dir := t.TempDir()
+	mine := filepath.Join(dir, "mine.txt")
+	if err := os.WriteFile(mine, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range []string{mine, filepath.Join(dir, "new.txt")} {
+		e := newEnv("body")
+		e.Buf().SetPath(mine)
+		e.Replies = []string{target}
+
+		mustRun(t, e, "write-file")
+
+		if len(e.CharPrompts) != 0 {
+			t.Errorf("writing to %q asked %q", target, e.CharPrompts)
+		}
+		if got := savedPaths(e); !slices.Equal(got, []string{target}) {
+			t.Errorf("saved %q, want %q", got, target)
+		}
+	}
+}
+
 // --- save-some-buffers ---------------------------------------------------
 
 // modified seeds extra buffers that each have a path and unsaved changes.
