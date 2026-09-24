@@ -164,7 +164,7 @@ func (e *Editor) RunAutosave(now time.Time) error {
 		if !b.Modified() || b.Path() == "" {
 			continue
 		}
-		if err := s.store.WriteAutosave(b.Path(), []byte(b.String())); err != nil {
+		if err := s.store.WriteAutosave(b.Path(), b.Contents()); err != nil {
 			if firstErr == nil {
 				firstErr = err
 			}

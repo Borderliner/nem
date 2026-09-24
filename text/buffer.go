@@ -227,7 +227,7 @@ func (b *Buffer) Text(from, to Pos) []rune {
 }
 
 // String returns the whole buffer as text, without a trailing newline.
-func (b *Buffer) String() string { return string(b.Text(Pos{0, 0}, b.End())) }
+func (b *Buffer) String() string { return string(b.encode("\n", false)) }
 
 // Insert inserts rs at at, splitting the line at any newline in rs.
 // It is one of the two primitives every edit composes from.

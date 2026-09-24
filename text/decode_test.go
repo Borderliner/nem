@@ -69,3 +69,19 @@ func TestDecodedLinesDoNotShareSpace(t *testing.T) {
 		t.Errorf("after growing line 0: %q", got)
 	}
 }
+
+// Saving writes exactly what was loaded, for every kind of file decodeLines
+// handles: the round trip through the new encoder is lossless wherever the
+// text itself is valid.
+func TestEncodeRoundTrips(t *testing.T) {
+	for _, s := range []string{"", "a", "a\n", "a\nb", "a\r\nb\r\n", "漢字\n👍 é\n", "\n\n", "x\ry\n"} {
+		lines, crlf, final := decodeLines([]byte(s))
+		b := &Buffer{lines: lines, crlf: crlf, finalNL: final, undo: newUndoLog(), dirtyFrom: noDirtyLine}
+		if got := string(b.bytes()); got != s {
+			t.Errorf("%q saved as %q", s, got)
+		}
+		if got, want := b.String(), strings.ReplaceAll(strings.TrimSuffix(strings.TrimSuffix(s, "\n"), "\r"), "\r\n", "\n"); crlf && got != want {
+			t.Errorf("%q: String() = %q, want %q", s, got, want)
+		}
+	}
+}
