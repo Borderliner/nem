@@ -246,8 +246,16 @@ func (e *Editor) diredRender(b *text.Buffer, st *diredState, focus string) {
 	for i, w := range wins {
 		w.Pt = after(spots[i])
 		w.GoalCol = view.GoalColUnset
+		if fresh {
+			// A directory just entered starts at the top, header in view,
+			// whatever the last one was scrolled to.
+			w.Top = 0
+		}
 	}
 	b.SetSavePoint(after(saved))
+	if fresh {
+		b.SetSaveTop(0)
+	}
 }
 
 // entryPos is where point sits on line: at the start of the entry's name,

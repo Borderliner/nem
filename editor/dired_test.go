@@ -583,3 +583,34 @@ func TestPromptCandidatesCarryIcons(t *testing.T) {
 		t.Error("icons switched off, but candidates still carry them")
 	}
 }
+
+// A listing longer than the window still opens with its header in view, and
+// walking into another directory starts at the top again.
+func TestDiredOpensWithTheHeaderInView(t *testing.T) {
+	dir := t.TempDir()
+	var names []string
+	for i := range 40 {
+		names = append(names, filepath.Join("sub", string(rune('a'+i%26))+string(rune('a'+i/26))))
+		names = append(names, string(rune('a'+i%26))+string(rune('a'+i/26))+".txt")
+	}
+	writeFiles(t, dir, names...)
+	e, scr := newTestEditor(t)
+
+	b, err := e.OpenFile(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.active.Visit(b)
+	e.Redraw()
+	if got := screenRow(t, scr, 0); !strings.Contains(got, filepath.Base(dir)) {
+		t.Fatalf("row 0 = %q, want the header", got)
+	}
+
+	press(t, e, "M->")
+	goTo(t, e, "sub")
+	press(t, e, "RET")
+	e.Redraw()
+	if got := screenRow(t, scr, 0); !strings.Contains(got, "sub/") {
+		t.Errorf("after walking into sub, row 0 = %q, want its header", got)
+	}
+}

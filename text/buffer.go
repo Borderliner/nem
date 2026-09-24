@@ -22,7 +22,10 @@ type Buffer struct {
 	// It is separate from hasMark on purpose; see MarkActive.
 	markActive bool
 	savePt     Pos
-	undo       *UndoLog
+	// saveTop is the first line on screen when a window last left this buffer,
+	// restored with savePt so coming back shows the same view.
+	saveTop int
+	undo    *UndoLog
 
 	path    string
 	crlf    bool // file used \r\n line endings
@@ -115,6 +118,12 @@ func (b *Buffer) SavePoint() Pos { return b.savePt }
 
 // SetSavePoint stores the point for when a window next visits this buffer.
 func (b *Buffer) SetSavePoint(p Pos) { b.savePt = p }
+
+// SaveTop returns the first line shown when a window last left this buffer.
+func (b *Buffer) SaveTop() int { return b.saveTop }
+
+// SetSaveTop stores the first line shown, for when a window next visits.
+func (b *Buffer) SetSaveTop(line int) { b.saveTop = line }
 
 // Modified reports whether the buffer differs from its last saved state.
 func (b *Buffer) Modified() bool { return b.undo.modified() }

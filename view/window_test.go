@@ -198,3 +198,31 @@ func TestScrollToPointAlwaysLeavesPointVisible(t *testing.T) {
 		}
 	}
 }
+
+// Coming back to a buffer shows it as it was left - the same first line on
+// screen - rather than with point's line moved to the top.
+func TestVisitRestoresTheView(t *testing.T) {
+	a, b := text.NewBuffer(), text.NewBuffer()
+	lines := make([]rune, 0, 200)
+	for range 100 {
+		lines = append(lines, 'x', '\n')
+	}
+	if err := a.Insert(text.Pos{}, lines); err != nil {
+		t.Fatal(err)
+	}
+	w := NewWindow(a)
+	w.Pt, w.Top = text.Pos{Line: 50}, 40
+
+	w.Visit(b)
+	w.Visit(a)
+
+	if w.Pt.Line != 50 || w.Top != 40 {
+		t.Errorf("back in a: point line %d, top %d; want 50 and 40", w.Pt.Line, w.Top)
+	}
+	// A buffer never shown starts at its top.
+	c := text.NewBuffer()
+	w.Visit(c)
+	if w.Top != 0 {
+		t.Errorf("a fresh buffer shows from line %d, want 0", w.Top)
+	}
+}

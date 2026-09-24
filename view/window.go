@@ -42,18 +42,24 @@ func NewWindow(b *text.Buffer) *Window {
 //
 // Visiting the buffer already shown is a no-op, so it cannot lose the current
 // position. Otherwise the incoming buffer's saved point is clamped into range,
-// since the buffer may have shrunk since it was stored, and Top is set so
-// point is visible without needing a ScrollToPoint first.
+// since the buffer may have shrunk since it was stored.
+//
+// The view comes back as well as point: the first line that was on screen is
+// restored, so C-x b back to a file shows it as it was left, rather than with
+// point's line jerked to the top. A buffer never shown before starts at its
+// first line, which is what keeps a listing's header in view. Drawing scrolls
+// from there only as far as keeping point visible needs.
 func (w *Window) Visit(b *text.Buffer) {
 	if b == nil || w.Buf == b {
 		return
 	}
 	if w.Buf != nil {
 		w.Buf.SetSavePoint(w.Pt)
+		w.Buf.SetSaveTop(w.Top)
 	}
 	w.Buf = b
 	w.Pt = b.ClampPos(b.SavePoint())
-	w.Top = w.Pt.Line
+	w.Top = min(max(b.SaveTop(), 0), w.Pt.Line)
 	w.LeftCol = 0
 	w.GoalCol = GoalColUnset
 }
