@@ -56,6 +56,11 @@ type Frame struct {
 	// ListingOf reports which buffers are listings rather than text. Optional:
 	// a nil ListingOf treats every buffer as text. See ListingFunc.
 	ListingOf ListingFunc
+	// EditingOf reports which listings are being edited as text, as a
+	// directory's file names are to rename them. Such a listing keeps its
+	// layout - no line numbers push its columns along - but loses the bar:
+	// point is a cursor again, where the typing goes. Optional.
+	EditingOf ListingFunc
 
 	// MiniRows lays a prompt's candidates out the emacs way, as Vertico does:
 	// the prompt on its row and the candidates on the rows below it, down to
@@ -124,7 +129,9 @@ func Render(scr tcell.Screen, f Frame, th Theme) {
 		rects = f.Tree.Layout(w, treeH)
 		for win, rect := range rects {
 			info := modelineInfo{Name: f.NameOf, Type: f.TypeOf, Branch: f.BranchOf}
-			drawWindow(scr, rect, win, win == f.Active, f.isListing(win.Buf), th, info, f.SpansOf)
+			listing := f.isListing(win.Buf)
+			bar := listing && (f.EditingOf == nil || !f.EditingOf(win.Buf))
+			drawWindow(scr, rect, win, win == f.Active, listing, bar, th, info, f.SpansOf)
 		}
 		for _, d := range f.Tree.Dividers(w, treeH) {
 			drawDivider(scr, d, th)
@@ -145,7 +152,7 @@ func Render(scr tcell.Screen, f Frame, th Theme) {
 }
 
 // drawWindow draws one pane: its visible buffer text, then its modeline.
-func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active, listing bool, th Theme, info modelineInfo, spansOf SpansFunc) {
+func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active, listing, bar bool, th Theme, info modelineInfo, spansOf SpansFunc) {
 	if rect.W <= 0 || rect.H <= 0 || win == nil || win.Buf == nil {
 		return
 	}
@@ -193,7 +200,7 @@ func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active, list
 				spans = spansOf(win.Buf, ln)
 			}
 			reg := region.onLine(ln, l)
-			if listing && active && ln == win.Pt.Line {
+			if bar && active && ln == win.Pt.Line {
 				// One flat bar, drawn like a selection to the window's edge.
 				// The row's own colours are dropped rather than inverted:
 				// inverted, each coloured field becomes a block of a different

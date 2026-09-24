@@ -101,3 +101,27 @@ func TestTextBufferIsNotDrawnAsAListing(t *testing.T) {
 		t.Error("a text buffer's current row is drawn as a bar")
 	}
 }
+
+// A listing being edited as text keeps its layout, with no gutter to shift
+// its columns, but has no bar: the row keeps its colours and point is a
+// cursor.
+func TestEditedListingHasNoBar(t *testing.T) {
+	f, w := listingFrame(t, 1, "alpha", "beta")
+	w.Pt.Col = 2
+	f.EditingOf = func(b *text.Buffer) bool { return b == w.Buf }
+
+	scr := draw(t, 20, 6, f)
+
+	if got := rowText(t, scr, 1); got[:4] != "beta" {
+		t.Errorf("row 1 = %q, want the text from column 0 with no numbers", got)
+	}
+	if c := cellAt(t, scr, 0, 1); reversed(c) {
+		t.Error("the row point is on is drawn as a bar")
+	}
+	if fg, _, _ := cellAt(t, scr, 0, 1).Style.Decompose(); fg == tcell.ColorDefault {
+		t.Error("the row point is on lost its colours")
+	}
+	if x, y, _ := scr.GetCursor(); x != 2 || y != 1 {
+		t.Errorf("cursor at (%d,%d), want (2,1)", x, y)
+	}
+}
