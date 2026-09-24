@@ -108,6 +108,12 @@ type Editor struct {
 	diredKeys  *keymap.Map
 	wdiredKeys *keymap.Map
 
+	// grep holds the results behind every search's buffer, grepKeys their
+	// keymap, and lastGrep the search M-g n steps through. See grep.go.
+	grep     map[*text.Buffer]*grepState
+	grepKeys *keymap.Map
+	lastGrep *text.Buffer
+
 	// startup shows the welcome panel. It is set by the caller when nem was
 	// started with no file to open, and cleared by the first keystroke - see
 	// dismissStartup. Nothing sets it again, which is what makes the panel a
@@ -207,6 +213,10 @@ func New(scr tcell.Screen) (*Editor, error) {
 	if err != nil {
 		return nil, fmt.Errorf("installing wdired bindings: %w", err)
 	}
+	gk, err := newGrepKeymap()
+	if err != nil {
+		return nil, fmt.Errorf("installing grep bindings: %w", err)
+	}
 
 	th := ui.DefaultTheme()
 	e := &Editor{
@@ -225,6 +235,8 @@ func New(scr tcell.Screen) (*Editor, error) {
 		dired:      map[*text.Buffer]*diredState{},
 		diredKeys:  dk,
 		wdiredKeys: wk,
+		grep:       map[*text.Buffer]*grepState{},
+		grepKeys:   gk,
 		before:     map[string][]func(){},
 		after:      map[string][]func(){},
 		clip:       clipboard{read: defaultClipboardReader},
@@ -255,6 +267,12 @@ func New(scr tcell.Screen) (*Editor, error) {
 		return nil, fmt.Errorf("registering dired commands: %w", err)
 	}
 	if err := registerWdiredCommands(e, reg); err != nil {
+		return nil, fmt.Errorf("registering dired commands: %w", err)
+	}
+	if err := registerGrepCommands(e, reg); err != nil {
+		return nil, fmt.Errorf("registering dired commands: %w", err)
+	}
+	if err := registerProjectCommands(e, reg); err != nil {
 		return nil, fmt.Errorf("registering dired commands: %w", err)
 	}
 	if err := registerExternalCommands(e, reg); err != nil {
@@ -473,6 +491,10 @@ func (e *Editor) KillBuffer(b *text.Buffer) error {
 	delete(e.byName, e.names[b])
 	delete(e.names, b)
 	delete(e.dired, b)
+	delete(e.grep, b)
+	if e.lastGrep == b {
+		e.lastGrep = nil
+	}
 	e.forgetHighlight(b)
 	e.forgetBranch(b)
 	for i, c := range e.buffers {

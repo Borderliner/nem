@@ -200,13 +200,25 @@ sequence simply replaces it.
 
 A third argument binds a key in a mode instead, where it applies only in that
 mode's buffers and takes precedence over the global binding. The modes are
-`"dired"`, for directory listings, and `"wdired"`, for a listing whose file
-names are being edited after `C-x C-q`:
+`"dired"`, for directory listings, `"wdired"`, for a listing whose file names
+are being edited after `C-x C-q`, and `"grep"`, for a project search's
+results:
 
 ```lua
 nem.bind("k", "dired-do-delete", "dired")   -- k deletes, as D does
 nem.bind("-", "dired-up-directory", "dired")
 nem.bind("C-c C-s", "wdired-finish-edit", "wdired")
+nem.bind("TAB", "grep-display-match", "grep")
+```
+
+The project commands live under `C-x p`, emacs's own prefix for them, because
+nem leaves `C-c` to you. If your fingers expect projectile's `C-c p`, give it
+to them:
+
+```lua
+nem.bind("C-c p f", "project-find-file")
+nem.bind("C-c p p", "project-switch-project")
+nem.bind("C-c p s", "project-find-regexp")
 ```
 
 ## Defining your own commands

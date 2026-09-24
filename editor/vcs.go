@@ -215,6 +215,9 @@ func (e *Editor) FileType(b *text.Buffer) string {
 		}
 		return "dired"
 	}
+	if e.grepOf(b) != nil {
+		return "grep"
+	}
 	switch name := e.cacheFor(b).Lexer().Name(); name {
 	case "text":
 		return "" // no grammar, so nothing worth a segment

@@ -114,6 +114,9 @@ func (e *Editor) modeKeys(b *text.Buffer) *keymap.Map {
 		}
 		return e.diredKeys
 	}
+	if e.grepOf(b) != nil {
+		return e.grepKeys
+	}
 	return nil
 }
 
@@ -125,8 +128,9 @@ func (e *Editor) diredOf(b *text.Buffer) *diredState {
 	return e.dired[b]
 }
 
-// isListing is the renderer's ListingFunc.
-func (e *Editor) isListing(b *text.Buffer) bool { return e.diredOf(b) != nil }
+// isListing is the renderer's ListingFunc: a directory, or a search's
+// results.
+func (e *Editor) isListing(b *text.Buffer) bool { return e.diredOf(b) != nil || e.grepOf(b) != nil }
 
 // isEditingListing is the renderer's EditingOf: a listing whose names are
 // being edited, drawn with a cursor where the typing goes rather than a bar
@@ -620,6 +624,9 @@ func (e *Editor) diredJump() error {
 func (e *Editor) bufferDir(b *text.Buffer) string {
 	if st := e.diredOf(b); st != nil {
 		return st.dir
+	}
+	if st := e.grepOf(b); st != nil {
+		return st.root
 	}
 	if b != nil && b.Path() != "" {
 		return filepath.Dir(b.Path())

@@ -108,6 +108,22 @@ var defaultBindings = []struct{ Spec, Command string }{
 	{"C-x d", "dired"},
 	{"C-x C-j", "dired-jump"},
 
+	// Projects: project.el's keys, with projectile's commands. See project.go.
+	{"C-x p f", "project-find-file"},
+	{"C-x p p", "project-switch-project"},
+	{"C-x p b", "project-switch-to-buffer"},
+	{"C-x p d", "project-find-dir"},
+	{"C-x p D", "project-dired"},
+	{"C-x p g", "project-find-regexp"},
+	{"C-x p r", "project-query-replace"},
+	{"C-x p e", "project-recentf"},
+	{"C-x p t", "project-toggle-test"},
+	{"C-x p k", "project-kill-buffers"},
+	{"C-x p S", "project-save-buffers"},
+	{"M-g n", "next-error"},
+	{"M-g p", "previous-error"},
+	{"C-x `", "next-error"},
+
 	// Windows.
 	{"C-x 2", "split-window-below"},
 	{"C-x 3", "split-window-right"},

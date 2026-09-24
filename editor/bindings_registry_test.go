@@ -22,7 +22,7 @@ func TestEveryBoundCommandExists(t *testing.T) {
 	}
 	// The modes' keymaps too: dired's, and wdired's while names are edited.
 	for mode, table := range map[string][]struct{ Spec, Command string }{
-		"dired": diredBindings, "wdired": wdiredBindings,
+		"dired": diredBindings, "wdired": wdiredBindings, "grep": grepBindings,
 	} {
 		for _, b := range table {
 			if _, ok := r.Lookup(b.Command); !ok {

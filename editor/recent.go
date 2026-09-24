@@ -8,6 +8,7 @@ import (
 	"github.com/Borderliner/nem/command"
 	"github.com/Borderliner/nem/icons"
 	"github.com/Borderliner/nem/memory"
+	"github.com/Borderliner/nem/project"
 	"github.com/Borderliner/nem/text"
 	"github.com/Borderliner/nem/view"
 )
@@ -77,9 +78,14 @@ func untildePath(p, home string) string {
 	return p
 }
 
-// rememberFile notes that path was opened, for C-x C-r.
+// rememberFile notes that path was opened, for C-x C-r, and the project it
+// is in, for C-x p p: working in a project is what makes it a known one, as
+// projectile has it.
 func (e *Editor) rememberFile(path string) {
 	e.mem.AddRecent(path)
+	if root, ok := project.Root(filepath.Dir(path)); ok {
+		e.mem.AddProject(root)
+	}
 	e.saveMemory()
 }
 

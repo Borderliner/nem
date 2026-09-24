@@ -32,6 +32,7 @@ var startupLines = []string{
 	"",
 	"  C-x C-f    open a file",
 	"  C-x C-r    open a recent file",
+	"  C-x p f    find a file in the project",
 	"  C-x d      browse a directory",
 	"  C-x C-s    save",
 	"  C-x C-c    exit",

@@ -146,6 +146,33 @@ swap names, and all or none of them do: a name already taken, or two files
 given one name, is refused before anything moves. A name with a `/` moves the
 file into that directory, and an emptied name flags the file for `x`.
 
+**Projects** — the repository a file is in is its project (or the nearest
+directory holding a `.projectile` file, or failing both, a build file such as
+`go.mod` or `package.json`), and `C-x p` works on the whole of it, as
+projectile does. The prefix is emacs's own `project.el` one, since `C-c` is
+yours.
+
+| Key | Does |
+|---|---|
+| `C-x p f` | find any file in the project by a few letters of its path; the ones opened last come first |
+| `C-x p p` | switch to another project nem has seen, and find a file in it |
+| `C-x p g` | search every file for a regexp, listing the matching lines (case is ignored unless you type a capital) |
+| `C-x p r` | query-replace across the project, file by file — `Y` does all the rest, `N` skips a file |
+| `C-x p b` `C-x p e` | switch to one of its buffers · open one of its recent files |
+| `C-x p d` `C-x p D` | list one of its directories · list its top |
+| `C-x p t` | go from a file to its test and back: `foo.go` ↔ `foo_test.go`, `app.ts` ↔ `app.test.ts`, … |
+| `C-x p S` `C-x p k` | save its modified files · kill its buffers |
+
+In the search results `RET` opens a match in the other window, `n` and `p`
+show each in turn there, `{` and `}` jump between files, and `g` searches
+again; `M-g n` and `M-g p` step through the matches from any buffer. Open
+files are searched as they are, unsaved edits and all.
+
+A project's files come from `git ls-files` in a repository, so `.gitignore`
+is honoured; elsewhere the tree is walked, passing over `node_modules` and its
+kind. A `.projectile` file narrows the list with projectile's syntax: `-/build`
+or `*.min.js` leaves things out, `+/src` keeps only `src`.
+
 **Search** — `C-s` is genuinely incremental: it moves as you type, backspace
 walks point back, and `C-g` returns you to where you started. `M-%` is
 query-replace with `y`/`n`/`!`/`q`.
