@@ -150,6 +150,9 @@ type Theme struct {
 	// MiniNote styles the candidate count beside a prompt at the bottom of the
 	// screen: quiet, since it is secondary to what is being typed.
 	MiniNote tcell.Style
+	// PanelNote styles a candidate's note - a command's keys at M-x - quiet
+	// for the same reason: it is read when looked for, not first.
+	PanelNote tcell.Style
 
 	// Chrome, rendered through Lip Gloss and blitted in. The modeline is built
 	// from four separately styled segments rather than one flat bar, which is
@@ -207,6 +210,7 @@ func DefaultTheme() Theme {
 		PanelMatch:    tcell.StyleDefault.Bold(true),
 		ListCursor:    tcell.StyleDefault.Reverse(true),
 		MiniNote:      tcell.StyleDefault.Foreground(tcell.GetColor(colourQuiet)),
+		PanelNote:     tcell.StyleDefault.Foreground(tcell.GetColor(colourQuiet)),
 
 		ModelineName:    lipgloss.NewStyle().Bold(true),
 		ModelineNameOff: lipgloss.NewStyle().Foreground(quiet),

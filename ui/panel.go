@@ -51,6 +51,12 @@ type PanelLine struct {
 	// Spans colour parts of Text by syntax class, for a row that is more than
 	// one thing - a key and the command it runs. Rune indices, as Match.
 	Spans []syntax.Span
+	// Note is drawn quietly after Text, starting NoteCol columns past where
+	// Text starts: a command's keys beside its name at M-x. Like Icon it is
+	// shown, not part of the candidate. The column is the caller's so that the
+	// notes of a whole list line up.
+	Note    string
+	NoteCol int
 }
 
 // Panel is a box to draw over the frame.
@@ -194,6 +200,15 @@ func drawPanelLine(scr tcell.Screen, x, y, width int, ln PanelLine, th Theme) {
 		x, width = x+2, width-2
 	}
 	drawPanelText(scr, x, y, width, ln.Text, base, ln.Match, ln.Spans, th)
+	if ln.Note != "" && ln.NoteCol < width {
+		// Quiet, except on the selected row, where the bar's style keeps it
+		// readable rather than grey on the inverted ground.
+		style := th.PanelNote
+		if ln.Selected {
+			style = base
+		}
+		drawPanelText(scr, x+ln.NoteCol, y, width-ln.NoteCol, ln.Note, style, nil, nil, th)
+	}
 }
 
 // drawPanelText writes s at (x, y) clipped to width columns, emphasising the

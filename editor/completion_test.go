@@ -340,6 +340,62 @@ func TestBottomStyleListsCandidatesBelowThePrompt(t *testing.T) {
 	}
 }
 
+// A candidate's note - M-x's keys - sits in a column two past the widest
+// candidate shown, drawn quieter than the candidate itself.
+func TestNotesLineUpBesideTheCandidates(t *testing.T) {
+	keys := map[string]string{"find-file": "C-x C-f", "kill-line": "C-k"}
+	e, _ := promptOn(t, 60, 20, command.ReadOpts{
+		Prompt:   "M-x ",
+		Complete: command.CompleteFrom([]string{"find-file", "kill-line", "forward-paragraph"}),
+		Annotate: func(c string) string { return keys[c] },
+	}, "")
+	e.Redraw()
+
+	scr := e.scr.(tcell.SimulationScreen)
+	col := len("forward-paragraph") + 2
+	found := 0
+	for y := 20 - 4; y < 20; y++ {
+		row := screenRow(t, scr, y)
+		name := strings.Fields(row)[0]
+		note, ok := keys[name]
+		if !ok {
+			continue
+		}
+		found++
+		if got := strings.TrimRight(row[col:], " "); got != note {
+			t.Errorf("row %q: note at column %d is %q, want %q", row, col, got, note)
+		}
+		if name != "find-file" { // the selected row takes the bar's style
+			cells, w, _ := scr.GetContents()
+			if cells[y*w+col].Style == cells[y*w].Style {
+				t.Errorf("the note on %q is styled like the candidate, not quieter", name)
+			}
+		}
+	}
+	if found != 2 {
+		t.Errorf("found %d annotated rows, want 2", found)
+	}
+}
+
+// The popup is wide enough for the notes as well as the candidates.
+func TestPopupMakesRoomForNotes(t *testing.T) {
+	long := "C-x C-a C-b C-c C-d C-e"
+	e, ms := promptOn(t, 80, 24, command.ReadOpts{
+		Prompt:   "M-x ",
+		Complete: command.CompleteFrom([]string{"find-file"}),
+		Annotate: func(string) string { return long },
+	}, "")
+	e.comp.style = completionPopup
+	p, _, _, ok := e.panelFor(ms)
+	if !ok {
+		t.Fatal("no panel")
+	}
+	ln := p.Lines[1]
+	if need := ln.NoteCol + len(long) + 2; p.Rect.W < need {
+		t.Errorf("panel is %d wide, want at least %d to hold %q beside its note", p.Rect.W, need, ln.Text)
+	}
+}
+
 // The list keeps the height it has reached while the prompt is open, as
 // emacs's grow-only minibuffer does, so narrowing the list does not resize the
 // windows under the user as they type.

@@ -179,6 +179,11 @@ type ReadOpts struct {
 	// current buffer first.
 	HistoryFirst bool
 
+	// Annotate, when non-nil, gives each candidate a note to show after it,
+	// quietly and in a column: M-x shows each command's keys. Display only,
+	// like Icon.
+	Annotate func(candidate string) string
+
 	// Icon, when non-nil, gives each candidate an icon to show beside it: a
 	// folder, the Go mark, a picture. Display only - the candidate is still
 	// the answer - and ignored when the icons setting is off.

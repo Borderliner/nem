@@ -67,6 +67,8 @@ type completion struct {
 	style completionStyle
 	// icon gives each candidate its icon, when the prompt offers one.
 	icon func(string) icons.Icon
+	// annotate gives each candidate its note, when the prompt offers one.
+	annotate func(string) string
 	// history, when set, puts the candidates entered before first, most
 	// recent first, while nothing is typed. See ReadOpts.HistoryFirst.
 	history []string
@@ -254,17 +256,24 @@ func (e *Editor) panelFor(ms *miniState) (ui.Panel, int, int, bool) {
 	promptLine := ms.line()
 	rows := c.visibleRows()
 
-	// Width is the widest thing that must fit, plus the border. An icon and
-	// its space come before each candidate.
-	pad := 0
-	if e.icons && c.icon != nil {
-		pad = 2
+	cands := make([]ui.PanelLine, 0, rows)
+	for i := c.top; i < c.top+rows; i++ {
+		cands = append(cands, e.candidateLine(c, i))
 	}
+	alignNotes(cands)
+
+	// Width is the widest thing that must fit, plus the border: the prompt,
+	// or a candidate with its icon before it and its note after.
 	wide := displayWidth(promptLine)
-	for _, r := range c.ranked[c.top : c.top+rows] {
-		if w := displayWidth(r.Candidate) + pad; w > wide {
-			wide = w
+	for _, ln := range cands {
+		w := displayWidth(ln.Text)
+		if ln.Note != "" {
+			w = ln.NoteCol + displayWidth(ln.Note)
 		}
+		if ln.Icon != 0 {
+			w += 2
+		}
+		wide = max(wide, w)
 	}
 	if wide < completionMinWidth {
 		wide = completionMinWidth
@@ -284,9 +293,7 @@ func (e *Editor) panelFor(ms *miniState) (ui.Panel, int, int, bool) {
 
 	lines := make([]ui.PanelLine, 0, rows+1)
 	lines = append(lines, ui.PanelLine{Text: promptLine})
-	for i := c.top; i < c.top+rows; i++ {
-		lines = append(lines, e.candidateLine(c, i))
-	}
+	lines = append(lines, cands...)
 
 	title := c.countNote()
 
@@ -327,6 +334,7 @@ func (e *Editor) bottomRows(c *completion, sh int) ([]ui.PanelLine, bool) {
 	for i := range shown {
 		lines[i] = e.candidateLine(c, c.top+i)
 	}
+	alignNotes(lines[:shown])
 	return lines, true
 }
 
@@ -342,7 +350,24 @@ func (e *Editor) candidateLine(c *completion, idx int) ui.PanelLine {
 		ic := c.icon(ln.Text)
 		ln.Icon, ln.IconClass = ic.Glyph, ic.Class
 	}
+	if c.annotate != nil {
+		ln.Note = c.annotate(ln.Text)
+	}
 	return ln
+}
+
+// alignNotes puts the notes of the rows shown in one column, two past the
+// widest candidate among them, so they read as a column rather than a ragged
+// edge. The widest on screen rather than of them all: a long name scrolled
+// out of view should not push the notes of what is visible away from it.
+func alignNotes(lines []ui.PanelLine) {
+	col := 0
+	for _, ln := range lines {
+		col = max(col, displayWidth(ln.Text))
+	}
+	for i := range lines {
+		lines[i].NoteCol = col + 2
+	}
 }
 
 // displayWidth measures s in screen columns.
