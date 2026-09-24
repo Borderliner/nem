@@ -58,7 +58,7 @@ func RegisterBuffers(r *Registry) error {
 func findFile(e Env) error {
 	path, err := e.ReadString(ReadOpts{
 		Prompt:   "Find file: ",
-		Complete: completeFilename,
+		Complete: cachedPaths(completeFilename),
 		Descend:  IsDirCandidate,
 		Icon:     icons.ForCandidate,
 	})
@@ -106,7 +106,7 @@ func writeFile(e Env) error {
 	path, err := e.ReadString(ReadOpts{
 		Prompt:   "Write file: ",
 		Initial:  b.Path(),
-		Complete: completeWritePath,
+		Complete: cachedPaths(completeWritePath),
 		Descend:  IsDirCandidate,
 		Icon:     icons.ForCandidate,
 	})
@@ -468,6 +468,32 @@ func completeFilename(prefix string) []string { return pathCandidates(prefix, tr
 // completeWritePath is write-file's completion. It has no entry for the
 // directory itself: a buffer cannot be written to a directory.
 func completeWritePath(prefix string) []string { return pathCandidates(prefix, false, false) }
+
+// cachedPaths wraps a path completer so each directory is read once per
+// prompt.
+//
+// The completer is asked again on every keystroke, but what it lists depends
+// only on the directory part of the input, which stays the same until a
+// separator is typed or erased: typing a name narrows the list, and the
+// minibuffer's fuzzy ranking does that over the same entries. Reading the
+// directory on every keystroke was nearly all of a keystroke's cost in a
+// large one, and on a network filesystem it is a round trip per key. Make one
+// per prompt, so a file created meanwhile shows up at the next.
+func cachedPaths(complete CompleteFunc) CompleteFunc {
+	var dir string
+	var list []string
+	read := false
+	return func(prefix string) []string {
+		if d, _ := filepath.Split(prefix); !read || d != dir {
+			dir, list, read = d, complete(prefix), true
+		}
+		return list
+	}
+}
+
+// DirectoryCompleter is CompleteDirectory reading each directory once, for
+// one prompt. See cachedPaths.
+func DirectoryCompleter() CompleteFunc { return cachedPaths(CompleteDirectory) }
 
 // CompleteDirectory completes a directory name: the directory the input names,
 // then the directories inside it. Dired's prompts use it, for where to list or

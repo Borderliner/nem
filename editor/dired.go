@@ -545,7 +545,7 @@ func (e *Editor) diredPrompt() error {
 	ans, err := e.ReadString(command.ReadOpts{
 		Prompt:   "Dired: ",
 		Initial:  promptDir(e.bufferDir(e.active.Buf)),
-		Complete: command.CompleteDirectory,
+		Complete: command.DirectoryCompleter(),
 		Descend:  command.IsDirCandidate,
 		Icon:     icons.ForCandidate,
 	})
@@ -842,7 +842,7 @@ func (e *Editor) diredTransfer(b *text.Buffer, st *diredState, copying bool) err
 	ans, err := e.ReadString(command.ReadOpts{
 		Prompt:   fmt.Sprintf("%s %s to: ", verb, describeEntries(ens)),
 		Initial:  promptDir(st.dir),
-		Complete: command.CompleteDirectory,
+		Complete: command.DirectoryCompleter(),
 		Descend:  command.IsDirCandidate,
 		Icon:     icons.ForCandidate,
 	})

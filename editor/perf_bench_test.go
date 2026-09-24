@@ -235,15 +235,15 @@ func BenchmarkLoadFile20MB(b *testing.B) {
 	}
 }
 
-// A keystroke at C-x C-f in a directory of 3000 files.
+// A keystroke at a directory prompt listing 3000 directories.
 func BenchmarkFindFileKeystroke(b *testing.B) {
 	dir := b.TempDir()
 	for i := range 3000 {
-		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("file-%04d.go", i)), nil, 0o644); err != nil {
+		if err := os.Mkdir(filepath.Join(dir, fmt.Sprintf("dir-%04d", i)), 0o755); err != nil {
 			b.Fatal(err)
 		}
 	}
-	c := newCompletion(command.CompleteDirectory, "")
+	c := newCompletion(command.DirectoryCompleter(), "")
 	in := dir + string(filepath.Separator) + "f"
 	b.ReportAllocs()
 	for b.Loop() {

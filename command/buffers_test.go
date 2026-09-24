@@ -1327,3 +1327,29 @@ func TestKillTerminalConfirmsForModifiedPathlessBuffer(t *testing.T) {
 		t.Error("declining the confirmation still quit")
 	}
 }
+
+// A directory completer reads each directory once for its prompt: typing a
+// name only narrows, so the same list serves until the directory changes. A
+// new prompt reads afresh.
+func TestDirectoryCompleterReadsEachDirectoryOnce(t *testing.T) {
+	dir := t.TempDir()
+	sep := string(filepath.Separator)
+	if err := os.Mkdir(filepath.Join(dir, "a"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	complete := command.DirectoryCompleter()
+	first := complete(dir + sep)
+
+	if err := os.Mkdir(filepath.Join(dir, "b"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := complete(dir + sep + "x"); !slices.Equal(got, first) {
+		t.Errorf("typing in the same directory re-read it: %q, want %q", got, first)
+	}
+	if got := command.DirectoryCompleter()(dir + sep); len(got) != len(first)+1 {
+		t.Errorf("a new prompt listed %q; want b/ as well", got)
+	}
+	if got := complete(dir + sep + "a" + sep); len(got) != 1 || got[0] != dir+sep+"a"+sep {
+		t.Errorf("walking into a/ listed %q, want only a/ itself", got)
+	}
+}
