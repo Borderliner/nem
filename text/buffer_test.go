@@ -319,3 +319,24 @@ func TestRegenerateReplacesGeneratedText(t *testing.T) {
 		t.Errorf("undo after Regenerate restored %q; the history should be gone", b.String())
 	}
 }
+
+// RegenerateLine rewrites one line of a read-only buffer and leaves no trace
+// in undo or in the modified flag.
+func TestRegenerateLine(t *testing.T) {
+	b := NewBuffer()
+	b.Regenerate([]rune("one\ntwo\nthree"))
+	b.SetReadOnly(true)
+
+	b.RegenerateLine(1, []rune("TWO"))
+
+	if got := b.String(); got != "one\nTWO\nthree" {
+		t.Errorf("text = %q", got)
+	}
+	if b.Modified() || !b.ReadOnly() {
+		t.Error("RegenerateLine left the buffer modified or writable")
+	}
+	b.SetReadOnly(false)
+	if _, ok := b.Undo(); ok {
+		t.Error("RegenerateLine left something to undo")
+	}
+}

@@ -161,6 +161,18 @@ func (b *Buffer) Regenerate(rs []rune) {
 	b.undo = newUndoLog()
 }
 
+// RegenerateLine replaces the text of one line of a generated buffer, as
+// Regenerate does the whole: past read-only, with no undo record, leaving the
+// buffer unmodified. A listing uses it when one entry changes, so marking a
+// file costs one line rather than the whole directory.
+func (b *Buffer) RegenerateLine(i int, rs []rune) {
+	if i < 0 || i >= len(b.lines) {
+		return
+	}
+	b.lines[i].setRunes(append([]rune(nil), rs...))
+	b.noteEdit(i, 0)
+}
+
 // End returns the position just past the last rune in the buffer.
 func (b *Buffer) End() Pos {
 	last := len(b.lines) - 1

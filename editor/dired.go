@@ -712,11 +712,24 @@ func (e *Editor) diredSetMark(b *text.Buffer, st *diredState, mark rune, advance
 	} else {
 		st.marks[en.Name] = mark
 	}
-	e.diredRender(b, st, "")
+	e.diredRedrawEntry(b, st, en)
 	if advance != 0 {
 		e.diredMove(st, advance)
 	}
 	return nil
+}
+
+// diredRedrawEntry redraws the one line a changed mark affects. A mark changes
+// nothing else - not the order, not the header - so re-formatting the whole
+// directory for it made holding m down across a large one visibly slow.
+func (e *Editor) diredRedrawEntry(b *text.Buffer, st *diredState, en dired.Entry) {
+	line, ok := st.list.LineOf(en.Name)
+	if !ok {
+		return
+	}
+	s, spans := dired.FormatEntry(en, st.marks[en.Name], st.opts, st.now)
+	st.list.Lines[line], st.list.Spans[line] = s, spans
+	b.RegenerateLine(line, []rune(s))
 }
 
 // describeEntries names what an operation is about to touch, for a prompt:
