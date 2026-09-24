@@ -91,7 +91,7 @@ func TestConfigSettingsReachTheEditor(t *testing.T) {
 		WhichKeyDelay: 0, AutosaveIdle: 0,
 		Backup: false, Clipboard: "off", LineNumbers: false,
 		Syntax: false, Theme: "light", DeleteSelection: false,
-		OpenBinary: "text", Icons: false,
+		OpenBinary: "text", Icons: "off",
 	})
 
 	if e.th.ScrollMargin != 5 {

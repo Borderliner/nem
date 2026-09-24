@@ -57,8 +57,10 @@ nem.set("theme", "auto")         -- syntax palette: "auto", "dark" or "light"
 
 -- Icons beside file names in dired and the file and buffer prompts. They need
 -- a Nerd Font, or a terminal that ships its symbols (Ghostty, Kitty, WezTerm);
--- without one they draw as empty boxes.
-nem.set("icons", true)           -- default true
+-- without one they draw as empty boxes. "auto" turns them on in those
+-- terminals, and locally when an installed font has the glyphs; it cannot see
+-- the fonts of the terminal you SSH in from, so set true there if you have one.
+nem.set("icons", "auto")         -- true, false or "auto"; default "auto"
 
 -- Files that are not text (a PDF, an image, a song)
 nem.set("open-binary", "ask")    -- "ask", "system" (open with the system's app)

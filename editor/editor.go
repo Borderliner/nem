@@ -152,7 +152,9 @@ type Editor struct {
 	ext externalState
 
 	// icons shows a file's icon beside its name in dired and in the file and
-	// buffer prompts. See SetIcons.
+	// buffer prompts. Off until the config's icons setting is applied: the
+	// default, "auto", guesses from the terminal and its fonts, which is not
+	// worth doing for an editor that may never load a config. See SetIcons.
 	icons bool
 
 	// frames counts what Redraw has painted, so a test can tell one redraw per
@@ -208,7 +210,6 @@ func New(scr tcell.Screen) (*Editor, error) {
 		after:     map[string][]func(){},
 		clip:      clipboard{read: defaultClipboardReader},
 		ext:       newExternalState(),
-		icons:     true,
 	}
 
 	// recover-file closes over the editor rather than going through Env. It is

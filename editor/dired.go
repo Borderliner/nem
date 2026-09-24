@@ -1021,6 +1021,10 @@ func (e *Editor) quitWindow() error {
 	return nil
 }
 
+// detectIcons decides the "auto" icons setting. A variable so the test binary
+// can make the answer the same on every machine; see TestMain.
+var detectIcons = icons.Detect
+
 // SetIcons turns file icons on or off, in the prompts and in every listing,
 // open ones included. They need a Nerd Font, or a terminal that carries its
 // symbols; without one each icon is an empty box, which is what this is for.

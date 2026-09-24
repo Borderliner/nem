@@ -88,7 +88,9 @@ by name, time or size.
 Each name has an icon for its kind - a folder, a language's mark, a picture,
 an archive - and so do the candidates at `C-x C-f` and `C-x b`. They need a
 [Nerd Font](https://www.nerdfonts.com), or a terminal that ships its symbols
-(Ghostty, Kitty and WezTerm do); `nem.set("icons", false)` turns them off.
+(Ghostty, Kitty and WezTerm do), so they turn on by themselves only where that
+looks true: in those terminals, or when an installed font has the glyphs. Over
+SSH nem cannot see your fonts; `nem.set("icons", true)` or `false` settles it.
 
 Deleting asks you to type `yes`, nothing is replaced without asking, and a
 rename carries any buffer visiting the file along with it. One listing follows

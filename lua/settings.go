@@ -69,9 +69,11 @@ type Settings struct {
 	// each time, hand it to the "system" app, or open it as "text" anyway.
 	OpenBinary string
 
-	// Icons shows file icons in dired and the file and buffer prompts. They
-	// need a Nerd Font, or a terminal that ships its symbols.
-	Icons bool
+	// Icons is "on", "off" or "auto": whether file icons show in dired and the
+	// file and buffer prompts. They need a Nerd Font, or a terminal that ships
+	// its symbols, and "auto" turns them on only where that looks likely. A
+	// script sets it with true, false or "auto".
+	Icons string
 }
 
 // DefaultSettings returns the built-in defaults, which are what the editor uses
@@ -84,7 +86,7 @@ func DefaultSettings() Settings {
 		Backup: true, Clipboard: "osc52", LineNumbers: true,
 		DeleteSelection: true,
 		Syntax:          true, Theme: "auto",
-		OpenBinary: "ask", Icons: true,
+		OpenBinary: "ask", Icons: "auto",
 	}
 }
 
@@ -188,11 +190,20 @@ func (s *Settings) set(key string, v glua.LValue) error {
 		}
 		s.LineNumbers = bool(b)
 	case "icons":
-		b, ok := v.(glua.LBool)
-		if !ok {
-			return fmt.Errorf("icons must be true or false, got %s", v.Type())
+		switch v := v.(type) {
+		case glua.LBool:
+			s.Icons = "off"
+			if v {
+				s.Icons = "on"
+			}
+		case glua.LString:
+			if v != "auto" {
+				return fmt.Errorf(`icons must be true, false or "auto", got %q`, string(v))
+			}
+			s.Icons = "auto"
+		default:
+			return fmt.Errorf(`icons must be true, false or "auto", got %s`, v.Type())
 		}
-		s.Icons = bool(b)
 	case "open-binary":
 		str, err := checkEnum(key, v, "ask", "system", "text")
 		if err != nil {

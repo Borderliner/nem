@@ -10,6 +10,7 @@ import (
 	"github.com/Borderliner/nem/command"
 	"github.com/Borderliner/nem/dired"
 	"github.com/Borderliner/nem/icons"
+	"github.com/Borderliner/nem/lua"
 	"github.com/Borderliner/nem/text"
 )
 
@@ -366,7 +367,7 @@ func TestDiredToggles(t *testing.T) {
 	}
 
 	press(t, e, "(")
-	if got, want := int(e.active.Pt.Col), dired.NameColumn(dired.Options{HideDetails: true, Icons: true}); got != want {
+	if got, want := int(e.active.Pt.Col), dired.NameColumn(dired.Options{HideDetails: true}); got != want {
 		t.Errorf("after (, point is in column %d, want the new name column %d", got, want)
 	}
 	if got := atEntry(t, e); got != "shown" {
@@ -541,12 +542,13 @@ func TestDiredParentEntry(t *testing.T) {
 	}
 }
 
-// Icons are on by default, in listings and beside file and buffer candidates,
-// and turning them off takes them out of open listings too.
+// Icons show in listings and beside file and buffer candidates, and turning
+// them off takes them out of open listings too.
 func TestIcons(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, "main.go")
 	e, _ := newTestEditor(t)
+	e.SetIcons(true)
 	b, st := listed(t, e, dir)
 	line, _ := st.list.LineOf("main.go")
 	if got := b.Line(line).String(); !strings.Contains(got, " main.go") {
@@ -570,6 +572,7 @@ func TestPromptCandidatesCarryIcons(t *testing.T) {
 		Complete: command.CompleteFrom(names),
 		Icon:     icons.ForCandidate,
 	}, "")
+	e.SetIcons(true)
 	rows := e.frame().MiniRows
 	if len(rows) != 2 || rows[0].Icon != '' || rows[1].Icon != '' {
 		t.Fatalf("rows = %+v, want a folder and the Go mark", rows)
@@ -612,5 +615,28 @@ func TestDiredOpensWithTheHeaderInView(t *testing.T) {
 	e.Redraw()
 	if got := screenRow(t, scr, 0); !strings.Contains(got, "sub/") {
 		t.Errorf("after walking into sub, row 0 = %q, want its header", got)
+	}
+}
+
+// "auto" asks the guess; true and false do not. The guess is stubbed out for
+// the whole test binary, so it is swapped here to see that it is consulted.
+func TestIconsSettingAuto(t *testing.T) {
+	saved := detectIcons
+	t.Cleanup(func() { detectIcons = saved })
+	asked := false
+	detectIcons = func() bool { asked = true; return true }
+
+	e, _ := newTestEditor(t)
+	s := lua.DefaultSettings()
+	e.applySettings(s)
+	if !asked || !e.icons {
+		t.Errorf("auto: asked %v, icons %v; want the guess asked and followed", asked, e.icons)
+	}
+
+	asked = false
+	s.Icons = "off"
+	e.applySettings(s)
+	if asked || e.icons {
+		t.Errorf("off: asked %v, icons %v; want neither", asked, e.icons)
 	}
 }

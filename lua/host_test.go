@@ -889,7 +889,7 @@ func TestV2SettingsApplyAndValidate(t *testing.T) {
 		{"theme", got.Theme, "light"},
 		{"delete-selection", got.DeleteSelection, false},
 		{"open-binary", got.OpenBinary, "system"},
-		{"icons", got.Icons, false},
+		{"icons", got.Icons, "off"},
 	} {
 		if c.got != c.want {
 			t.Errorf("%s = %v, want %v", c.name, c.got, c.want)
