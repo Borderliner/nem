@@ -110,6 +110,10 @@ type Seq struct {
 	// M-x and bindable from Lua, instead of a stub that only the event loop
 	// can call.
 	LastRune rune
+
+	// dabbrev is an M-/ expansion in progress, so a second M-/ offers the next
+	// candidate in place of the first rather than starting over.
+	dabbrev dabbrevState
 }
 
 // CompleteFunc returns the candidates available for what has been typed so far.

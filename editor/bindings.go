@@ -46,6 +46,7 @@ var defaultBindings = []struct{ Spec, Command string }{
 	{"M-l", "downcase-word"},
 	{"M-c", "capitalize-word"},
 	{"M-;", "comment-dwim"},
+	{"M-/", "dabbrev-expand"},
 	{"M-SPC", "just-one-space"},
 	{`M-\`, "delete-horizontal-space"},
 	{"M-^", "delete-indentation"},

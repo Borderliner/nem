@@ -26,6 +26,7 @@ func RegisterAll(r *Registry) error {
 		{"paragraph", RegisterParagraph},
 		{"sexp", RegisterSexp},
 		{"info", RegisterInfo},
+		{"dabbrev", RegisterDabbrev},
 	}
 	for _, g := range groups {
 		if err := g.fn(r); err != nil {
