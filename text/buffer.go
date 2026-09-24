@@ -51,7 +51,14 @@ type Buffer struct {
 	// rather than by commands: sixty commands would each have to remember it,
 	// and the one that forgot would quietly corrupt a directory listing.
 	readOnly bool
+	// guard, when set, vets each edit before it is made. See SetEditGuard.
+	guard EditGuard
 }
+
+// EditGuard vets an edit: the deletion of the text between from and to, or,
+// with from equal to to, the insertion of ins there. An error refuses it, and
+// is what the edit returns.
+type EditGuard func(from, to Pos, ins []rune) error
 
 // NewBuffer returns an empty buffer holding a single empty line.
 func NewBuffer() *Buffer {
@@ -180,17 +187,26 @@ func (b *Buffer) ReadOnly() bool { return b.readOnly }
 // it is set, since undoing is editing.
 func (b *Buffer) SetReadOnly(ro bool) { b.readOnly = ro }
 
+// SetEditGuard makes the buffer accept only the edits g allows, or every edit
+// again with nil: a buffer read-only in parts, such as a directory listing
+// whose file names are being edited.
+//
+// Undo and redo are not vetted. They replay edits, and every edit made since
+// the guard went in was one it allowed, so a guard should go in on a buffer
+// whose history is clear - one just regenerated.
+func (b *Buffer) SetEditGuard(g EditGuard) { b.guard = g }
+
 // Regenerate replaces the whole text of a buffer whose contents are generated,
 // such as a directory listing. It works on a read-only buffer, leaves it
 // unmodified, and discards the undo history: undoing back to an old listing
 // would show files that are no longer there.
 func (b *Buffer) Regenerate(rs []rune) {
-	ro := b.readOnly
-	b.readOnly = false
+	ro, g := b.readOnly, b.guard
+	b.readOnly, b.guard = false, nil
 	// Neither can fail: both positions come from the buffer itself.
 	_ = b.Delete(Pos{}, b.End())
 	_ = b.Insert(Pos{}, rs)
-	b.readOnly = ro
+	b.readOnly, b.guard = ro, g
 	b.undo = newUndoLog()
 	b.markRing = nil // positions in text that is gone
 }
@@ -275,6 +291,11 @@ func (b *Buffer) Insert(at Pos, rs []rune) error {
 	if len(rs) == 0 {
 		return nil
 	}
+	if b.guard != nil {
+		if err := b.guard(at, at, rs); err != nil {
+			return err
+		}
+	}
 	b.undo.recordInsert(at, rs)
 	return b.insertRaw(at, rs)
 }
@@ -294,6 +315,11 @@ func (b *Buffer) Delete(from, to Pos) error {
 	}
 	if from.Equal(to) {
 		return nil
+	}
+	if b.guard != nil {
+		if err := b.guard(from, to, nil); err != nil {
+			return err
+		}
 	}
 	b.undo.recordDelete(from, b.Text(from, to))
 	_, err := b.deleteRaw(from, to)

@@ -2,6 +2,7 @@ package text
 
 import (
 	"errors"
+	"slices"
 	"testing"
 )
 
@@ -291,6 +292,51 @@ func TestReadOnlyBufferRefusesEdits(t *testing.T) {
 	b.SetReadOnly(false)
 	if _, ok := b.Undo(); !ok || b.String() != "" {
 		t.Errorf("after SetReadOnly(false), undo gave %q, want the insert undone", b.String())
+	}
+}
+
+// An edit guard sees each edit before it is made, and one it refuses leaves the
+// text as it was. Regenerate is not an edit, and passes it.
+func TestEditGuardVetsEdits(t *testing.T) {
+	b := NewBuffer()
+	if err := b.Insert(Pos{}, []rune("fixed: name")); err != nil {
+		t.Fatal(err)
+	}
+	refused := errors.New("refused")
+	// Only the part after "fixed: " may change, and not by a newline.
+	b.SetEditGuard(func(from, to Pos, ins []rune) error {
+		if from.Col < 7 || from.Line != to.Line || slices.Contains(ins, '\n') {
+			return refused
+		}
+		return nil
+	})
+
+	if err := b.Insert(Pos{0, 11}, []rune("s")); err != nil {
+		t.Errorf("Insert in the open part: %v", err)
+	}
+	if err := b.Delete(Pos{0, 7}, Pos{0, 8}); err != nil {
+		t.Errorf("Delete in the open part: %v", err)
+	}
+	for _, try := range []func() error{
+		func() error { return b.Insert(Pos{0, 2}, []rune("x")) },
+		func() error { return b.Insert(Pos{0, 9}, []rune("\n")) },
+		func() error { return b.Delete(Pos{0, 5}, Pos{0, 9}) },
+	} {
+		if err := try(); !errors.Is(err, refused) {
+			t.Errorf("guarded edit returned %v, want the guard's error", err)
+		}
+	}
+	if got := b.String(); got != "fixed: ames" {
+		t.Errorf("text = %q, want only the allowed edits made", got)
+	}
+
+	b.Regenerate([]rune("other"))
+	if got := b.String(); got != "other" {
+		t.Errorf("Regenerate under a guard gave %q", got)
+	}
+	b.SetEditGuard(nil)
+	if err := b.Insert(Pos{}, []rune("x")); err != nil {
+		t.Errorf("Insert with the guard removed: %v", err)
 	}
 }
 
