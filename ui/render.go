@@ -53,6 +53,24 @@ type Frame struct {
 	// simply contributes no segment. See TypeFunc and BranchFunc.
 	TypeOf   TypeFunc
 	BranchOf BranchFunc
+	// ListingOf reports which buffers are listings rather than text. Optional:
+	// a nil ListingOf treats every buffer as text. See ListingFunc.
+	ListingOf ListingFunc
+}
+
+// ListingFunc reports whether a buffer is a listing - a directory, say - whose
+// lines are items rather than text.
+//
+// A listing is drawn differently in two ways. It has no line numbers, which
+// would count nothing a reader cares about. And the row point is on is drawn
+// as a bar across the window, as the selected row of a completion panel is,
+// because in a list the row is what point selects; a lone cursor cell in a
+// column of names is easy to lose.
+type ListingFunc func(*text.Buffer) bool
+
+// isListing asks f.ListingOf, treating a missing function as "no".
+func (f Frame) isListing(b *text.Buffer) bool {
+	return f.ListingOf != nil && b != nil && f.ListingOf(b)
 }
 
 // Render draws f onto scr using th. It does not call Show; the caller decides
@@ -84,7 +102,7 @@ func Render(scr tcell.Screen, f Frame, th Theme) {
 		rects = f.Tree.Layout(w, treeH)
 		for win, rect := range rects {
 			info := modelineInfo{Name: f.NameOf, Type: f.TypeOf, Branch: f.BranchOf}
-			drawWindow(scr, rect, win, win == f.Active, th, info, f.SpansOf)
+			drawWindow(scr, rect, win, win == f.Active, f.isListing(win.Buf), th, info, f.SpansOf)
 		}
 		for _, d := range f.Tree.Dividers(w, treeH) {
 			drawDivider(scr, d, th)
@@ -104,7 +122,7 @@ func Render(scr tcell.Screen, f Frame, th Theme) {
 }
 
 // drawWindow draws one pane: its visible buffer text, then its modeline.
-func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active bool, th Theme, info modelineInfo, spansOf SpansFunc) {
+func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active, listing bool, th Theme, info modelineInfo, spansOf SpansFunc) {
 	if rect.W <= 0 || rect.H <= 0 || win == nil || win.Buf == nil {
 		return
 	}
@@ -115,7 +133,7 @@ func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active bool,
 		// works in the narrowed text area: textX is where the text begins and
 		// textW how much of it there is. Handing drawLine those two is what puts
 		// the line numbers beyond the reach of the region and the bracket match.
-		gw := gutterFor(rect, win, th)
+		gw := gutterFor(rect, win, listing, th)
 		textX, textW := rect.X+gw, rect.W-gw
 
 		// Scroll both axes first: afterwards point is guaranteed to lie within
@@ -126,7 +144,7 @@ func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active bool,
 		win.ScrollToPoint(textH, th.ScrollMargin)
 		win.ScrollToPointHorizontally(textW)
 
-		drawGutter(scr, rect, win, textH, active, th)
+		drawGutter(scr, rect, win, textH, active, listing, th)
 
 		// Bracket matching is computed here, from point, at draw time. A command
 		// could not do it: Env cannot reach the screen by design, so it has
@@ -151,8 +169,17 @@ func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active bool,
 			if spansOf != nil {
 				spans = spansOf(win.Buf, ln)
 			}
+			reg := region.onLine(ln, l)
+			if listing && active && ln == win.Pt.Line {
+				// One flat bar, drawn like a selection to the window's edge.
+				// The row's own colours are dropped rather than inverted:
+				// inverted, each coloured field becomes a block of a different
+				// colour and the bar reads as a patchwork.
+				spans = nil
+				reg = regionHL{on: true, to: l.Len(), toEOL: true, style: th.ListCursor}
+			}
 			drawLine(scr, textX, rect.Y+i, textW,
-				l, win.LeftCol, th, paren.onLine(ln), region.onLine(ln, l), spans)
+				l, win.LeftCol, th, paren.onLine(ln), reg, spans)
 		}
 	}
 
@@ -304,7 +331,7 @@ func placeCursor(scr tcell.Screen, w, h, echoY int, rects map[*view.Window]view.
 
 	// The same gutter width drawWindow used, from the same function, because a
 	// disagreement here puts the cursor beside the character it is on.
-	gw := gutterFor(rect, f.Active, th)
+	gw := gutterFor(rect, f.Active, f.isListing(f.Active.Buf), th)
 	textW := rect.W - gw
 
 	pt := f.Active.Buf.ClampPos(f.Active.Pt)

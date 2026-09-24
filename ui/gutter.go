@@ -30,8 +30,8 @@ const minGutterText = 4
 // It is derived from the buffer's line count rather than from the rows on
 // screen, so the numbers do not shift sideways the moment you scroll past line
 // 99.
-func gutterWidth(win *view.Window, th Theme) int {
-	if !th.LineNumbers || win == nil || win.Buf == nil {
+func gutterWidth(win *view.Window, listing bool, th Theme) int {
+	if !th.LineNumbers || listing || win == nil || win.Buf == nil {
 		return 0
 	}
 	n := win.Buf.NumLines()
@@ -48,8 +48,8 @@ func gutterWidth(win *view.Window, th Theme) int {
 // separately. If they ever disagreed the cursor would sit a few columns away
 // from the character it is on, which is the most visible bug this feature could
 // have.
-func gutterFor(rect view.Rect, win *view.Window, th Theme) int {
-	gw := gutterWidth(win, th)
+func gutterFor(rect view.Rect, win *view.Window, listing bool, th Theme) int {
+	gw := gutterWidth(win, listing, th)
 	if gw == 0 || rect.W-gw < minGutterText {
 		return 0
 	}
@@ -62,8 +62,8 @@ func gutterFor(rect view.Rect, win *view.Window, th Theme) int {
 // separating column is left blank so the gutter reads as a margin rather than a
 // border. Rows past the end of the buffer get no number, matching the blank text
 // rows beside them.
-func drawGutter(scr tcell.Screen, rect view.Rect, win *view.Window, textH int, active bool, th Theme) {
-	gw := gutterFor(rect, win, th)
+func drawGutter(scr tcell.Screen, rect view.Rect, win *view.Window, textH int, active, listing bool, th Theme) {
+	gw := gutterFor(rect, win, listing, th)
 	if gw == 0 || textH <= 0 || rect.H <= 0 {
 		return
 	}

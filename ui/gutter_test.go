@@ -35,7 +35,7 @@ func TestGutterWidthGrowsWithTheBuffer(t *testing.T) {
 		{1, 2}, {9, 2}, {10, 3}, {99, 3}, {100, 4}, {999, 4}, {1000, 5}, {10000, 6},
 	} {
 		w := view.NewWindow(bufferOf(t, linesOf(tc.lines)...))
-		if got := gutterWidth(w, gutterTheme(true)); got != tc.want {
+		if got := gutterWidth(w, false, gutterTheme(true)); got != tc.want {
 			t.Errorf("%d lines: gutterWidth = %d, want %d", tc.lines, got, tc.want)
 		}
 	}
@@ -43,7 +43,7 @@ func TestGutterWidthGrowsWithTheBuffer(t *testing.T) {
 
 func TestGutterWidthIsZeroWhenDisabled(t *testing.T) {
 	w := view.NewWindow(bufferOf(t, linesOf(500)...))
-	if got := gutterWidth(w, gutterTheme(false)); got != 0 {
+	if got := gutterWidth(w, false, gutterTheme(false)); got != 0 {
 		t.Errorf("gutterWidth with numbers off = %d, want 0", got)
 	}
 }
@@ -53,9 +53,9 @@ func TestGutterWidthIsZeroWhenDisabled(t *testing.T) {
 // jump sideways as you scrolled.
 func TestGutterWidthDoesNotDependOnScrollPosition(t *testing.T) {
 	w := view.NewWindow(bufferOf(t, linesOf(200)...))
-	at0 := gutterWidth(w, gutterTheme(true))
+	at0 := gutterWidth(w, false, gutterTheme(true))
 	w.Top = 150
-	if at150 := gutterWidth(w, gutterTheme(true)); at150 != at0 {
+	if at150 := gutterWidth(w, false, gutterTheme(true)); at150 != at0 {
 		t.Errorf("gutterWidth = %d at Top=0 but %d at Top=150; the numbers would shift while scrolling", at0, at150)
 	}
 }
@@ -99,7 +99,7 @@ func TestRegionNeverStylesTheGutter(t *testing.T) {
 	th := gutterTheme(true)
 	scr := drawTh(t, 30, 8, f, th)
 
-	gw := gutterWidth(w, th)
+	gw := gutterWidth(w, false, th)
 	if gw == 0 {
 		t.Fatal("no gutter drawn; this test asserts nothing")
 	}
@@ -124,7 +124,7 @@ func TestBracketMatchNeverStylesTheGutter(t *testing.T) {
 	th := gutterTheme(true)
 	scr := drawTh(t, 30, 6, f, th)
 
-	gw := gutterWidth(w, th)
+	gw := gutterWidth(w, false, th)
 	for x := 0; x < gw; x++ {
 		c := cellAt(t, scr, x, 0)
 		if c.Style == th.ParenMatch || c.Style == th.ParenMismatch {
@@ -236,7 +236,7 @@ func TestHorizontalScrollUsesTheNarrowedWidth(t *testing.T) {
 	if !vis {
 		t.Fatal("cursor hidden")
 	}
-	gw := gutterWidth(w, th)
+	gw := gutterWidth(w, false, th)
 	if cx < gw {
 		t.Errorf("cursor at column %d is inside the %d-column gutter", cx, gw)
 	}
@@ -260,7 +260,7 @@ func TestTruncationMarkerSitsInTheLastTextColumn(t *testing.T) {
 	if got := cellAt(t, scr, 23, 0); len(got.Runes) == 0 || got.Runes[0] != TruncMarker {
 		t.Errorf("last column holds %q, want the truncation marker", string(got.Runes))
 	}
-	gw := gutterWidth(w, th)
+	gw := gutterWidth(w, false, th)
 	for x := 0; x < gw; x++ {
 		if got := cellAt(t, scr, x, 0); len(got.Runes) > 0 && got.Runes[0] == TruncMarker {
 			t.Errorf("truncation marker drawn in the gutter at column %d", x)
@@ -273,7 +273,7 @@ func TestTruncationMarkerSitsInTheLastTextColumn(t *testing.T) {
 func TestWideGlyphsAlignAfterTheGutter(t *testing.T) {
 	th := gutterTheme(true)
 	f, w := singleFrame(t, "日本語")
-	gw := gutterWidth(w, th)
+	gw := gutterWidth(w, false, th)
 	scr := drawTh(t, 30, 6, f, th)
 
 	for i, want := range []rune{'日', '本', '語'} {
@@ -295,7 +295,7 @@ func TestNarrowPaneDropsTheGutter(t *testing.T) {
 	}{
 		{6, true}, {8, true}, {9, false}, {40, false},
 	} {
-		got := gutterFor(view.Rect{W: tc.paneW, H: 5}, w, th)
+		got := gutterFor(view.Rect{W: tc.paneW, H: 5}, w, false, th)
 		if dropped := got == 0; dropped != tc.wantDrop {
 			t.Errorf("pane width %d: gutter = %d (dropped=%v), want dropped=%v",
 				tc.paneW, got, dropped, tc.wantDrop)
@@ -309,18 +309,18 @@ func TestGutterSurvivesDegenerateRects(t *testing.T) {
 	for _, r := range []view.Rect{
 		{}, {W: -5, H: -5}, {W: 0, H: 10}, {W: 10, H: 0}, {W: 1, H: 1},
 	} {
-		gutterFor(r, w, th) // must not panic
+		gutterFor(r, w, false, th) // must not panic
 		scr := sim(t, 30, 8)
-		drawGutter(scr, r, w, view.TextHeight(r), true, th) // must not panic
+		drawGutter(scr, r, w, view.TextHeight(r), true, false, th) // must not panic
 	}
 }
 
 func TestGutterHandlesNilWindow(t *testing.T) {
 	th := gutterTheme(true)
-	if got := gutterWidth(nil, th); got != 0 {
+	if got := gutterWidth(nil, false, th); got != 0 {
 		t.Errorf("gutterWidth(nil) = %d, want 0", got)
 	}
-	if got := gutterWidth(&view.Window{}, th); got != 0 {
+	if got := gutterWidth(&view.Window{}, false, th); got != 0 {
 		t.Errorf("gutterWidth with no buffer = %d, want 0", got)
 	}
 }
