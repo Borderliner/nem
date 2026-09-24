@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Borderliner/nem/syntax"
 	"github.com/Borderliner/nem/view"
 	"github.com/gdamore/tcell/v2"
 )
@@ -445,5 +446,25 @@ func TestClampIntHandlesAnInvertedRange(t *testing.T) {
 		if got := clampInt(tc.v, tc.lo, tc.hi); got != tc.want {
 			t.Errorf("clampInt(%d, %d, %d) = %d, want %d", tc.v, tc.lo, tc.hi, got, tc.want)
 		}
+	}
+}
+
+// An icon is drawn before the text with a space after it, in its class's
+// colour - except on the selected row, where it is part of the bar.
+func TestPanelLineIcon(t *testing.T) {
+	th := DefaultTheme()
+	scr := sim(t, 20, 3)
+	drawPanelLine(scr, 0, 0, 20, PanelLine{Text: "main.go", Icon: '', IconClass: syntax.Function}, th)
+	drawPanelLine(scr, 0, 1, 20, PanelLine{Text: "src/", Icon: '', IconClass: syntax.Function, Selected: true}, th)
+	scr.Show()
+
+	if got := rowText(t, scr, 0); got[:len(" main.go")] != " main.go" {
+		t.Errorf("row 0 = %q, want the icon, a space, then the text", got)
+	}
+	if fg, _, _ := cellAt(t, scr, 0, 0).Style.Decompose(); fg == tcell.ColorDefault {
+		t.Error("the icon on an ordinary row is uncoloured")
+	}
+	if _, _, attr := cellAt(t, scr, 0, 1).Style.Decompose(); attr&tcell.AttrReverse == 0 {
+		t.Error("the icon on the selected row is not part of the bar")
 	}
 }

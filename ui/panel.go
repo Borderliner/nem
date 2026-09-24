@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/Borderliner/nem/syntax"
 	"github.com/Borderliner/nem/text"
 	"github.com/Borderliner/nem/view"
 	"github.com/gdamore/tcell/v2"
@@ -42,6 +43,11 @@ type PanelLine struct {
 	// the whole interior so it reads as a bar rather than stopping at the end of
 	// its text.
 	Selected bool
+	// Icon, when not zero, is drawn before Text with a space after it, in the
+	// colour IconClass has in the syntax palette. It is not part of Text, so
+	// Match indices and the candidate a prompt returns are unaffected.
+	Icon      rune
+	IconClass syntax.Class
 }
 
 // Panel is a box to draw over the frame.
@@ -173,6 +179,16 @@ func drawPanelLine(scr tcell.Screen, x, y, width int, ln PanelLine, th Theme) {
 		for k := 0; k < width; k++ {
 			scr.SetContent(x+k, y, ' ', nil, base)
 		}
+	}
+	if ln.Icon != 0 && width > 2 {
+		// On the selected row the icon takes the bar's style like everything
+		// else on it: coloured, the cell would invert to a block of colour.
+		style := base
+		if !ln.Selected {
+			style = th.syntaxStyle(ln.IconClass)
+		}
+		scr.SetContent(x, y, ln.Icon, nil, style)
+		x, width = x+2, width-2
 	}
 	drawPanelText(scr, x, y, width, ln.Text, base, ln.Match, th)
 }

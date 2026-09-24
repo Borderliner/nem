@@ -188,3 +188,12 @@ func parenOver(hl lineHL, r text.RuneIdx, style, base tcell.Style) tcell.Style {
 	}
 	return style
 }
+
+// syntaxStyle is the style for class, or plain text when colouring is off or
+// the class is out of range - the same fallbacks as the draw loop's.
+func (t Theme) syntaxStyle(c syntax.Class) tcell.Style {
+	if !t.Syntax || int(c) >= numSyntaxClasses {
+		return t.Text
+	}
+	return t.SyntaxStyle[c]
+}
