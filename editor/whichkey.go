@@ -118,7 +118,7 @@ func (e *Editor) fireWhichKey() {
 	if e.whichKeyDelay() == 0 || len(e.pending) == 0 || e.mini != nil {
 		return
 	}
-	cs := e.keys.Continuations(e.pending)
+	cs := e.continuations(e.pending)
 	if len(cs) == 0 {
 		return
 	}
@@ -128,6 +128,29 @@ func (e *Editor) fireWhichKey() {
 	}
 	e.wk.view = v
 	e.wk.shows++
+}
+
+// continuations is what can follow seq in every keymap in force, as the keys
+// resolve: a mode's keymap comes first and shadows the global one, so in a
+// listing C-x offers dired's C-x C-q beside the global C-x keys, and where a
+// mode rebinds a key the panel names what that key does there.
+func (e *Editor) continuations(seq []keymap.Key) []keymap.Continuation {
+	stack := e.keymapStack()
+	if len(stack) == 1 {
+		return stack[0].Continuations(seq)
+	}
+	var out []keymap.Continuation
+	seen := map[string]bool{}
+	for _, m := range stack {
+		for _, c := range m.Continuations(seq) {
+			if k := c.Key.String(); !seen[k] {
+				seen[k] = true
+				out = append(out, c)
+			}
+		}
+	}
+	keymap.SortContinuations(out)
+	return out
 }
 
 // buildWhichKey lays the continuations out for the completion style in force:

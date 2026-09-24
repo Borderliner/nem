@@ -64,13 +64,19 @@ func (m *Map) Continuations(seq []Key) []Continuation {
 		out = append(out, c)
 	}
 
-	sort.Slice(out, func(i, j int) bool {
-		if gi, gj := keyGroup(out[i].Key), keyGroup(out[j].Key); gi != gj {
+	SortContinuations(out)
+	return out
+}
+
+// SortContinuations puts cs in the order Continuations returns, for a caller
+// that merges the continuations of several maps.
+func SortContinuations(cs []Continuation) {
+	sort.Slice(cs, func(i, j int) bool {
+		if gi, gj := keyGroup(cs[i].Key), keyGroup(cs[j].Key); gi != gj {
 			return gi < gj
 		}
-		return out[i].Key.String() < out[j].Key.String()
+		return cs[i].Key.String() < cs[j].Key.String()
 	})
-	return out
 }
 
 // bindingCount is the number of commands reachable at or beneath n.

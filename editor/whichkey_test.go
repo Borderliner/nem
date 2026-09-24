@@ -405,3 +405,32 @@ func TestWhichKeyReportsNothingDroppedWhenItAllFits(t *testing.T) {
 		t.Errorf("a complete panel must not claim a truncation:\n%s", body)
 	}
 }
+
+// A mode's keys are offered with the global ones, and in place of any they
+// shadow: in a listing C-x offers dired's C-x C-q, and while its names are
+// edited C-c offers the keys that finish the edit.
+func TestWhichKeyListsAModesKeys(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, "a.txt")
+	e, _ := newTestEditor(t)
+	listed(t, e, dir)
+
+	press(t, e, "C-x")
+	e.fireWhichKey()
+	body := wkText(t, e)
+	for _, want := range []string{"wdired-change-to-wdired-mode", "find-file"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("C-x in a listing does not offer %q:\n%s", want, body)
+		}
+	}
+	press(t, e, "C-g")
+
+	press(t, e, "C-x", "C-q", "C-c")
+	e.fireWhichKey()
+	body = wkText(t, e)
+	for _, want := range []string{"wdired-finish-edit", "wdired-abort-changes"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("C-c while editing names does not offer %q:\n%s", want, body)
+		}
+	}
+}
