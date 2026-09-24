@@ -20,8 +20,13 @@ func (e *Editor) UseStateDir(dir string) error {
 }
 
 // saveMemory writes the memory, quietly: a history that could not be saved is
-// not worth interrupting anyone over, and the next save tries again.
-func (e *Editor) saveMemory() { _ = e.mem.Save() }
+// not worth interrupting anyone over, and the next save tries again. Where
+// point is in each file goes with it, so a session that ends badly has still
+// kept the places as of its last save.
+func (e *Editor) saveMemory() {
+	e.rememberPlaces()
+	_ = e.mem.Save()
+}
 
 // SaveMemory is for the end of a session.
 func (e *Editor) SaveMemory() { e.saveMemory() }

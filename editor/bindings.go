@@ -96,6 +96,7 @@ var defaultBindings = []struct{ Spec, Command string }{
 
 	// Files.
 	{"C-x C-f", "find-file"},
+	{"C-x C-r", "recentf-open"},
 	{"C-x C-s", "save-buffer"},
 	{"C-x C-w", "write-file"},
 	{"C-x s", "save-some-buffers"},

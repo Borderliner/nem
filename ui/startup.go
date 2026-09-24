@@ -31,6 +31,7 @@ var startupLines = []string{
 	"a terminal editor with emacs keys",
 	"",
 	"  C-x C-f    open a file",
+	"  C-x C-r    open a recent file",
 	"  C-x d      browse a directory",
 	"  C-x C-s    save",
 	"  C-x C-c    exit",

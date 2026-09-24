@@ -253,6 +253,9 @@ func New(scr tcell.Screen) (*Editor, error) {
 	if err := registerKmacroCommands(e, reg); err != nil {
 		return nil, fmt.Errorf("registering keyboard macro commands: %w", err)
 	}
+	if err := registerRecentCommands(e, reg); err != nil {
+		return nil, fmt.Errorf("registering recentf-open: %w", err)
+	}
 
 	scratch := e.NewBuffer(ui.ScratchName)
 	e.active = view.NewWindow(scratch)
@@ -392,6 +395,7 @@ func (e *Editor) OpenFile(path string) (*text.Buffer, error) {
 	for _, b := range e.buffers {
 		if b.Path() == abs {
 			e.touch(b)
+			e.rememberFile(abs)
 			return b, nil
 		}
 	}
@@ -414,6 +418,9 @@ func (e *Editor) OpenFile(path string) (*text.Buffer, error) {
 	}
 	b.SetPath(abs)
 	e.adopt(b, e.uniqueName(filepath.Base(abs)))
+	// Back where it was left last time, and on the recent list for next time.
+	e.restorePlace(b, abs)
+	e.rememberFile(abs)
 
 	// Remember what the file looked like, so a later save can tell whether
 	// anything else has touched it.
@@ -437,6 +444,10 @@ func (e *Editor) KillBuffer(b *text.Buffer) error {
 	if len(e.buffers) <= 1 {
 		return errors.New("cannot kill the last buffer")
 	}
+	// Where point was goes with the rest of what is remembered, for when the
+	// file is opened again.
+	e.rememberPlace(b)
+	e.saveMemory()
 	var repl *text.Buffer
 	for _, c := range e.buffers {
 		if c != b {
@@ -523,6 +534,7 @@ func (e *Editor) SaveBuffer(b *text.Buffer, path string) error {
 	// repository: saving into one moves the buffer onto its branch.
 	e.forgetBranch(b)
 	e.afterSave(target)
+	e.rememberFile(target)
 	return nil
 }
 
