@@ -29,7 +29,10 @@ type Buffer struct {
 	// markActive says the region is live - highlighted, and replaced by typing.
 	// It is separate from hasMark on purpose; see MarkActive.
 	markActive bool
-	savePt     Pos
+	// markRing holds earlier marks, most recent first, for C-u C-SPC to go
+	// back through. Each SetMark pushes the mark it replaces.
+	markRing []Pos
+	savePt   Pos
 	// saveTop is the first line on screen when a window last left this buffer,
 	// restored with savePt so coming back shows the same view.
 	saveTop int
@@ -81,7 +84,35 @@ func (b *Buffer) Mark() Pos { return b.mark }
 // the buffer-edge jumps set it so C-x C-x can return, but in neither case is the
 // text between mark and point a selection. Commands that mean to select call
 // ActivateMark as well.
-func (b *Buffer) SetMark(p Pos) { b.mark, b.hasMark = p, true }
+func (b *Buffer) SetMark(p Pos) {
+	if b.hasMark && b.mark != p {
+		b.markRing = append([]Pos{b.mark}, b.markRing...)
+		if len(b.markRing) > markRingSize {
+			b.markRing = b.markRing[:markRingSize]
+		}
+	}
+	b.mark, b.hasMark = p, true
+}
+
+// markRingSize is how many earlier marks a buffer remembers: emacs's number.
+const markRingSize = 16
+
+// PopMark returns the mark, for point to jump to, and makes the most recent
+// earlier mark the mark, sending the current one to the far end of the ring -
+// so popping again and again visits every remembered position in turn, as
+// emacs's C-u C-SPC does. It reports false when there is no mark at all.
+func (b *Buffer) PopMark() (Pos, bool) {
+	if !b.hasMark {
+		return Pos{}, false
+	}
+	cur := b.mark
+	if len(b.markRing) > 0 {
+		b.mark = b.markRing[0]
+		b.markRing = append(b.markRing[1:], cur)
+	}
+	b.markActive = false
+	return cur, true
+}
 
 // HasMark reports whether a mark has been set in this buffer.
 //
@@ -91,7 +122,9 @@ func (b *Buffer) SetMark(p Pos) { b.mark, b.hasMark = p, true }
 // the distinction C-w would silently kill from the buffer start to point.
 func (b *Buffer) HasMark() bool { return b.hasMark }
 
-// ClearMark forgets the mark entirely, which also deactivates the region.
+// ClearMark forgets the mark entirely, which also deactivates the region. The
+// ring of earlier marks is kept: forgetting the current selection is not
+// forgetting where you have been.
 func (b *Buffer) ClearMark() { b.mark, b.hasMark, b.markActive = Pos{}, false, false }
 
 // MarkActive reports whether the region is live: drawn as a selection, and
@@ -159,6 +192,7 @@ func (b *Buffer) Regenerate(rs []rune) {
 	_ = b.Insert(Pos{}, rs)
 	b.readOnly = ro
 	b.undo = newUndoLog()
+	b.markRing = nil // positions in text that is gone
 }
 
 // RegenerateLine replaces the text of one line of a generated buffer, as
@@ -305,6 +339,9 @@ func (b *Buffer) insertRaw(at Pos, rs []rune) error {
 	b.noteEdit(at.Line, len(parts)-1)
 	b.mark = adjustForInsert(b.mark, at, rs)
 	b.savePt = adjustForInsert(b.savePt, at, rs)
+	for i, m := range b.markRing {
+		b.markRing[i] = adjustForInsert(m, at, rs)
+	}
 	return nil
 }
 
@@ -338,6 +375,9 @@ func (b *Buffer) deleteRaw(from, to Pos) ([]rune, error) {
 	b.noteEdit(from.Line, -(to.Line - from.Line))
 	b.mark = adjustForDelete(b.mark, from, to)
 	b.savePt = adjustForDelete(b.savePt, from, to)
+	for i, m := range b.markRing {
+		b.markRing[i] = adjustForDelete(m, from, to)
+	}
 	return removed, nil
 }
 

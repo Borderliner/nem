@@ -357,6 +357,8 @@ func gotoLine(e Env) error {
 	if last := w.Buf.NumLines() - 1; target > last {
 		target = last
 	}
+	// Where it jumped from is kept, for C-u C-SPC to come back to.
+	w.Buf.SetMark(w.Pt)
 	w.Pt = text.Pos{Line: target}
 	clearGoal(w)
 	return nil

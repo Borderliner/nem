@@ -110,3 +110,56 @@ func TestClearMarkDeactivates(t *testing.T) {
 		t.Error("SetMark after ClearMark revived the old active region")
 	}
 }
+
+// Setting the mark remembers the one it replaces; popping walks back through
+// them and round again, and edits keep every remembered position on its text.
+func TestMarkRing(t *testing.T) {
+	b := bufFrom("0123456789")
+	b.SetMark(Pos{0, 1})
+	b.SetMark(Pos{0, 5})
+	b.SetMark(Pos{0, 8})
+
+	var got []RuneIdx
+	for range 4 {
+		p, ok := b.PopMark()
+		if !ok {
+			t.Fatal("PopMark with a mark set reported none")
+		}
+		got = append(got, p.Col)
+	}
+	if want := []RuneIdx{8, 5, 1, 8}; !equalCols(got, want) {
+		t.Errorf("popped %v, want %v", got, want)
+	}
+
+	// Insert two runes at the start: every remembered position moves with
+	// its text.
+	if err := b.Insert(Pos{}, []rune("ab")); err != nil {
+		t.Fatal(err)
+	}
+	got = got[:0]
+	for range 3 {
+		p, _ := b.PopMark()
+		got = append(got, p.Col)
+	}
+	if want := []RuneIdx{7, 3, 10}; !equalCols(got, want) {
+		t.Errorf("after an insert, popped %v, want %v", got, want)
+	}
+}
+
+func TestPopMarkWithNoMark(t *testing.T) {
+	if _, ok := bufFrom("x").PopMark(); ok {
+		t.Error("PopMark on a buffer with no mark reported one")
+	}
+}
+
+func equalCols(a, b []RuneIdx) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}

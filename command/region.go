@@ -134,8 +134,20 @@ func advance(at text.Pos, rs []rune) text.Pos {
 //
 // Its binding C-SPC reaches the terminal as NUL and is folded to C-@ by
 // keymap.Normalize, so nothing here has to know about that encoding.
+//
+// With C-u it goes back instead: point jumps to the mark, and the mark
+// becomes the one before it, so C-u C-SPC repeated walks back through the
+// places the mark has been - where a search started, where M-< jumped from.
 func setMarkCommand(e Env) error {
 	b := e.Buf()
+	if _, explicit := e.Arg(); explicit {
+		p, ok := b.PopMark()
+		if !ok {
+			return ErrNoMark
+		}
+		edSetPoint(e, b.ClampPos(p))
+		return nil
+	}
 	b.SetMark(e.Win().Pt)
 	b.ActivateMark() // C-SPC is the deliberate act of starting a selection
 	e.Echo("Mark set")

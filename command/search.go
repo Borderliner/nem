@@ -330,6 +330,12 @@ func isearchCmd(backward bool) Func {
 		if s.failing {
 			return ErrSearchFailed
 		}
+		// Where the search started is kept, as emacs keeps it, so C-u C-SPC
+		// returns there.
+		if p := e.Win().Pt; p != s.origin {
+			e.Buf().SetMark(s.origin)
+			e.Echo("Mark saved where search started")
+		}
 		return nil
 	}
 }
