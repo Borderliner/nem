@@ -97,7 +97,10 @@ func runeAtPos(b *text.Buffer, p text.Pos) (rune, bool) {
 	if p.Col < 0 || p.Col >= l.Len() {
 		return 0, false
 	}
-	for c := range l.Clusters() {
+	// From the cluster at p's column rather than from the start of the line:
+	// this runs twice a frame, and walking a long line to reach point was a
+	// fifth of a keystroke's cost on one.
+	for c := range l.ClustersFrom(l.DisplayCol(p.Col)) {
 		if c.Start == p.Col {
 			return c.Runes[0], true
 		}
