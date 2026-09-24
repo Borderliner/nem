@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Borderliner/nem/command"
 	"github.com/Borderliner/nem/lua"
 	"github.com/Borderliner/nem/ui"
 	"github.com/gdamore/tcell/v2"
@@ -91,7 +92,7 @@ func TestConfigSettingsReachTheEditor(t *testing.T) {
 		WhichKeyDelay: 0, AutosaveIdle: 0,
 		Backup: false, Clipboard: "off", LineNumbers: false,
 		Syntax: false, Theme: "light", DeleteSelection: false,
-		OpenBinary: "text", Icons: "off",
+		OpenBinary: "text", Icons: "off", FillColumn: 64,
 	})
 
 	if e.th.ScrollMargin != 5 {
@@ -100,6 +101,10 @@ func TestConfigSettingsReachTheEditor(t *testing.T) {
 	if e.icons {
 		t.Error("icons did not reach the editor")
 	}
+	if command.FillColumn != 64 {
+		t.Error("fill-column did not reach the editor")
+	}
+	command.FillColumn = 70
 	if e.ext.mode != binaryText {
 		t.Error("open-binary did not reach the editor")
 	}

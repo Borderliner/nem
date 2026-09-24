@@ -870,6 +870,7 @@ func TestV2SettingsApplyAndValidate(t *testing.T) {
 		nem.set("delete-selection", false)
 		nem.set("open-binary", "system")
 		nem.set("icons", false)
+		nem.set("fill-column", 72)
 	`)
 	mustLoad(t, h)
 	got := h.Settings()
@@ -890,6 +891,7 @@ func TestV2SettingsApplyAndValidate(t *testing.T) {
 		{"delete-selection", got.DeleteSelection, false},
 		{"open-binary", got.OpenBinary, "system"},
 		{"icons", got.Icons, "off"},
+		{"fill-column", got.FillColumn, 72},
 	} {
 		if c.got != c.want {
 			t.Errorf("%s = %v, want %v", c.name, c.got, c.want)

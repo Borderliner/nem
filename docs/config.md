@@ -52,6 +52,7 @@ nem.set("tab-width", 4)          -- display width of a tab; default 8
 nem.set("scroll-margin", 3)      -- lines of context kept around point; default 2
 nem.set("line-numbers", true)    -- show a line-number gutter; default true
 nem.set("delete-selection", true)-- typing replaces the selection; default true
+nem.set("fill-column", 70)       -- width M-q re-wraps paragraphs to; default 70
 nem.set("syntax", true)          -- colour code; default true
 nem.set("theme", "auto")         -- syntax palette: "auto", "dark" or "light"
 

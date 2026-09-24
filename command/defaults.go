@@ -23,6 +23,7 @@ func RegisterAll(r *Registry) error {
 		{"lines", RegisterLines},
 		{"comment", RegisterComment},
 		{"space", RegisterSpace},
+		{"paragraph", RegisterParagraph},
 	}
 	for _, g := range groups {
 		if err := g.fn(r); err != nil {

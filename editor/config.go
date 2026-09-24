@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/Borderliner/nem/command"
 	"github.com/Borderliner/nem/keymap"
 	"github.com/Borderliner/nem/lua"
 	"github.com/Borderliner/nem/text"
@@ -118,6 +119,9 @@ func (e *Editor) applySettings(s lua.Settings) {
 		e.th.UseSyntaxPalette(ui.TerminalIsLight())
 	}
 	e.SetOpenBinary(s.OpenBinary)
+	if s.FillColumn > 0 {
+		command.FillColumn = s.FillColumn
+	}
 	switch s.Icons {
 	case "on":
 		e.SetIcons(true)

@@ -70,17 +70,24 @@ var commentByName = map[string]commentSyntax{
 // or a kind nem does not know, gets # - the most widely understood marker, and
 // the one scripts and configuration use.
 func commentFor(path string) commentSyntax {
-	base := strings.ToLower(filepath.Base(path))
-	if cs, ok := commentByName[base]; ok {
-		return cs
-	}
-	if strings.HasPrefix(base, "dockerfile") {
-		return hash
-	}
-	if cs, ok := commentByExt[strings.TrimPrefix(filepath.Ext(base), ".")]; ok {
+	if cs, ok := knownComment(path); ok {
 		return cs
 	}
 	return hash
+}
+
+// knownComment is the comment syntax for path when nem knows the kind of
+// file, and false when it would only be guessing.
+func knownComment(path string) (commentSyntax, bool) {
+	base := strings.ToLower(filepath.Base(path))
+	if cs, ok := commentByName[base]; ok {
+		return cs, true
+	}
+	if strings.HasPrefix(base, "dockerfile") {
+		return hash, true
+	}
+	cs, ok := commentByExt[strings.TrimPrefix(filepath.Ext(base), ".")]
+	return cs, ok
 }
 
 // RegisterComment adds the comment commands to r.

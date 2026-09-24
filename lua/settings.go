@@ -69,6 +69,9 @@ type Settings struct {
 	// each time, hand it to the "system" app, or open it as "text" anyway.
 	OpenBinary string
 
+	// FillColumn is the width M-q fills paragraphs to.
+	FillColumn int
+
 	// Icons is "on", "off" or "auto": whether file icons show in dired and the
 	// file and buffer prompts. They need a Nerd Font, or a terminal that ships
 	// its symbols, and "auto" turns them on only where that looks likely. A
@@ -86,7 +89,7 @@ func DefaultSettings() Settings {
 		Backup: true, Clipboard: "osc52", LineNumbers: true,
 		DeleteSelection: true,
 		Syntax:          true, Theme: "auto",
-		OpenBinary: "ask", Icons: "auto",
+		OpenBinary: "ask", Icons: "auto", FillColumn: 70,
 	}
 }
 
@@ -107,7 +110,7 @@ const (
 // why it has no effect.
 var knownSettings = []string{
 	"autosave-idle", "backup", "clipboard", "completion-rows", "completion-style",
-	"delete-selection", "icons", "line-numbers", "open-binary", "scroll-margin", "syntax", "tab-width",
+	"delete-selection", "fill-column", "icons", "line-numbers", "open-binary", "scroll-margin", "syntax", "tab-width",
 	"theme", "undo-style", "which-key-delay",
 }
 
@@ -189,6 +192,12 @@ func (s *Settings) set(key string, v glua.LValue) error {
 			return fmt.Errorf("line-numbers must be true or false, got %s", v.Type())
 		}
 		s.LineNumbers = bool(b)
+	case "fill-column":
+		n, err := checkRange(key, v, 10, 1000)
+		if err != nil {
+			return err
+		}
+		s.FillColumn = n
 	case "icons":
 		switch v := v.(type) {
 		case glua.LBool:
