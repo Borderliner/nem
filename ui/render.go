@@ -333,7 +333,7 @@ func drawMiniRows(scr tcell.Screen, y, width int, rows []PanelLine, f Frame, th 
 	// being edited and the count is a footnote to it.
 	used, note := cellWidth(f.Echo), cellWidth(f.MiniNote)
 	if x := width - note - 1; x >= used+2 {
-		drawPanelText(scr, x, y, note, f.MiniNote, th.MiniNote, nil, th)
+		drawPanelText(scr, x, y, note, f.MiniNote, th.MiniNote, nil, nil, th)
 	}
 }
 

@@ -468,3 +468,26 @@ func TestPanelLineIcon(t *testing.T) {
 		t.Error("the icon on the selected row is not part of the bar")
 	}
 }
+
+// Spans colour parts of a row by class, and leave the rest plain.
+func TestPanelLineSpans(t *testing.T) {
+	th := DefaultTheme()
+	scr := sim(t, 20, 1)
+	drawPanelLine(scr, 0, 0, 20, PanelLine{
+		Text:  "C-f → find-file",
+		Spans: []syntax.Span{{Start: 0, End: 3, Class: syntax.Constant}, {Start: 6, End: 15, Class: syntax.Function}},
+	}, th)
+	scr.Show()
+
+	fg := func(x int) tcell.Color { c, _, _ := cellAt(t, scr, x, 0).Style.Decompose(); return c }
+	want := func(c syntax.Class) tcell.Color { f, _, _ := th.SyntaxStyle[c].Decompose(); return f }
+	if fg(0) != want(syntax.Constant) {
+		t.Error("the key is not in its class's colour")
+	}
+	if fg(4) != tcell.ColorDefault {
+		t.Error("text outside every span was coloured")
+	}
+	if fg(6) != want(syntax.Function) {
+		t.Error("the command is not in its class's colour")
+	}
+}

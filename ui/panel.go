@@ -48,6 +48,9 @@ type PanelLine struct {
 	// Match indices and the candidate a prompt returns are unaffected.
 	Icon      rune
 	IconClass syntax.Class
+	// Spans colour parts of Text by syntax class, for a row that is more than
+	// one thing - a key and the command it runs. Rune indices, as Match.
+	Spans []syntax.Span
 }
 
 // Panel is a box to draw over the frame.
@@ -165,7 +168,7 @@ func drawPanelBorder(scr tcell.Screen, r view.Rect, title string, th Theme) {
 		// Inset two cells so the title clears both corners, and padded with a
 		// space either side so the label reads as set into the rule rather than
 		// running straight into it.
-		drawPanelText(scr, r.X+2, r.Y, r.W-4, " "+title+" ", st, nil, th)
+		drawPanelText(scr, r.X+2, r.Y, r.W-4, " "+title+" ", st, nil, nil, th)
 	}
 }
 
@@ -190,7 +193,7 @@ func drawPanelLine(scr tcell.Screen, x, y, width int, ln PanelLine, th Theme) {
 		scr.SetContent(x, y, ln.Icon, nil, style)
 		x, width = x+2, width-2
 	}
-	drawPanelText(scr, x, y, width, ln.Text, base, ln.Match, th)
+	drawPanelText(scr, x, y, width, ln.Text, base, ln.Match, ln.Spans, th)
 }
 
 // drawPanelText writes s at (x, y) clipped to width columns, emphasising the
@@ -201,14 +204,16 @@ func drawPanelLine(scr tcell.Screen, x, y, width int, ln PanelLine, th Theme) {
 // width implementation instead of two that can drift. A panel is a handful of
 // short lines drawn once a frame, so building a Line per row costs nothing next
 // to the text area it sits over.
-func drawPanelText(scr tcell.Screen, x, y, width int, s string, base tcell.Style, match []int, th Theme) {
+func drawPanelText(scr tcell.Screen, x, y, width int, s string, base tcell.Style, match []int, spans []syntax.Span, th Theme) {
 	if width <= 0 || s == "" {
 		return
 	}
 	l := text.NewLine([]rune(s))
 
 	// match is ascending, and so are the clusters, so one cursor walks both.
+	// spans are walked the same way, by the draw loop's own walker.
 	mi := 0
+	syn := newLineSyntax(spans, &th)
 	for c := range l.Clusters() {
 		if int(c.Col)+int(c.Width) > width {
 			// This cluster straddles the right edge; everything after it is
@@ -221,6 +226,11 @@ func drawPanelText(scr tcell.Screen, x, y, width int, s string, base tcell.Style
 			mi++ // an index before this cluster: out of range, or already used
 		}
 		style := base
+		if len(spans) > 0 {
+			// Laid over base rather than replacing it, so a coloured span on
+			// a selected row keeps the bar.
+			style = overlay(base, syn.styleAt(c.Start, base))
+		}
 		end := c.Start + text.RuneIdx(len(c.Runes))
 		if mi < len(match) && text.RuneIdx(match[mi]) < end {
 			style = overlay(style, th.PanelMatch)
