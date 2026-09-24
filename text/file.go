@@ -1,9 +1,11 @@
 package text
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"strings"
+	"unicode/utf8"
 )
 
 // ErrNoPath is returned by Save when the buffer has no associated file.
@@ -26,39 +28,63 @@ func LoadFile(path string) (*Buffer, error) {
 
 	b := NewBuffer()
 	b.path = path
-
-	// string(data) replaces invalid UTF-8 sequences with U+FFFD on conversion.
-	content := string(data)
-
-	// Line ending style is whatever the first line ending uses.
-	if i := strings.IndexByte(content, '\n'); i > 0 && content[i-1] == '\r' {
-		b.crlf = true
-	}
-	if b.crlf {
-		content = strings.ReplaceAll(content, "\r\n", "\n")
-	}
-
-	switch {
-	case content == "":
-		b.lines = []*Line{{}}
-		b.finalNL = false
-	default:
-		parts := strings.Split(content, "\n")
-		if parts[len(parts)-1] == "" {
-			parts = parts[:len(parts)-1]
-			b.finalNL = true
-		}
-		// One allocation for every Line rather than one each.
-		slab := make([]Line, len(parts))
-		b.lines = make([]*Line, len(parts))
-		for i, p := range parts {
-			slab[i] = NewLine([]rune(p))
-			b.lines[i] = &slab[i]
-		}
-	}
-
+	b.lines, b.crlf, b.finalNL = decodeLines(data)
 	b.undo = newUndoLog()
 	return b, nil
+}
+
+// decodeLines splits a file's bytes into lines, reporting whether it uses
+// CRLF - decided by its first line ending - and whether it ends in a newline.
+//
+// It decodes in one pass into one rune array that every line is a slice of,
+// and makes every Line in one more allocation. Converting to a string,
+// splitting it, and converting and then copying each part cost four copies of
+// the file and two allocations a line: opening 20MB took 200ms. Each line's
+// slice is capped at its own length, so an edit that grows it moves it to an
+// array of its own rather than writing over the next line.
+//
+// Invalid UTF-8 becomes U+FFFD a byte at a time, as a []rune conversion does.
+func decodeLines(data []byte) (lines []*Line, crlf, finalNL bool) {
+	if i := bytes.IndexByte(data, '\n'); i > 0 && data[i-1] == '\r' {
+		crlf = true
+	}
+	if len(data) == 0 {
+		return []*Line{{}}, crlf, false
+	}
+	n := bytes.Count(data, []byte{'\n'}) + 1
+	if data[len(data)-1] == '\n' {
+		finalNL = true
+		n--
+	}
+
+	runes := make([]rune, 0, utf8.RuneCount(data))
+	slab := make([]Line, n)
+	lines = make([]*Line, n)
+	li, start := 0, 0
+	for i := 0; i < len(data); {
+		switch c := data[i]; {
+		case c == '\n':
+			slab[li].runes = runes[start:len(runes):len(runes)]
+			lines[li] = &slab[li]
+			li++
+			start = len(runes)
+			i++
+		case c == '\r' && crlf && i+1 < len(data) && data[i+1] == '\n':
+			i++ // the CR of a CRLF; the LF ends the line
+		case c < utf8.RuneSelf:
+			runes = append(runes, rune(c))
+			i++
+		default:
+			r, size := utf8.DecodeRune(data[i:])
+			runes = append(runes, r)
+			i += size
+		}
+	}
+	if li < n {
+		slab[li].runes = runes[start:len(runes):len(runes)]
+		lines[li] = &slab[li]
+	}
+	return lines, crlf, finalNL
 }
 
 // bytes renders the buffer using its recorded line ending style.
