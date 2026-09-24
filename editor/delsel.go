@@ -105,18 +105,22 @@ func (e *Editor) consumeSelection(name string) (skip bool, done func()) {
 		command.AutoPair && e.mini == nil {
 		b.BeginUndoGroup()
 		defer b.EndUndoGroup()
-		if err := b.Insert(hi, []rune{closer}); err != nil {
-			e.Echo("%v", err)
-			return true, nil
-		}
+		// The opener first, so a buffer that refuses the edit - one read-only
+		// in parts - refuses before anything is inserted rather than after
+		// the closer is.
 		if err := b.Insert(lo, []rune{e.seq.LastRune}); err != nil {
 			e.Echo("%v", err)
 			return true, nil
 		}
-		// Point after the closer, the wrapped text having grown by the two.
 		if hi.Line == lo.Line {
 			hi.Col++
 		}
+		if err := b.Insert(hi, []rune{closer}); err != nil {
+			_ = b.Delete(lo, text.Pos{Line: lo.Line, Col: lo.Col + 1})
+			e.Echo("%v", err)
+			return true, nil
+		}
+		// Point after the closer.
 		w.Pt = text.Pos{Line: hi.Line, Col: hi.Col + 1}
 		b.DeactivateMark()
 		return true, nil
@@ -124,12 +128,13 @@ func (e *Editor) consumeSelection(name string) (skip bool, done func()) {
 
 	b.BeginUndoGroup()
 	if err := b.Delete(lo, hi); err != nil {
-		// Positions come from the buffer itself, so this should be unreachable.
-		// Degrade to the command running on its own rather than swallowing the
-		// keystroke, and say so.
+		// The buffer refused: it is read-only, or read-only in parts and the
+		// selection reaches into them. The keystroke goes no further - typed
+		// beside a selection it could not replace, it would do something the
+		// user did not ask for.
 		b.EndUndoGroup()
-		e.Echo("delete-selection: %v", err)
-		return false, nil
+		e.Echo("%v", err)
+		return true, nil
 	}
 	w.Pt = lo
 	// The selection is consumed, so it ends. The mark itself is kept, as emacs
