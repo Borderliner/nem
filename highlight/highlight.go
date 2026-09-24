@@ -19,6 +19,7 @@ package highlight
 import (
 	"github.com/Borderliner/nem/syntax"
 	"github.com/Borderliner/nem/text"
+	"slices"
 )
 
 // spanCacheLimit bounds how many lines' spans are held.
@@ -277,30 +278,25 @@ func (c *Cache) stateAt(line int) syntax.State {
 // shift moves each surviving state to the line it still describes, so that
 // pressing Enter does not throw away everything below the cursor.
 //
-// Old line j becomes new line j+delta for every j after the edit. The slice is
-// rebuilt rather than copied in place: the arithmetic for an overlapping move
-// in both directions is where this kind of code goes quietly wrong, and one
-// pass over a state per line costs microseconds even on a very large file.
+// Old line j becomes new line j+delta for every j after the edit, and the
+// slice ends up n+1 long. It is shifted in place: rebuilt, it allocated a
+// state per line of the file on every newline, which on a large file was most
+// of what a keystroke allocated. TestShiftMatchesTheRebuild pins it to the
+// straightforward rebuild it replaced, since overlapping moves are where this
+// kind of code goes quietly wrong.
 func (c *Cache) shift(from, delta, n int) {
-	need := n + 1
-	moved := make([]syntax.State, need)
-
-	head := from + 1
-	if head > len(c.states) {
-		head = len(c.states)
+	at := min(from+1, len(c.states))
+	switch {
+	case delta > 0:
+		c.states = slices.Insert(c.states, at, make([]syntax.State, delta)...)
+	case delta < 0:
+		c.states = slices.Delete(c.states, at, min(at-delta, len(c.states)))
 	}
-	if head > need {
-		head = need
+	if need := n + 1; len(c.states) < need {
+		c.states = append(c.states, make([]syntax.State, need-len(c.states))...)
+	} else {
+		c.states = c.states[:need]
 	}
-	copy(moved, c.states[:head])
-
-	for j := from + 1; j < len(c.states); j++ {
-		k := j + delta
-		if k > from && k < need {
-			moved[k] = c.states[j]
-		}
-	}
-	c.states = moved
 	c.states[0] = 0
 }
 
