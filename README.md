@@ -39,6 +39,17 @@ cd nem && make build
 ./nem file.txt
 ```
 
+Or with [xmake](https://xmake.io), which also runs the checks and the
+benchmarks:
+
+```sh
+xmake                                  # static, stripped build/<plat>/<arch>/release/nem
+xmake f -m debug && xmake              # with symbols, for a debugger
+xmake f --goos=windows --goarch=arm64 && xmake   # cross-compile
+xmake test                             # gofmt, go vet, tests with the race detector
+xmake bench -p ./editor -f Redraw      # benchmarks; xmake bench --help
+```
+
 Go 1.27 or later, and nothing else.
 
 `make build` sets `CGO_ENABLED=0`, which matters: Go turns cgo on by default
