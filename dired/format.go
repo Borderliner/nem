@@ -261,7 +261,17 @@ func header(dir, home string, shown []Entry, hidden int) (string, []syntax.Span)
 		files++
 		total += e.Size
 	}
-	summary := plural(dirs, "dir") + " · " + plural(files, "file") + " · " + humanSize(total)
+	summary := plural(dirs, "dir") + " · " + plural(files, "file")
+	// Alone in a sentence a bare "31" reads as a count, so small totals say
+	// bytes; the column can do without, the way ls does. With no files there is
+	// no total worth stating.
+	if files > 0 {
+		size := humanSize(total)
+		if total < 1000 {
+			size += " B"
+		}
+		summary += " · " + size
+	}
 	if hidden > 0 {
 		summary += fmt.Sprintf(" · %d hidden", hidden)
 	}

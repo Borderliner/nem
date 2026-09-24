@@ -200,9 +200,9 @@ func TestFormatPlaceholders(t *testing.T) {
 		header  string
 		line    string
 	}{
-		{"empty", nil, " " + p("/tmp/x/") + "  0 dirs · 0 files · 0", "   (empty)"},
+		{"empty", nil, " " + p("/tmp/x/") + "  0 dirs · 0 files", "   (empty)"},
 		{"only hidden", []Entry{{Name: ".a", Mode: 0o644, Size: 3, ModTime: old}},
-			" " + p("/tmp/x/") + "  0 dirs · 0 files · 0 · 1 hidden", "   (only hidden files)"},
+			" " + p("/tmp/x/") + "  0 dirs · 0 files · 1 hidden", "   (only hidden files)"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			l := Format(p("/tmp/x"), tc.entries, nil, Options{}, now, "")
@@ -243,7 +243,7 @@ func TestHeaderPath(t *testing.T) {
 		{"/é/ü", "", "/é/ü/", []syntax.Span{{Start: 1, End: 4, Class: syntax.Comment}, {Start: 4, End: 6, Class: syntax.Function}}},
 	} {
 		l := Format(p(tc.dir), nil, nil, Options{}, now, p(tc.home))
-		wantLine := " " + p(tc.path) + "  0 dirs · 0 files · 0"
+		wantLine := " " + p(tc.path) + "  0 dirs · 0 files"
 		if l.Lines[0] != wantLine {
 			t.Errorf("dir %q home %q: header %q, want %q", tc.dir, tc.home, l.Lines[0], wantLine)
 			continue
@@ -267,14 +267,14 @@ func TestHeaderSummaryCounts(t *testing.T) {
 		opts    Options
 		want    string
 	}{
-		{"singular", []Entry{d("a"), f("b", 1)}, Options{}, "1 dir · 1 file · 1"},
-		{"plural", []Entry{d("a"), d("b"), f("c", 1), f("d", 2)}, Options{}, "2 dirs · 2 files · 3"},
+		{"singular", []Entry{d("a"), f("b", 1)}, Options{}, "1 dir · 1 file · 1 B"},
+		{"plural", []Entry{d("a"), d("b"), f("c", 1), f("d", 2)}, Options{}, "2 dirs · 2 files · 3 B"},
 		{"no dirs", []Entry{f("c", 2048)}, Options{}, "0 dirs · 1 file · 2.0K"},
 		// Directory sizes are the size of the directory file itself, which
 		// says nothing about what is in it, so they are not totalled.
-		{"dirs not totalled", []Entry{d("a")}, Options{}, "1 dir · 0 files · 0"},
-		{"hidden counted", []Entry{f(".a", 5), d(".b"), f("c", 1)}, Options{}, "0 dirs · 1 file · 1 · 2 hidden"},
-		{"hidden shown", []Entry{f(".a", 5), d(".b"), f("c", 1)}, Options{ShowHidden: true}, "1 dir · 2 files · 6"},
+		{"dirs not totalled", []Entry{d("a")}, Options{}, "1 dir · 0 files"},
+		{"hidden counted", []Entry{f(".a", 5), d(".b"), f("c", 1)}, Options{}, "0 dirs · 1 file · 1 B · 2 hidden"},
+		{"hidden shown", []Entry{f(".a", 5), d(".b"), f("c", 1)}, Options{ShowHidden: true}, "1 dir · 2 files · 6 B"},
 	} {
 		l := Format(p("/x"), tc.entries, nil, tc.opts, now, "")
 		want := " " + p("/x/") + "  " + tc.want
