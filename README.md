@@ -43,7 +43,8 @@ xmake run nem file.txt
 xmake                                  # static, stripped build/<plat>/<arch>/release/nem
 xmake f -m debug && xmake              # with symbols, for a debugger
 xmake f --goos=windows --goarch=arm64 && xmake   # cross-compile
-xmake install                          # into the install prefix's bin
+xmake install --user                   # into ~/.local/bin, no root needed
+xmake install [-o DIR]                 # into DIR/bin, default /usr/local/bin
 xmake test                             # gofmt, go vet, tests with the race detector
 xmake bench -p ./editor -f Redraw      # benchmarks; xmake bench --help
 ```

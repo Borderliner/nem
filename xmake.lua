@@ -8,7 +8,9 @@
 --   xmake test                 gofmt, go vet, and the tests with the race detector
 --   xmake test nem/unit        one of those
 --   xmake bench                every benchmark; see xmake bench --help
---   xmake install              copy nem into the install prefix's bin
+--   xmake install --user       install into ~/.local/bin, no root needed
+--   xmake install [-o DIR]     install into DIR/bin (default /usr/local/bin)
+--   xmake uninstall [--user | -o DIR]
 --
 -- xmake drives the Go toolchain rather than compiling Go itself: `go build`
 -- already knows the module graph, the build cache and every platform's
@@ -184,5 +186,113 @@ task("bench")
             {'p', "packages",   "kv", "./...", "The packages to benchmark, e.g. ./editor."},
             {nil, "cpuprofile", "kv", nil,     "Write a CPU profile here (with a single package)."},
         }
+    }
+task_end()
+
+-- xmake install [--user | -o DIR], and xmake uninstall with the same.
+--
+-- These replace xmake's own install and uninstall, which have no way to say
+-- "for this user only". nem is one binary, so installing is building it and
+-- copying it into a bin directory:
+--
+--   --user    ~/.local/bin, which needs no root and is on PATH in most setups
+--   -o DIR    DIR/bin
+--   neither   /usr/local/bin, as xmake's own install does
+--
+-- (Each task works the directory out for itself: functions defined out here
+-- are not visible inside xmake's script sandbox.)
+
+local install_options = {
+    {nil, "user",       "k",  nil, "Install into ~/.local/bin, for this user only."},
+    {'o', "installdir", "kv", nil, "Install into INSTALLDIR/bin (default /usr/local)."},
+}
+
+task("install")
+    set_category("action")
+    on_run(function ()
+        import("core.base.option")
+        import("core.base.task")
+        import("core.project.config")
+        import("core.project.project")
+
+        -- Built first, as xmake's own install does, so what is copied is
+        -- what the sources say now.
+        task.run("build", {target = "nem"})
+        config.load()
+        local src = project.target("nem"):targetfile()
+
+        local bindir
+        if option.get("user") then
+            bindir = path.join(os.getenv("HOME") or os.getenv("USERPROFILE"), ".local", "bin")
+        else
+            local prefix = option.get("installdir") or os.getenv("INSTALLDIR") or os.getenv("DESTDIR")
+            if not prefix or prefix == "" then
+                prefix = is_host("windows") and path.join(os.getenv("LOCALAPPDATA"), "Programs", "nem") or "/usr/local"
+            end
+            bindir = path.join(prefix, "bin")
+        end
+        local dest = path.join(bindir, path.filename(src))
+        -- Copied beside the old one and renamed over it: the rename is
+        -- atomic, so a nem already running from dest keeps its file, where
+        -- copying onto it fails with "text file busy".
+        local ok = try { function ()
+            os.mkdir(bindir)
+            os.cp(src, dest .. ".new")
+            os.mv(dest .. ".new", dest)
+            return true
+        end }
+        if not ok then
+            -- xmake's own message for a directory it cannot write to says
+            -- the file is "busy", which sends people looking for the wrong
+            -- problem.
+            os.tryrm(dest .. ".new")
+            raise("cannot write to %s: run this as root, or use `xmake install --user` for ~/.local/bin", bindir)
+        end
+        cprint("${color.success}installed %s", dest)
+
+        local sep = is_host("windows") and ";" or ":"
+        local onpath = false
+        for _, dir in ipairs((os.getenv("PATH") or ""):split(sep)) do
+            if path.absolute(dir) == path.absolute(bindir) then
+                onpath = true
+            end
+        end
+        if not onpath then
+            cprint("${color.warning}%s is not on your PATH; add it to run nem by name", bindir)
+        end
+    end)
+    set_menu {
+        usage = "xmake install [--user | -o DIR]",
+        description = "Build nem and install it.",
+        options = install_options,
+    }
+task_end()
+
+task("uninstall")
+    set_category("action")
+    on_run(function ()
+        import("core.base.option")
+        local bindir
+        if option.get("user") then
+            bindir = path.join(os.getenv("HOME") or os.getenv("USERPROFILE"), ".local", "bin")
+        else
+            local prefix = option.get("installdir") or os.getenv("INSTALLDIR") or os.getenv("DESTDIR")
+            if not prefix or prefix == "" then
+                prefix = is_host("windows") and path.join(os.getenv("LOCALAPPDATA"), "Programs", "nem") or "/usr/local"
+            end
+            bindir = path.join(prefix, "bin")
+        end
+        local dest = path.join(bindir, is_host("windows") and "nem.exe" or "nem")
+        if os.isfile(dest) then
+            os.rm(dest)
+            cprint("${color.success}removed %s", dest)
+        else
+            cprint("${color.warning}%s is not installed", dest)
+        end
+    end)
+    set_menu {
+        usage = "xmake uninstall [--user | -o DIR]",
+        description = "Remove an installed nem.",
+        options = install_options,
     }
 task_end()
