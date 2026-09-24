@@ -132,11 +132,14 @@ func (k SortKey) Next() SortKey {
 }
 
 // Options controls what a listing shows. The zero value is the default:
-// details shown, hidden entries omitted, sorted by name.
+// details shown, hidden entries omitted, sorted by name, no icons.
 type Options struct {
 	ShowHidden  bool
 	HideDetails bool
 	Sort        SortKey
+	// Icons puts a Nerd Font glyph before each name. Off in the zero value
+	// because it needs a font this package cannot know the terminal has.
+	Icons bool
 }
 
 // Read lists every entry of dir (not recursive), hidden ones included; Format

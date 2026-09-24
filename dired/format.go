@@ -10,6 +10,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/Borderliner/nem/icons"
 	"github.com/Borderliner/nem/syntax"
 )
 
@@ -80,7 +81,7 @@ func Format(dir string, entries []Entry, marks map[string]rune, opts Options, no
 	l.Lines = make([]string, 0, n)
 	l.Spans = make([][]syntax.Span, 0, n)
 
-	head, headSpans := header(l.Dir, home, shown, l.Hidden)
+	head, headSpans := header(l.Dir, home, shown, l.Hidden, opts.Icons)
 	l.Lines = append(l.Lines, head, "")
 	l.Spans = append(l.Spans, headSpans, nil)
 
@@ -155,6 +156,14 @@ func FormatEntry(e Entry, mark rune, opts Options, now time.Time) (string, []syn
 		}
 	}
 
+	if opts.Icons {
+		ic := icons.For(e.Name, iconKind(e))
+		col := NameColumn(opts) - iconWidth
+		b.WriteRune(ic.Glyph)
+		b.WriteByte(' ')
+		add(col, col+1, ic.Class)
+	}
+
 	name := sanitize(e.Name)
 	if e.IsDir {
 		// A marker as in ls -F, not a path separator, so "/" on every OS.
@@ -220,10 +229,38 @@ func nameClass(e Entry, mark rune) (syntax.Class, bool) {
 // NameColumn is the rune column at which an entry's name starts on its line.
 // It depends only on opts: everything before the name is fixed-width.
 func NameColumn(opts Options) int {
+	col := detailsNameCol
 	if opts.HideDetails {
-		return bareNameCol
+		col = bareNameCol
 	}
-	return detailsNameCol
+	if opts.Icons {
+		col += iconWidth
+	}
+	return col
+}
+
+// iconWidth is the columns an icon takes before a name: the glyph, which the
+// icons package keeps to one cell, and a space. The space is not decoration:
+// many terminals draw a Nerd Font glyph wider than its cell, and without it
+// the glyph would run into the name.
+const iconWidth = 2
+
+// iconKind is what the icons package needs to know about an entry beyond its
+// name.
+func iconKind(e Entry) icons.Kind {
+	switch {
+	case e.IsParent():
+		return icons.Parent
+	case e.Mode&fs.ModeSymlink != 0 && e.IsDir:
+		return icons.LinkDir
+	case e.Mode&fs.ModeSymlink != 0:
+		return icons.Link
+	case e.IsDir:
+		return icons.Dir
+	case e.Executable():
+		return icons.Exec
+	}
+	return icons.File
 }
 
 // EntryAt returns the entry on buffer line line, and false for the header, the
@@ -251,7 +288,7 @@ func (l *Listing) LineOf(name string) (int, bool) {
 
 // header builds line 0: the abbreviated directory, then a summary of what is
 // shown.
-func header(dir, home string, shown []Entry, hidden int) (string, []syntax.Span) {
+func header(dir, home string, shown []Entry, hidden int, withIcon bool) (string, []syntax.Span) {
 	path := sanitize(abbreviate(dir, home))
 	sep := string(filepath.Separator)
 	if !strings.HasSuffix(path, sep) {
@@ -287,7 +324,13 @@ func header(dir, home string, shown []Entry, hidden int) (string, []syntax.Span)
 	}
 
 	var spans []syntax.Span
-	pathStart := 1
+	lead := " "
+	if withIcon {
+		ic := icons.For(".", icons.Dir)
+		lead = " " + string(ic.Glyph) + " "
+		spans = append(spans, syntax.Span{Start: 1, End: 2, Class: ic.Class})
+	}
+	pathStart := utf8.RuneCountInString(lead)
 	pathEnd := pathStart + utf8.RuneCountInString(path)
 	// The final component is what the user needs at a glance; the leading
 	// path is context, so it is dimmed. "/" and "~/" have no leading part.
@@ -300,7 +343,7 @@ func header(dir, home string, shown []Entry, hidden int) (string, []syntax.Span)
 	sumStart := pathEnd + 2
 	spans = append(spans, syntax.Span{Start: sumStart, End: sumStart + utf8.RuneCountInString(summary), Class: syntax.Comment})
 
-	return " " + path + "  " + summary, spans
+	return lead + path + "  " + summary, spans
 }
 
 // abbreviate replaces a leading home directory with "~".

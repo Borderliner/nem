@@ -576,3 +576,43 @@ func TestEveryLineHasValidSpans(t *testing.T) {
 		checkSpans(t, Format(p("/x/y"), entries, marks, opts, now, p("/x")))
 	}
 }
+
+// With icons on, each name is led by its glyph and a space, the name column
+// moves over to make room, and the layout before it is unchanged.
+func TestIconsLeadEachName(t *testing.T) {
+	entries := []Entry{
+		{Name: ParentName, IsDir: true, Mode: fs.ModeDir | 0o755, ModTime: now},
+		{Name: "src", IsDir: true, Mode: fs.ModeDir | 0o755, ModTime: now},
+		{Name: "main.go", Mode: 0o644, Size: 10, ModTime: now},
+	}
+	for _, opts := range []Options{{Icons: true}, {Icons: true, HideDetails: true}} {
+		l := Format("/x/proj", entries, nil, opts, now, "")
+		col := NameColumn(opts)
+		plainCol := NameColumn(Options{HideDetails: opts.HideDetails})
+		if col != plainCol+2 {
+			t.Fatalf("NameColumn with icons = %d, want %d", col, plainCol+2)
+		}
+		for i, want := range map[int]string{0: " ../", 1: " src/", 2: " main.go"} {
+			line := []rune(l.Lines[FirstEntry+i])
+			if got := string(line[col-2:]); got != want {
+				t.Errorf("details=%v line %d from the icon = %q, want %q", !opts.HideDetails, i, got, want)
+			}
+			// The details are where they were without icons.
+			plain := []rune(formatEntryString(entries[i], Options{HideDetails: opts.HideDetails}))
+			if string(line[:plainCol]) != string(plain[:plainCol]) {
+				t.Errorf("icons moved the columns before the name: %q vs %q", string(line[:plainCol]), string(plain[:plainCol]))
+			}
+		}
+		checkSpans(t, l)
+		if !strings.HasPrefix(l.Lines[0], "  /x/proj/") {
+			t.Errorf("header = %q, want an open folder before the path", l.Lines[0])
+		}
+	}
+}
+
+// formatEntryString is FormatEntry's text alone, with no mark, for comparing
+// layouts.
+func formatEntryString(e Entry, opts Options) string {
+	s, _ := FormatEntry(e, ' ', opts, now)
+	return s
+}
