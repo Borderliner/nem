@@ -77,7 +77,7 @@ by name, time or size.
 
 | Key | Does |
 |---|---|
-| `RET` `^` | open the file or directory at point · go up a level |
+| `RET` `^` | open the file or directory at point (`..` goes up) · go up a level |
 | `n` `p` | next and previous file |
 | `m` `u` `t` `U` | mark · unmark · invert the marks · unmark all |
 | `d` `x` | flag for deletion · delete the flagged files |

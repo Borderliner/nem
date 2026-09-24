@@ -108,7 +108,7 @@ func TestDiredRefusesTyping(t *testing.T) {
 }
 
 // n and p move a file at a time and stop at the ends rather than wandering onto
-// the header.
+// the header. The top is the parent entry.
 func TestDiredMovesByFile(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, "a", "b", "c")
@@ -120,8 +120,12 @@ func TestDiredMovesByFile(t *testing.T) {
 		t.Errorf("after four n, on %q, want the last file, c", got)
 	}
 	press(t, e, "p", "C-p", "<up>", "p")
+	if got := atEntry(t, e); got != ".." {
+		t.Errorf("after four p, on %q, want the top entry, ..", got)
+	}
+	press(t, e, "M-<")
 	if got := atEntry(t, e); got != "a" {
-		t.Errorf("after four p, on %q, want the first file, a", got)
+		t.Errorf("after M-<, on %q, want the first file, a", got)
 	}
 	press(t, e, "M->")
 	if got := atEntry(t, e); got != "c" {
@@ -487,10 +491,50 @@ func TestDiredRenders(t *testing.T) {
 	if got := row(0); !strings.HasPrefix(got, " ") || !strings.Contains(got, filepath.Base(dir)) {
 		t.Errorf("row 0 = %q, want the header with no line number", got)
 	}
-	if got := row(dired.FirstEntry); !strings.Contains(got, "sub/") {
-		t.Errorf("row %d = %q, want the sub/ entry", dired.FirstEntry, got)
+	if got := row(dired.FirstEntry); !strings.Contains(got, "../") {
+		t.Errorf("row %d = %q, want the parent entry", dired.FirstEntry, got)
+	}
+	if got := row(dired.FirstEntry + 1); !strings.Contains(got, "sub/") {
+		t.Errorf("row %d = %q, want the sub/ entry", dired.FirstEntry+1, got)
 	}
 	if !strings.Contains(row(22), "dired") {
 		t.Errorf("modeline = %q, want it to say dired", row(22))
+	}
+}
+
+// The parent entry sits at the top: RET on it goes up, with point on the
+// directory just left, as ^ does. Nothing acts on it - D there would otherwise
+// offer to delete the directory being looked at.
+func TestDiredParentEntry(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, filepath.Join("sub", "x"))
+	e, _ := newTestEditor(t)
+	_, st := listed(t, e, filepath.Join(dir, "sub"))
+
+	if got := atEntry(t, e); got != "x" {
+		t.Errorf("a new listing puts point on %q, want the first file, not ..", got)
+	}
+	press(t, e, "p")
+	if got := atEntry(t, e); got != ".." {
+		t.Fatalf("p from the first file lands on %q, want ..", got)
+	}
+
+	for _, k := range []string{"m", "d", "D", "R", "w"} {
+		press(t, e, k)
+		wantEcho(t, e, "Cannot operate on ..")
+		if len(st.marks) != 0 {
+			t.Errorf("%s marked the parent entry", k)
+		}
+	}
+	if !exists(dir) {
+		t.Fatal("the parent directory is gone")
+	}
+
+	press(t, e, "RET")
+	if st.dir != dir {
+		t.Fatalf("RET on .. lists %s, want %s", st.dir, dir)
+	}
+	if got := atEntry(t, e); got != "sub" {
+		t.Errorf("after RET on .., point is on %q, want sub", got)
 	}
 }

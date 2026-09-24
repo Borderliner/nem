@@ -69,8 +69,11 @@ func TestReadPlainEntries(t *testing.T) {
 		t.Fatalf("Read: %v", err)
 	}
 	got := byName(t, entries)
-	if len(got) != 4 {
-		t.Fatalf("Read returned %d entries, want 4: %v", len(got), entries)
+	if len(got) != 5 {
+		t.Fatalf("Read returned %d entries, want 4 and the parent: %v", len(got), entries)
+	}
+	if up := got[ParentName]; !up.IsParent() || !up.IsDir || up.Hidden() {
+		t.Errorf(".. = %+v, want a directory that is the parent and not hidden", up)
 	}
 
 	a := got["a.txt"]
@@ -163,10 +166,10 @@ func TestReadKeepsEntriesWhoseLstatFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Read: %v", err)
 	}
-	if len(entries) != 1 {
-		t.Fatalf("Read returned %v, want the one entry", entries)
+	if len(entries) != 2 || !entries[0].IsParent() {
+		t.Fatalf("Read returned %v, want the parent and the one entry", entries)
 	}
-	e := entries[0]
+	e := entries[1]
 	if e.Name != "secret" || e.Mode != 0 || e.Size != 0 || !e.ModTime.IsZero() {
 		t.Errorf("entry = %+v, want only the name known", e)
 	}
@@ -279,5 +282,18 @@ func TestSortOrders(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A filesystem root has nowhere above it, so it gets no parent entry.
+func TestReadRootHasNoParent(t *testing.T) {
+	entries, err := Read(string(filepath.Separator))
+	if err != nil {
+		t.Skipf("cannot read the root here: %v", err)
+	}
+	for _, e := range entries {
+		if e.IsParent() {
+			t.Fatal("the root lists a parent")
+		}
 	}
 }

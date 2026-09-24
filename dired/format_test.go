@@ -256,6 +256,36 @@ func TestHeaderPath(t *testing.T) {
 	}
 }
 
+// The parent entry leads whatever the sort, is never hidden or marked, is
+// not counted, and does not stop an otherwise empty directory saying so.
+func TestParentEntry(t *testing.T) {
+	up := Entry{Name: ParentName, IsDir: true, Mode: fs.ModeDir | 0o755, ModTime: now}
+	for _, key := range []SortKey{ByName, ByTime, BySize} {
+		l := Format("/x", []Entry{
+			{Name: "a", IsDir: true, Mode: fs.ModeDir | 0o755, ModTime: now.Add(time.Hour)},
+			up,
+			{Name: "big", Size: 1 << 20, Mode: 0o644, ModTime: now.Add(time.Hour)},
+		}, map[string]rune{ParentName: '*'}, Options{Sort: key}, now, "")
+		if e, _ := l.EntryAt(FirstEntry); !e.IsParent() {
+			t.Errorf("sorted by %s, the first entry is %q, want ..", key, e.Name)
+		}
+		if got := l.Lines[FirstEntry]; []rune(got)[MarkColumn] != ' ' || !strings.HasSuffix(got, "../") {
+			t.Errorf("parent line = %q, want it unmarked and shown as ../", got)
+		}
+		if !strings.Contains(l.Lines[0], "1 dir · 1 file") {
+			t.Errorf("header = %q; the parent should not be counted", l.Lines[0])
+		}
+	}
+
+	l := Format("/x", []Entry{up}, nil, Options{}, now, "")
+	if len(l.Lines) != FirstEntry+2 || !strings.Contains(l.Lines[FirstEntry+1], "(empty)") {
+		t.Errorf("lines = %q, want .. then the empty placeholder", l.Lines)
+	}
+	if _, ok := l.EntryAt(FirstEntry + 1); ok {
+		t.Error("the placeholder counts as an entry")
+	}
+}
+
 func TestHeaderSummaryCounts(t *testing.T) {
 	d := func(name string) Entry {
 		return Entry{Name: name, Mode: fs.ModeDir | 0o755, IsDir: true, Size: 4096, ModTime: old}

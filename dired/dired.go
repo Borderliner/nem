@@ -45,8 +45,16 @@ type Entry struct {
 	resolved fs.FileMode
 }
 
-// Hidden reports whether the name starts with a dot.
-func (e Entry) Hidden() bool { return strings.HasPrefix(e.Name, ".") }
+// ParentName names the entry for the directory above, which Read lists so a
+// listing can be left the same way it was entered: by RET on a directory.
+const ParentName = ".."
+
+// IsParent reports whether e is the entry for the directory above.
+func (e Entry) IsParent() bool { return e.Name == ParentName }
+
+// Hidden reports whether the name starts with a dot. The parent entry is not
+// hidden: it is the way out, not a dotfile.
+func (e Entry) Hidden() bool { return strings.HasPrefix(e.Name, ".") && !e.IsParent() }
 
 // Executable reports whether the entry is a regular file, or a symlink to one,
 // with any execute bit set. Directories are excluded: their x bit means
@@ -133,6 +141,8 @@ type Options struct {
 
 // Read lists every entry of dir (not recursive), hidden ones included; Format
 // does the filtering and ordering, so toggling either needs no second read.
+// Unless dir is a filesystem root, the list also holds a ParentName entry for
+// the directory above.
 //
 // An entry whose Lstat fails - it vanished between readdir and lstat, or the
 // directory is readable but not searchable - is still listed with its name and
@@ -141,7 +151,10 @@ type Options struct {
 // itself; entries read before such a failure are returned alongside it.
 func Read(dir string) ([]Entry, error) {
 	names, err := readNames(dir)
-	entries := make([]Entry, 0, len(names))
+	entries := make([]Entry, 0, len(names)+1)
+	if p, ok := parentEntry(dir); ok {
+		entries = append(entries, p)
+	}
 	for _, name := range names {
 		entries = append(entries, readEntry(filepath.Join(dir, name), name))
 	}
@@ -158,6 +171,30 @@ func readNames(dir string) ([]string, error) {
 	}
 	defer f.Close()
 	return f.Readdirnames(-1)
+}
+
+// parentEntry describes the directory above dir, or reports false at a root.
+//
+// The parent is the lexical one - dir with its last component removed - which
+// is where dired goes on RET or ^, so a directory reached through a symlink is
+// left back the way it was entered. It is Stat'ed rather than Lstat'ed: that
+// lexical parent may itself be a link, and ".." is a place to go, not a link
+// to show a target for.
+func parentEntry(dir string) (Entry, bool) {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return Entry{}, false
+	}
+	up := filepath.Dir(abs)
+	if up == abs {
+		return Entry{}, false
+	}
+	e := Entry{Name: ParentName, IsDir: true}
+	if info, err := os.Stat(up); err == nil {
+		e.Mode, e.ModTime = info.Mode(), info.ModTime()
+		e.resolved = e.Mode
+	}
+	return e, true
 }
 
 func readEntry(path, name string) Entry {
@@ -204,6 +241,13 @@ func sortEntries(entries []Entry, key SortKey) {
 		return strings.Compare(a.e.Name, b.e.Name)
 	}
 	slices.SortFunc(ks, func(a, b keyed) int {
+		// The way out is always at the top, whatever the order below it.
+		if a.e.IsParent() != b.e.IsParent() {
+			if a.e.IsParent() {
+				return -1
+			}
+			return 1
+		}
 		if a.e.IsDir != b.e.IsDir {
 			if a.e.IsDir {
 				return -1

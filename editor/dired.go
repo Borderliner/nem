@@ -236,7 +236,7 @@ func (e *Editor) diredRender(b *text.Buffer, st *diredState, focus string) {
 			}
 		}
 		if fresh {
-			return st.entryPos(dired.FirstEntry)
+			return st.entryPos(st.firstFileLine())
 		}
 		return st.entryPos(s.line)
 	}
@@ -256,6 +256,16 @@ func (st *diredState) entryPos(line int) text.Pos {
 	}
 	line = max(dired.FirstEntry, min(line, dired.FirstEntry+n-1))
 	return text.Pos{Line: line, Col: text.RuneIdx(dired.NameColumn(st.opts))}
+}
+
+// firstFileLine is the line of the first entry other than the parent, where a
+// new listing puts point: the way out is one p away, and m or D pressed
+// straight away should act on a file.
+func (st *diredState) firstFileLine() int {
+	if len(st.list.Entries) > 1 && st.list.Entries[0].IsParent() {
+		return dired.FirstEntry + 1
+	}
+	return dired.FirstEntry
 }
 
 // homeDir abbreviates listing headers to ~. Without one nothing is abbreviated.
@@ -288,19 +298,42 @@ func (st *diredState) pathOf(en dired.Entry) string { return filepath.Join(st.di
 // targets is what an operation acts on: the entries marked with mark if there
 // are any, otherwise the entry at point. It is the emacs rule, and what makes
 // one key serve both a single file and a selection.
+//
+// The parent entry is never a target. It is how to leave the directory, and
+// D on it would otherwise offer to delete the directory being looked at.
 func (e *Editor) targets(st *diredState, mark rune) []dired.Entry {
 	var out []dired.Entry
 	for _, en := range st.list.Entries {
-		if st.marks[en.Name] == mark {
+		if st.marks[en.Name] == mark && !en.IsParent() {
 			out = append(out, en)
 		}
 	}
 	if len(out) == 0 {
-		if en, ok := e.entryAtPoint(st); ok {
+		if en, ok := e.entryAtPoint(st); ok && !en.IsParent() {
 			out = append(out, en)
 		}
 	}
 	return out
+}
+
+// noTarget says why an operation found nothing to act on.
+func (e *Editor) noTarget(st *diredState) {
+	if en, ok := e.entryAtPoint(st); ok && en.IsParent() {
+		e.Echo("Cannot operate on %s", dired.ParentName)
+		return
+	}
+	e.Echo("No file on this line")
+}
+
+// diredUp lists the parent of st's directory, with point on the directory just
+// left, or says there is nowhere to go.
+func (e *Editor) diredUp(b *text.Buffer, st *diredState) error {
+	parent := filepath.Dir(st.dir)
+	if parent == st.dir {
+		e.Echo("Already at the top")
+		return nil
+	}
+	return e.diredGo(b, st, parent, filepath.Base(st.dir))
 }
 
 // registerDiredCommands adds dired and its commands. Like the display commands
@@ -336,6 +369,9 @@ func registerDiredCommands(e *Editor, reg *command.Registry) error {
 			Fn: func(command.Env) error { return e.diredJump() }},
 		{Name: "dired-find-file", Doc: "Visit the file at point, or list the directory at point.",
 			Fn: onEntry(func(b *text.Buffer, st *diredState, en dired.Entry) error {
+				if en.IsParent() {
+					return e.diredUp(b, st)
+				}
 				if en.IsDir {
 					return e.diredGo(b, st, st.pathOf(en), "")
 				}
@@ -346,14 +382,7 @@ func registerDiredCommands(e *Editor, reg *command.Registry) error {
 				return e.diredOtherWindow(st.pathOf(en), en.IsDir)
 			})},
 		{Name: "dired-up-directory", Doc: "List the parent directory, with point on this one.",
-			Fn: inDired(func(b *text.Buffer, st *diredState) error {
-				parent := filepath.Dir(st.dir)
-				if parent == st.dir {
-					e.Echo("Already at the top")
-					return nil
-				}
-				return e.diredGo(b, st, parent, filepath.Base(st.dir))
-			})},
+			Fn: inDired(func(b *text.Buffer, st *diredState) error { return e.diredUp(b, st) })},
 		{Name: "dired-next-line", Doc: "Move to the next file, ARG files down.",
 			Fn: inDired(func(b *text.Buffer, st *diredState) error {
 				n, _ := e.Arg()
@@ -366,9 +395,9 @@ func registerDiredCommands(e *Editor, reg *command.Registry) error {
 				e.diredMove(st, -n)
 				return nil
 			})},
-		{Name: "dired-first-file", Doc: "Move to the first file in the listing.",
+		{Name: "dired-first-file", Doc: "Move to the first file in the listing, below the parent entry.",
 			Fn: inDired(func(b *text.Buffer, st *diredState) error {
-				e.active.Pt = st.entryPos(dired.FirstEntry)
+				e.active.Pt = st.entryPos(st.firstFileLine())
 				return nil
 			})},
 		{Name: "dired-last-file", Doc: "Move to the last file in the listing.",
@@ -396,6 +425,9 @@ func registerDiredCommands(e *Editor, reg *command.Registry) error {
 		{Name: "dired-toggle-marks", Doc: "Mark every unmarked file and unmark every marked one.",
 			Fn: inDired(func(b *text.Buffer, st *diredState) error {
 				for _, en := range st.list.Entries {
+					if en.IsParent() {
+						continue
+					}
 					switch st.marks[en.Name] {
 					case '*':
 						delete(st.marks, en.Name)
@@ -468,7 +500,7 @@ func registerDiredCommands(e *Editor, reg *command.Registry) error {
 			Fn: inDired(func(b *text.Buffer, st *diredState) error {
 				ts := e.targets(st, '*')
 				if len(ts) == 0 {
-					e.Echo("No file on this line")
+					e.noTarget(st)
 					return nil
 				}
 				names := make([]string, len(ts))
@@ -524,12 +556,7 @@ func (e *Editor) diredPrompt() error {
 func (e *Editor) diredJump() error {
 	cur := e.active.Buf
 	if st := e.diredOf(cur); st != nil {
-		parent := filepath.Dir(st.dir)
-		if parent == st.dir {
-			e.Echo("Already at the top")
-			return nil
-		}
-		return e.diredGo(cur, st, parent, filepath.Base(st.dir))
+		return e.diredUp(cur, st)
 	}
 	dir, focus := e.bufferDir(cur), ""
 	if p := cur.Path(); p != "" {
@@ -664,6 +691,10 @@ func (e *Editor) diredSetMark(b *text.Buffer, st *diredState, mark rune, advance
 		e.Echo("No file on this line")
 		return nil
 	}
+	if en.IsParent() {
+		e.noTarget(st)
+		return nil
+	}
 	if mark == ' ' {
 		delete(st.marks, en.Name)
 	} else {
@@ -717,7 +748,7 @@ func (e *Editor) yesOrNo(question string) (bool, error) {
 // diredDelete deletes ens after asking, then lists the directory again.
 func (e *Editor) diredDelete(b *text.Buffer, st *diredState, ens []dired.Entry) error {
 	if len(ens) == 0 {
-		e.Echo("No file on this line")
+		e.noTarget(st)
 		return nil
 	}
 	inside := ""
@@ -774,7 +805,7 @@ func describeCount(n int) string { return fmt.Sprintf("%d file%s", n, plural(n))
 func (e *Editor) diredTransfer(b *text.Buffer, st *diredState, copying bool) error {
 	ens := e.targets(st, '*')
 	if len(ens) == 0 {
-		e.Echo("No file on this line")
+		e.noTarget(st)
 		return nil
 	}
 	verb, did := "Rename", "Renamed"

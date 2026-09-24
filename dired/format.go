@@ -84,10 +84,24 @@ func Format(dir string, entries []Entry, marks map[string]rune, opts Options, no
 	l.Lines = append(l.Lines, head, "")
 	l.Spans = append(l.Spans, headSpans, nil)
 
-	if len(shown) == 0 {
+	real := 0
+	for _, e := range shown {
+		mark := marks[e.Name]
+		if e.IsParent() {
+			mark = ' ' // nothing acts on the parent, so nothing marks it
+		} else {
+			real++
+		}
+		line, spans := FormatEntry(e, mark, opts, now)
+		l.Lines = append(l.Lines, line)
+		l.Spans = append(l.Spans, spans)
+	}
+
+	if real == 0 {
 		// A buffer with nothing under the header reads as broken; saying why
 		// it is empty - and that hidden files exist, when they do - answers
-		// the question before the user asks it.
+		// the question before the user asks it. It goes after the parent entry,
+		// if there is one, and is not an entry itself.
 		text := "(empty)"
 		if l.Hidden > 0 {
 			text = "(only hidden files)"
@@ -95,13 +109,6 @@ func Format(dir string, entries []Entry, marks map[string]rune, opts Options, no
 		line := "   " + text
 		l.Lines = append(l.Lines, line)
 		l.Spans = append(l.Spans, []syntax.Span{{Start: 3, End: utf8.RuneCountInString(line), Class: syntax.Comment}})
-		return l
-	}
-
-	for _, e := range shown {
-		line, spans := FormatEntry(e, marks[e.Name], opts, now)
-		l.Lines = append(l.Lines, line)
-		l.Spans = append(l.Spans, spans)
 	}
 	return l
 }
@@ -254,6 +261,9 @@ func header(dir, home string, shown []Entry, hidden int) (string, []syntax.Span)
 	dirs, files := 0, 0
 	var total int64
 	for _, e := range shown {
+		if e.IsParent() {
+			continue
+		}
 		if e.IsDir {
 			dirs++
 			continue

@@ -46,10 +46,10 @@ func TestReadAndFormatANamedPipe(t *testing.T) {
 	dir := t.TempDir()
 	mkfifo(t, filepath.Join(dir, "fifo"))
 	entries, err := Read(dir)
-	if err != nil || len(entries) != 1 {
-		t.Fatalf("Read = %v, %v; want the one pipe", entries, err)
+	if err != nil || len(entries) != 2 {
+		t.Fatalf("Read = %v, %v; want the parent and the one pipe", entries, err)
 	}
-	e := entries[0]
+	e := entries[1]
 	if e.Mode&fs.ModeNamedPipe == 0 {
 		t.Fatalf("mode %v, want a named pipe", e.Mode)
 	}
