@@ -178,7 +178,7 @@ func (e *Editor) readLoop(ms *miniState) {
 			ms.abort = true
 			return
 		}
-		e.HandleEvent(ev)
+		e.handleEvent(ev)
 		if !e.paste.active {
 			e.Redraw()
 		}
@@ -421,7 +421,7 @@ func (e *Editor) ReadChar(prompt string, valid []rune) (rune, error) {
 		}
 		ke, ok := ev.(*tcell.EventKey)
 		if !ok {
-			e.HandleEvent(ev)
+			e.handleEvent(ev)
 			continue
 		}
 		k := DecodeKey(ke, e.keys.TreatCtrlHAsBackspace)
@@ -469,7 +469,7 @@ func (e *Editor) ReadKey(prompt string) (keymap.Key, error) {
 		}
 		ke, ok := ev.(*tcell.EventKey)
 		if !ok {
-			e.HandleEvent(ev)
+			e.handleEvent(ev)
 			continue
 		}
 		if k := DecodeKey(ke, e.keys.TreatCtrlHAsBackspace); k != (keymap.Key{}) {

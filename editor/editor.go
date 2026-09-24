@@ -151,6 +151,12 @@ type Editor struct {
 	// ext decides what happens to files that are not text. See external.go.
 	ext externalState
 
+	// km is keyboard macros, and lastSeqLen how many keys made the last key
+	// sequence, so the keys that end a recording can be left out of it. See
+	// kmacro.go.
+	km         kmacroState
+	lastSeqLen int
+
 	// icons shows a file's icon beside its name in dired and in the file and
 	// buffer prompts. Off until the config's icons setting is applied: the
 	// default, "auto", guesses from the terminal and its fonts, which is not
@@ -236,6 +242,9 @@ func New(scr tcell.Screen) (*Editor, error) {
 	}
 	if err := registerExternalCommands(e, reg); err != nil {
 		return nil, fmt.Errorf("registering external commands: %w", err)
+	}
+	if err := registerKmacroCommands(e, reg); err != nil {
+		return nil, fmt.Errorf("registering keyboard macro commands: %w", err)
 	}
 
 	scratch := e.NewBuffer(ui.ScratchName)

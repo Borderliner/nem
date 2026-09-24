@@ -92,6 +92,8 @@ var tcellSpecialFor = map[keymap.SpecialKey]tcell.Key{
 	keymap.KeyPgUp:      tcell.KeyPgUp,
 	keymap.KeyPgDn:      tcell.KeyPgDn,
 	keymap.KeyF1:        tcell.KeyF1,
+	keymap.KeyF3:        tcell.KeyF3,
+	keymap.KeyF4:        tcell.KeyF4,
 }
 
 // tcell's simulation screen holds only 10 queued events and InjectKey BLOCKS

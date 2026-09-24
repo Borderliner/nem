@@ -61,6 +61,13 @@ var defaultBindings = []struct{ Spec, Command string }{
 	{"M-=", "count-words"},
 	{"C-x =", "what-cursor-position"},
 
+	// Keyboard macros.
+	{"<f3>", "kmacro-start-macro-or-insert-counter"},
+	{"<f4>", "kmacro-end-or-call-macro"},
+	{"C-x (", "kmacro-start-macro"},
+	{"C-x )", "kmacro-end-macro"},
+	{"C-x e", "kmacro-end-and-call-macro"},
+
 	// Line movement. Not an emacs binding: emacs has no native line move, and
 	// M-<up>/M-<down> is the convention every other editor uses.
 	{"M-<up>", "move-lines-up"},

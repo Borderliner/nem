@@ -121,20 +121,41 @@ func (e *Editor) Loop() error {
 //
 // Outside Loop - tests that drive HandleEvent directly - there is no channel
 // and PollEvent is the only source, so it stays the fallback.
+//
+// A keyboard macro being played back comes first: its events stand in for the
+// terminal's, which is how a prompt inside a macro gets its keys. An event
+// read from the terminal here is recorded if a macro is being defined, since
+// the prompt that asked for it never passes it through HandleEvent.
 func (e *Editor) nextEvent() tcell.Event {
+	if len(e.km.queue) > 0 {
+		ev := e.km.queue[0]
+		e.km.queue = e.km.queue[1:]
+		return ev
+	}
+	var ev tcell.Event
 	if e.events == nil {
-		return e.scr.PollEvent()
+		ev = e.scr.PollEvent()
+	} else {
+		var ok bool
+		if ev, ok = <-e.events; !ok {
+			return nil // the screen finalized underneath us
+		}
 	}
-	ev, ok := <-e.events
-	if !ok {
-		return nil // the screen finalized underneath us
-	}
+	e.recordEvent(ev)
 	return ev
 }
 
-// HandleEvent processes one terminal event. Exported so tests can drive the
+// HandleEvent processes one terminal event from the top level, recording it
+// when a keyboard macro is being defined. Exported so tests can drive the
 // editor a keystroke at a time without a real loop.
 func (e *Editor) HandleEvent(ev tcell.Event) {
+	e.recordEvent(ev)
+	e.handleEvent(ev)
+}
+
+// handleEvent processes one event without recording it: an event that
+// nextEvent already recorded, or one a macro is playing back.
+func (e *Editor) handleEvent(ev tcell.Event) {
 	// A paste is claimed before anything else sees a key: between the markers
 	// nothing may reach the keymap. See paste.go.
 	if e.pasteEvent(ev, time.Now()) {
@@ -177,6 +198,10 @@ func (e *Editor) HandleKey(k keymap.Key) {
 	// not come back. Dismissing here rather than per branch is what keeps the
 	// key itself from being consumed.
 	e.dismissStartup()
+	// Straight after C-x e, a bare e plays the macro again.
+	if e.kmacroRepeatKey(k) {
+		return
+	}
 
 	// C-g is handled before anything else, because in emacs it is never a
 	// no-op. Cancelling a half-typed C-x prefix or a half-typed argument must
@@ -213,6 +238,7 @@ func (e *Editor) HandleKey(k keymap.Key) {
 		// command legitimately left behind — a failing incremental search
 		// reports through Echo and then the accepting RET would erase it.
 		hadPrefix := len(e.pending) > 1
+		e.lastSeqLen = len(e.pending)
 		e.pending = nil
 		if hadPrefix {
 			e.echo = ""
@@ -227,6 +253,7 @@ func (e *Editor) HandleKey(k keymap.Key) {
 		// self-insert-command needs the triggering rune: nothing else in Env
 		// reports which key ran a command.
 		if selfInserting(k) {
+			e.lastSeqLen = 1
 			e.seq.LastRune = k.Rune
 			e.dispatchReporting("self-insert-command")
 			e.afterMiniEdit()
@@ -234,6 +261,7 @@ func (e *Editor) HandleKey(k keymap.Key) {
 		}
 		e.arg.reset()
 		e.Echo("%s is undefined", spec)
+		e.noteFailure(errUndefinedKey)
 	}
 }
 
@@ -314,10 +342,12 @@ func (e *Editor) runKeyCommand(name string, k keymap.Key, from *keymap.Map) {
 // end of the buffer wants silence, not an error.
 func (e *Editor) dispatchReporting(name string) {
 	err := e.dispatch(name)
+	e.noteFailure(err)
 	switch {
 	case err == nil,
 		errors.Is(err, command.ErrQuit),
 		errors.Is(err, command.ErrOpenedElsewhere),
+		errors.Is(err, command.ErrSearchFailed),
 		errors.Is(err, command.ErrBeginningOfBuffer),
 		errors.Is(err, command.ErrEndOfBuffer):
 	default:

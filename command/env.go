@@ -63,6 +63,11 @@ var (
 	// caller stops, and nothing is reported beyond what OpenFile said itself.
 	ErrOpenedElsewhere = errors.New("opened with the system app")
 
+	// ErrSearchFailed is an incremental search ended on a pattern it could
+	// not find. The search has said so already, so nothing more is reported;
+	// it is returned so that a keyboard macro stops there, as in emacs.
+	ErrSearchFailed = errors.New("search failed")
+
 	// ErrBeginningOfBuffer and ErrEndOfBuffer report that point could not move
 	// because it already sits at a boundary.
 	//

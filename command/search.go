@@ -205,6 +205,9 @@ type Isearch struct {
 	// skip is how many matches to step past, incremented by Advance. A
 	// pattern edit resets it, because the match numbering has changed.
 	skip int
+
+	// failing reports that the pattern, as it stands, is not found.
+	failing bool
 }
 
 // NewIsearch opens a session searching forward, or backward when backward is
@@ -295,6 +298,7 @@ func (s *Isearch) run() bool {
 		return true
 	}
 	p, ok := s.find()
+	s.failing = !ok
 	if !ok {
 		s.e.Win().Pt = s.lastGood
 		s.e.Echo("Failing I-search: %s", s.pat)
@@ -322,6 +326,9 @@ func isearchCmd(backward bool) Func {
 				e.Echo("Quit")
 			}
 			return err
+		}
+		if s.failing {
+			return ErrSearchFailed
 		}
 		return nil
 	}
