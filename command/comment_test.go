@@ -11,14 +11,20 @@ import (
 // runAll dispatches name through the full default registry, as the editor would.
 func runAll(t *testing.T, f *commandtest.Fake, name string) {
 	t.Helper()
+	if err := allCommands(t).Run(name, f); err != nil {
+		t.Fatalf("%s: %v", name, err)
+	}
+	f.SetLastCommand(name)
+}
+
+// allCommands is the full default registry.
+func allCommands(t *testing.T) *command.Registry {
+	t.Helper()
 	r, err := command.NewDefaultRegistry()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := r.Run(name, f); err != nil {
-		t.Fatalf("%s: %v", name, err)
-	}
-	f.SetLastCommand(name)
+	return r
 }
 
 // fileEnv is a fake editing a file called name, holding lines.
