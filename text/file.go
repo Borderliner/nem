@@ -40,7 +40,7 @@ func LoadFile(path string) (*Buffer, error) {
 
 	switch {
 	case content == "":
-		b.lines = []Line{NewLine(nil)}
+		b.lines = []*Line{{}}
 		b.finalNL = false
 	default:
 		parts := strings.Split(content, "\n")
@@ -48,9 +48,12 @@ func LoadFile(path string) (*Buffer, error) {
 			parts = parts[:len(parts)-1]
 			b.finalNL = true
 		}
-		b.lines = make([]Line, len(parts))
+		// One allocation for every Line rather than one each.
+		slab := make([]Line, len(parts))
+		b.lines = make([]*Line, len(parts))
 		for i, p := range parts {
-			b.lines[i] = NewLine([]rune(p))
+			slab[i] = NewLine([]rune(p))
+			b.lines[i] = &slab[i]
 		}
 	}
 

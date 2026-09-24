@@ -18,7 +18,12 @@ var ErrReadOnly = errors.New("buffer is read-only")
 // each with its own cursor. Buffer keeps only savePt, the point restored when
 // a window next visits it.
 type Buffer struct {
-	lines   []Line
+	// lines holds pointers, not Lines, for two reasons. A newline shifts every
+	// line after it, and moving eight bytes a line instead of seventy-two is
+	// what keeps RET cheap in a large file. And a *Line from Line(i) then stays
+	// the line it was, rather than whichever line an edit above moved into
+	// its slot.
+	lines   []*Line
 	mark    Pos
 	hasMark bool
 	// markActive says the region is live - highlighted, and replaced by typing.
@@ -48,7 +53,7 @@ type Buffer struct {
 // NewBuffer returns an empty buffer holding a single empty line.
 func NewBuffer() *Buffer {
 	return &Buffer{
-		lines:     []Line{NewLine(nil)},
+		lines:     []*Line{{}},
 		undo:      newUndoLog(),
 		dirtyFrom: noDirtyLine,
 	}
@@ -58,7 +63,7 @@ func NewBuffer() *Buffer {
 func (b *Buffer) NumLines() int { return len(b.lines) }
 
 // Line returns the line at index i.
-func (b *Buffer) Line(i int) *Line { return &b.lines[i] }
+func (b *Buffer) Line(i int) *Line { return b.lines[i] }
 
 // Path returns the file this buffer is associated with, empty if none.
 func (b *Buffer) Path() string { return b.path }
@@ -273,14 +278,15 @@ func (b *Buffer) insertRaw(at Pos, rs []rune) error {
 		tail := make([]rune, 0, len(last)+len(cur)-int(at.Col))
 		tail = append(append(tail, last...), cur[at.Col:]...)
 
-		built := make([]Line, 0, len(parts))
+		built := make([]*Line, 0, len(parts))
 		head := b.lines[at.Line]
 		head.setRunes(append(cur[:at.Col], parts[0]...))
 		built = append(built, head)
 		for _, p := range parts[1 : len(parts)-1] {
-			built = append(built, NewLine(p))
+			l := NewLine(p)
+			built = append(built, &l)
 		}
-		built = append(built, Line{runes: tail})
+		built = append(built, &Line{runes: tail})
 		b.lines = slices.Replace(b.lines, at.Line, at.Line+1, built...)
 	}
 
@@ -306,7 +312,7 @@ func (b *Buffer) deleteRaw(from, to Pos) ([]rune, error) {
 	removed := b.Text(from, to)
 
 	// In place, for the reasons insertRaw gives.
-	first := &b.lines[from.Line]
+	first := b.lines[from.Line]
 	if to.Line == from.Line {
 		first.setRunes(slices.Delete(first.runes, int(from.Col), int(to.Col)))
 	} else {
