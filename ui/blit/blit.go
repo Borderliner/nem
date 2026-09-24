@@ -15,6 +15,8 @@
 package blit
 
 import (
+	"sync"
+
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/cellbuf"
@@ -65,10 +67,11 @@ func Draw(scr tcell.Screen, x, y, w, h int, s string) {
 		return
 	}
 
+	parser := getParser()
+	defer parsers.Put(parser)
 	var (
 		pen      cellbuf.Style
 		state    byte
-		parser   = ansi.NewParser()
 		row, col int
 		// Position of the last cluster written, so a stray zero-width mark can
 		// attach to it rather than claiming a cell of its own.
@@ -132,6 +135,19 @@ func Draw(scr tcell.Screen, x, y, w, h int, s string) {
 	}
 }
 
+// parsers are reused rather than made per call. Each carries a 64KB buffer for
+// control-string payloads, and a frame draws a modeline per window, the
+// dividers and the echo row: a new parser each time was the largest
+// allocation in a frame, and all of it garbage by the next.
+var parsers = sync.Pool{New: func() any { return ansi.NewParser() }}
+
+// getParser returns a parser in its ground state.
+func getParser() *ansi.Parser {
+	p := parsers.Get().(*ansi.Parser)
+	p.Reset()
+	return p
+}
+
 // Size reports the cell dimensions a styled string occupies: the width of its
 // widest line and its line count. It decodes via the same path as Draw, so the
 // two cannot disagree about how much room a string needs.
@@ -140,10 +156,11 @@ func Size(s string) (w, h int) {
 		return 0, 0
 	}
 
+	parser := getParser()
+	defer parsers.Put(parser)
 	var (
-		state  byte
-		parser = ansi.NewParser()
-		col    int
+		state byte
+		col   int
 	)
 	h = 1
 
