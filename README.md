@@ -83,6 +83,7 @@ by name, time or size.
 | `d` `x` | flag for deletion · delete the flagged files |
 | `D` `R` `C` | delete · rename or move · copy — the marked files, or the one at point |
 | `+` `g` `w` `o` `q` | new directory · re-read · copy the name · open in the other window · leave |
+| `E` | open with the system's app — the marked files, or the one at point |
 
 Deleting asks you to type `yes`, nothing is replaced without asking, and a
 rename carries any buffer visiting the file along with it. One listing follows
@@ -114,6 +115,14 @@ typed anything, so `C-x C-f RET` opens it in dired. `M-RET` takes exactly what
 you typed, for a new file or buffer whose name happens to match an existing
 one. Buffers are listed most recently visited first, so `C-x b RET` flips back
 to the previous one.
+
+**Files that aren't text** — a PDF, a photo, a song or a zip is not dumped into
+a buffer as garbage. nem asks: `s` opens it with your system's app for that
+type, `t` opens it as text anyway, and `S` or `T` answers the same for every
+file of that type for the rest of the session. To answer without being asked,
+set `nem.set("open-binary", "system")` or `"text"`. `M-x open-externally` hands
+any file to the system app on purpose, and so does `E` in dired. With no desktop
+to open things on (over plain SSH, say) files open as text, as before.
 
 **Line numbers** — shown by default, and drawn outside the text so they can
 never be selected or copied. `C-x n` toggles them.

@@ -10,10 +10,12 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 
+	"github.com/Borderliner/nem/command"
 	"github.com/Borderliner/nem/editor"
 	"github.com/Borderliner/nem/ui"
 )
@@ -81,6 +83,9 @@ func run(paths []string) (err error) {
 
 	for i, path := range paths {
 		b, err := e.OpenFile(path)
+		if errors.Is(err, command.ErrOpenedElsewhere) {
+			continue // handed to the system's app; nothing to show here
+		}
 		if err != nil {
 			return fmt.Errorf("opening %s: %w", path, err)
 		}

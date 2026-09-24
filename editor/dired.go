@@ -84,6 +84,7 @@ var diredBindings = []struct{ Spec, Command string }{
 	{".", "dired-toggle-hidden"},
 	{"s", "dired-sort-toggle"},
 	{"w", "dired-copy-filename"},
+	{"E", "dired-do-open"},
 	{"q", "quit-window"},
 }
 

@@ -148,6 +148,9 @@ type Editor struct {
 	// paste collects a bracketed paste between its markers. See paste.go.
 	paste pasteState
 
+	// ext decides what happens to files that are not text. See external.go.
+	ext externalState
+
 	// frames counts what Redraw has painted, so a test can tell one redraw per
 	// paste from one per pasted character without timing anything.
 	frames int
@@ -200,6 +203,7 @@ func New(scr tcell.Screen) (*Editor, error) {
 		before:    map[string][]func(){},
 		after:     map[string][]func(){},
 		clip:      clipboard{read: defaultClipboardReader},
+		ext:       newExternalState(),
 	}
 
 	// recover-file closes over the editor rather than going through Env. It is
@@ -223,6 +227,9 @@ func New(scr tcell.Screen) (*Editor, error) {
 	}
 	if err := registerDiredCommands(e, reg); err != nil {
 		return nil, fmt.Errorf("registering dired commands: %w", err)
+	}
+	if err := registerExternalCommands(e, reg); err != nil {
+		return nil, fmt.Errorf("registering external commands: %w", err)
 	}
 
 	scratch := e.NewBuffer(ui.ScratchName)
@@ -364,6 +371,19 @@ func (e *Editor) OpenFile(path string) (*text.Buffer, error) {
 		if b.Path() == abs {
 			e.touch(b)
 			return b, nil
+		}
+	}
+	if fi, err := os.Stat(abs); err == nil {
+		// Reading a named pipe or a device as a file blocks, or never ends.
+		if !fi.Mode().IsRegular() {
+			return nil, fmt.Errorf("%s is not a regular file", filepath.Base(abs))
+		}
+		elsewhere, err := e.openElsewhere(abs)
+		if err != nil {
+			return nil, err
+		}
+		if elsewhere {
+			return nil, command.ErrOpenedElsewhere
 		}
 	}
 	b, err := text.LoadFile(abs)

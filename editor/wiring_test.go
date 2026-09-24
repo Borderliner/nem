@@ -91,10 +91,14 @@ func TestConfigSettingsReachTheEditor(t *testing.T) {
 		WhichKeyDelay: 0, AutosaveIdle: 0,
 		Backup: false, Clipboard: "off", LineNumbers: false,
 		Syntax: false, Theme: "light", DeleteSelection: false,
+		OpenBinary: "text",
 	})
 
 	if e.th.ScrollMargin != 5 {
 		t.Errorf("scroll-margin = %d, want 5", e.th.ScrollMargin)
+	}
+	if e.ext.mode != binaryText {
+		t.Error("open-binary did not reach the editor")
 	}
 	if e.comp.style != completionPopup {
 		t.Error("completion-style did not reach the editor")

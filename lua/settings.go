@@ -64,6 +64,10 @@ type Settings struct {
 	// the terminal. One palette cannot serve both grounds - colours with enough
 	// contrast on black wash out on white - so nem carries two.
 	Theme string
+
+	// OpenBinary decides what opening a file that is not text does: "ask"
+	// each time, hand it to the "system" app, or open it as "text" anyway.
+	OpenBinary string
 }
 
 // DefaultSettings returns the built-in defaults, which are what the editor uses
@@ -76,6 +80,7 @@ func DefaultSettings() Settings {
 		Backup: true, Clipboard: "osc52", LineNumbers: true,
 		DeleteSelection: true,
 		Syntax:          true, Theme: "auto",
+		OpenBinary: "ask",
 	}
 }
 
@@ -96,7 +101,7 @@ const (
 // why it has no effect.
 var knownSettings = []string{
 	"autosave-idle", "backup", "clipboard", "completion-rows", "completion-style",
-	"delete-selection", "line-numbers", "scroll-margin", "syntax", "tab-width",
+	"delete-selection", "line-numbers", "open-binary", "scroll-margin", "syntax", "tab-width",
 	"theme", "undo-style", "which-key-delay",
 }
 
@@ -178,6 +183,12 @@ func (s *Settings) set(key string, v glua.LValue) error {
 			return fmt.Errorf("line-numbers must be true or false, got %s", v.Type())
 		}
 		s.LineNumbers = bool(b)
+	case "open-binary":
+		str, err := checkEnum(key, v, "ask", "system", "text")
+		if err != nil {
+			return err
+		}
+		s.OpenBinary = str
 	case "delete-selection":
 		b, ok := v.(glua.LBool)
 		if !ok {

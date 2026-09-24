@@ -152,6 +152,12 @@ func (e *Editor) HandleEvent(ev tcell.Event) {
 		// loop because ReadChar and ReadKey forward non-key events to
 		// HandleEvent, so a reply arriving during a prompt is not lost.
 		e.SetClipboardReply(ev.Data())
+	case *tcell.EventInterrupt:
+		// A system app that failed to start, reported from the goroutine that
+		// waited on it. See launch.
+		if f, ok := ev.Data().(openFailure); ok {
+			e.Echo("%v", f.err)
+		}
 	case *tcell.EventResize:
 		// Nothing to recompute: layout is derived from the screen size on every
 		// frame, so a resize is just a redraw. A degenerate size is handled by
@@ -311,6 +317,7 @@ func (e *Editor) dispatchReporting(name string) {
 	switch {
 	case err == nil,
 		errors.Is(err, command.ErrQuit),
+		errors.Is(err, command.ErrOpenedElsewhere),
 		errors.Is(err, command.ErrBeginningOfBuffer),
 		errors.Is(err, command.ErrEndOfBuffer):
 	default:

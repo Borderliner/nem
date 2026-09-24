@@ -55,6 +55,10 @@ nem.set("delete-selection", true)-- typing replaces the selection; default true
 nem.set("syntax", true)          -- colour code; default true
 nem.set("theme", "auto")         -- syntax palette: "auto", "dark" or "light"
 
+-- Files that are not text (a PDF, an image, a song)
+nem.set("open-binary", "ask")    -- "ask", "system" (open with the system's app)
+                                 -- or "text"; default "ask"
+
 -- Completion
 nem.set("completion-style", "bottom") -- "bottom" (emacs/Vertico) or "popup" (centred
                                       -- panel); default "bottom"

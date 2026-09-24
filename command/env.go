@@ -56,6 +56,12 @@ var (
 	// that is not registered.
 	ErrUnknownCommand = errors.New("no such command")
 
+	// ErrOpenedElsewhere is returned by OpenFile when the file went to the
+	// operating system's own app - a PDF to the viewer - instead of into a
+	// buffer. It is not a failure: there is simply no buffer to visit, so a
+	// caller stops, and nothing is reported beyond what OpenFile said itself.
+	ErrOpenedElsewhere = errors.New("opened with the system app")
+
 	// ErrBeginningOfBuffer and ErrEndOfBuffer report that point could not move
 	// because it already sits at a boundary.
 	//
