@@ -470,11 +470,16 @@ func (e *Editor) adopt(b *text.Buffer, name string) {
 	e.byName[name] = b
 }
 
-// touch moves b to the front of the visited order.
+// touch moves b to the front of the visited order. A buffer that is not in the
+// list, such as the minibuffer's, is left alone.
+//
+// It rotates in place: dispatch calls it after every command, and the buffer is
+// almost always at the front already.
 func (e *Editor) touch(b *text.Buffer) {
 	for i, c := range e.buffers {
 		if c == b {
-			e.buffers = append([]*text.Buffer{b}, append(e.buffers[:i:i], e.buffers[i+1:]...)...)
+			copy(e.buffers[1:i+1], e.buffers[:i])
+			e.buffers[0] = b
 			return
 		}
 	}

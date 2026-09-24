@@ -421,15 +421,27 @@ func anyModified(e Env) bool {
 
 // --- completion ----------------------------------------------------------
 
-// completeBufferName completes over the display names of live buffers.
+// completeBufferName completes over the display names of live buffers, most
+// recently visited first and the current buffer last. Since RET takes the
+// highlighted candidate, that makes C-x b RET go back to the previous buffer,
+// as it does in emacs.
+//
+// The current buffer is last rather than omitted: C-x b is also how a buffer is
+// shown in a second window, and that may be the one already on screen.
 func completeBufferName(e Env) CompleteFunc {
+	// Taken now, before the prompt opens: from then on the active buffer is the
+	// minibuffer's own.
+	cur := e.Buf()
 	return func(string) []string {
-		var out []string
+		var out, last []string
 		for _, b := range e.Buffers() {
-			out = append(out, e.BufferName(b))
+			if b == cur {
+				last = append(last, e.BufferName(b))
+			} else {
+				out = append(out, e.BufferName(b))
+			}
 		}
-		sort.Strings(out)
-		return out
+		return append(out, last...)
 	}
 }
 

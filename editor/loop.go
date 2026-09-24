@@ -328,6 +328,7 @@ func (e *Editor) dispatchReporting(name string) {
 //     previous one, which is what yank-pop and recenter-top-bottom need.
 //   - Every window's point, clamped back inside its buffer. See
 //     clampWindowPoints: this one prevents a crash, not a misbehaviour.
+//   - The visited order of buffers, which switch-to-buffer offers from.
 //   - An active region, consumed by the handful of commands that replace it.
 //     See delsel.go.
 //   - An active region, ended by any command that changes the buffer. See
@@ -372,6 +373,14 @@ func (e *Editor) dispatch(name string) error {
 	// costs one comparison per window, and a nested dispatch that shortens a
 	// buffer must not be able to leave a window stranded either.
 	e.clampWindowPoints()
+
+	// Whatever the command left on screen is now the most recently visited
+	// buffer. Recorded here rather than by the commands that change buffers, so
+	// C-x o, kill-buffer and anything a Lua hook does are all counted, and
+	// switch-to-buffer can offer the previous buffer first.
+	if e.active != nil && e.active.Buf != nil {
+		e.touch(e.active.Buf)
+	}
 
 	if !e.childDispatched {
 		e.bookkeep(name)

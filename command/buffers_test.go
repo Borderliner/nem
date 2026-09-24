@@ -741,7 +741,9 @@ func TestSwitchToBufferCompletesOverBufferNames(t *testing.T) {
 	}
 	// Every buffer, whatever has been typed: the minibuffer narrows by fuzzy
 	// rank, so narrowing here too would hide candidates fuzzy could have found.
-	want := []string{"*scratch*", "nginx.conf", "notes.md"}
+	// In Buffers() order, which is most recent first, except that the current
+	// buffer goes last so RET alone switches away from it.
+	want := []string{"notes.md", "nginx.conf", "*scratch*"}
 	if got := complete("n"); !slices.Equal(got, want) {
 		t.Errorf("completing %q gave %q, want every buffer %q", "n", got, want)
 	}

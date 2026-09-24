@@ -217,3 +217,32 @@ func TestFindFileMetaRetBypassesTheHighlight(t *testing.T) {
 		})
 	}
 }
+
+// C-x b RET goes back to the buffer visited before this one, as in emacs, and a
+// second C-x b RET returns. Candidates are offered most recent first with the
+// current buffer last, so the previous buffer is the one highlighted.
+//
+// Sorted by name instead, RET from beta would pick *scratch*, which sorts
+// before both - the regression this guards against.
+func TestSwitchToBufferRetReturnsToThePreviousBuffer(t *testing.T) {
+	for _, tc := range []struct {
+		toggles int
+		want    string
+	}{
+		{1, "alpha"},
+		{2, "beta"},
+		{3, "alpha"},
+	} {
+		e := runKeys(t, "", func(scr tcell.SimulationScreen) {
+			time.Sleep(60 * time.Millisecond)
+			prompted(t, scr, switchKeys, "alpha", "M-RET")
+			prompted(t, scr, switchKeys, "beta", "M-RET")
+			for range tc.toggles {
+				stroke(t, scr, append(switchKeys, "RET")...)
+			}
+		})
+		if got := e.BufferName(e.Buf()); got != tc.want {
+			t.Errorf("after %d C-x b RET from beta, visiting %q, want %q", tc.toggles, got, tc.want)
+		}
+	}
+}
