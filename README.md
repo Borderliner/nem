@@ -80,6 +80,13 @@ a character, `M-SPC` and `M-\` squeeze or delete the spaces around point, `M-^`
 joins a line to the one above and `M-m` goes to its first non-blank character.
 `M-=` counts words and `C-x =` describes the character under point.
 
+**Keyboard macros** — `F3` starts recording, `F4` stops, and `F4` plays it
+back; `C-u 3 F4` plays it three times and `C-u 0 F4` until it fails, which is
+how a macro runs down the rest of a file. `F3` while recording inserts a
+counter that counts on as it plays. `C-x (`, `C-x )` and `C-x e` work too.
+Searches and prompts inside a macro replay exactly, and playback stops at the
+first thing that fails, as in emacs.
+
 **Brackets and quotes pair themselves** — `(` gives `()` with point between,
 typing `)` steps over it, and Backspace between the two removes both. Over a
 selection, `(` or `"` wraps it. It holds back in front of a word, and an
