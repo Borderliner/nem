@@ -429,6 +429,42 @@ func TestQueryReplaceYesAndNo(t *testing.T) {
 	}
 }
 
+// A match the buffer will not let be changed is passed over, not offered, and
+// the replacing goes on past it.
+func TestQueryReplaceSkipsWhatCannotBeEdited(t *testing.T) {
+	f := newSearchFake(t, "a", "a fixed", "a")
+	f.Buf().SetEditGuard(func(from, to text.Pos, _ []rune) error {
+		if from.Line == 1 {
+			return errors.New("fixed")
+		}
+		return nil
+	})
+	f.Replies = []string{"a", "X"}
+	f.Chars = []rune{'y', 'y'} // one answer per match that can change
+
+	if err := f.Run("query-replace"); err != nil {
+		t.Fatalf("query-replace: %v", err)
+	}
+	if got, want := f.Text(), "X\na fixed\nX"; got != want {
+		t.Errorf("text = %q, want %q", got, want)
+	}
+	if !echoContains(f, "skipped 1") {
+		t.Errorf("echoes = %q, want the skipped match counted", f.Echoes)
+	}
+}
+
+// A read-only buffer is refused before any prompt, not after both.
+func TestQueryReplaceRefusesAReadOnlyBuffer(t *testing.T) {
+	f := newSearchFake(t, "a")
+	f.Buf().SetReadOnly(true)
+	if err := f.Run("query-replace"); !errors.Is(err, text.ErrReadOnly) {
+		t.Errorf("err = %v, want ErrReadOnly", err)
+	}
+	if len(f.Prompts) != 0 {
+		t.Errorf("prompted %q first", f.Prompts)
+	}
+}
+
 func TestQueryReplacePromptsForBothStrings(t *testing.T) {
 	f := newSearchFake(t, "a")
 	f.Replies = []string{"a", "b"}

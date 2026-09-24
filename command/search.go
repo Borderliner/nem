@@ -346,6 +346,9 @@ func isearchCmd(backward bool) Func {
 var queryReplaceAnswers = []rune{'y', 'n', '!', 'q'}
 
 func queryReplace(e Env) error {
+	if e.Buf().ReadOnly() {
+		return text.ErrReadOnly
+	}
 	from, err := e.ReadString(ReadOpts{Prompt: "Query replace: ", History: "replace"})
 	if err != nil {
 		return err
@@ -362,12 +365,28 @@ func queryReplace(e Env) error {
 	fold := FoldCase(from)
 	b := e.Buf()
 	at := e.Win().Pt
-	all, n := false, 0
+	all, n, skipped := false, 0, 0
+	done := func() {
+		msg := fmt.Sprintf("Replaced %d occurrences", n)
+		if skipped > 0 {
+			msg += fmt.Sprintf(" (skipped %d that cannot be edited)", skipped)
+		}
+		e.Echo("%s", msg)
+	}
 
 	for {
 		start, end, ok := SearchForward(b, from, at, fold)
 		if !ok {
 			break
+		}
+		// A match the buffer will not let be changed - in the part of a
+		// file listing that is not a name, say - is passed over rather than
+		// offered, as emacs does with query-replace-skip-read-only. Stopping
+		// there would leave every match after it unreplaced.
+		if b.Vet(start, end, nil) != nil || (to != "" && b.Vet(start, start, []rune(to)) != nil) {
+			skipped++
+			at = end
+			continue
 		}
 		e.Win().Pt = start
 
@@ -387,17 +406,19 @@ func queryReplace(e Env) error {
 			case '!':
 				replace, all = true, true
 			case 'q':
-				e.Echo("Replaced %d occurrences", n)
+				done()
 				return nil
 			}
 		}
 
 		if replace {
+			was := b.Text(start, end)
 			if err := b.Delete(start, end); err != nil {
 				return err
 			}
 			if to != "" {
 				if err := b.Insert(start, []rune(to)); err != nil {
+					_ = b.Insert(start, was) // not half a replacement
 					return err
 				}
 			}
@@ -411,7 +432,7 @@ func queryReplace(e Env) error {
 		e.Win().Pt = at
 	}
 
-	e.Echo("Replaced %d occurrences", n)
+	done()
 	return nil
 }
 
