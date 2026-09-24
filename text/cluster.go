@@ -1,6 +1,9 @@
 package text
 
-import "iter"
+import (
+	"iter"
+	"sort"
+)
 
 // Cluster is one grapheme cluster's placement within a line: the runes it is
 // made of, where they start, and the screen columns they occupy.
@@ -38,6 +41,32 @@ func (l *Line) Clusters() iter.Seq[Cluster] {
 	return func(yield func(Cluster) bool) {
 		l.build()
 		for _, s := range l.segs {
+			lo := int(s.start)
+			if !yield(Cluster{
+				Runes: l.runes[lo : lo+s.n],
+				Start: s.start,
+				Col:   s.col,
+				Width: s.w,
+			}) {
+				return
+			}
+		}
+	}
+}
+
+// ClustersFrom is Clusters starting from the cluster that covers display
+// column col, or the first one after it - the first cluster a window scrolled
+// to col can show any of.
+//
+// A renderer scrolled far along a long line otherwise walks every cluster to
+// its left on each frame just to skip it; the segment cache knows every
+// cluster's column, so a binary search finds the place instead.
+func (l *Line) ClustersFrom(col ColIdx) iter.Seq[Cluster] {
+	return func(yield func(Cluster) bool) {
+		l.build()
+		// The last segment starting at or before col is the one covering it.
+		k := sort.Search(len(l.segs), func(k int) bool { return l.segs[k].col > col }) - 1
+		for _, s := range l.segs[max(k, 0):] {
 			lo := int(s.start)
 			if !yield(Cluster{
 				Runes: l.runes[lo : lo+s.n],

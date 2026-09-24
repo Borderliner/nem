@@ -237,7 +237,9 @@ func drawLine(scr tcell.Screen, x, y, width int, l *text.Line, left text.ColIdx,
 	if avail > 0 {
 		syn := newLineSyntax(spans, &th)
 	walk:
-		for c := range l.Clusters() {
+		// From the first cluster the window can show any of: a line scrolled
+		// far to the right is not walked from its start on every frame.
+		for c := range l.ClustersFrom(left) {
 			sx := c.Col - left
 			// Order matters and each step only adds: syntax sets the
 			// foreground, a matched bracket adds weight and an underline over

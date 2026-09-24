@@ -198,3 +198,38 @@ func BenchmarkWalkViaClusters(b *testing.B) {
 		}
 	}
 }
+
+// ClustersFrom yields exactly the tail of Clusters that a window scrolled to
+// col can show: from the cluster covering col - even one straddling it - on.
+func TestClustersFrom(t *testing.T) {
+	var l Line
+	l.runes = []rune("ab\t漢字éxyz")
+	var all []Cluster
+	for c := range l.Clusters() {
+		all = append(all, c)
+	}
+	for col := ColIdx(0); col <= l.Width()+2; col++ {
+		var want []Cluster
+		for i, c := range all {
+			if c.Col+c.Width > col || (i == len(all)-1 && c.Col <= col) {
+				want = all[i:]
+				break
+			}
+		}
+		var got []Cluster
+		for c := range l.ClustersFrom(col) {
+			got = append(got, c)
+		}
+		if len(got) != len(want) || (len(got) > 0 && got[0].Start != want[0].Start) {
+			t.Errorf("from column %d: got %d clusters starting at rune %v, want %d from %v",
+				col, len(got), firstStart(got), len(want), firstStart(want))
+		}
+	}
+}
+
+func firstStart(cs []Cluster) any {
+	if len(cs) == 0 {
+		return "none"
+	}
+	return cs[0].Start
+}
