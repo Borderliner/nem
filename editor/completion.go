@@ -17,20 +17,23 @@ import (
 // The design that makes the two renderings cheap: prompt STATE and prompt
 // RENDERING are independent. The minibuffer remains a real text.Buffer in a real
 // view.Window — which is what makes C-a, C-k and the kill ring work inside a
-// prompt — and where its contents are DRAWN is a separate decision. A floating
-// panel and the echo row read the same buffer and the same candidate list, so
-// completionStyle selects between them without a second state machine.
+// prompt — and where its contents are DRAWN is a separate decision. The bottom
+// of the screen and a floating panel read the same buffer and the same
+// candidate list, so completionStyle selects between them without a second
+// state machine.
 type completionStyle int
 
 const (
+	// completionBottom is the emacs shape, and Vertico's: the prompt at the
+	// foot of the screen with its candidates listed below it, full width, the
+	// windows shrinking to make room. It is the default because it is where
+	// an emacs user's eyes already go, and it covers none of the buffer.
+	completionBottom completionStyle = iota
 	// completionPopup centres the prompt and its candidates in the frame, as a
 	// command palette does. Centred rather than anchored under the current line:
 	// find-file, switch-to-buffer and M-x are one gesture, and a panel that moved
 	// about with point would be disorienting when the gesture did not change.
-	completionPopup completionStyle = iota
-	// completionBottom stacks them above the echo row, the emacs-shaped
-	// rendering.
-	completionBottom
+	completionPopup
 )
 
 const (
@@ -60,10 +63,15 @@ type completion struct {
 
 	rows  int
 	style completionStyle
+	// peak is the most candidate rows this prompt has shown. At the bottom of
+	// the screen the list keeps that height as it narrows, as emacs's
+	// grow-only minibuffer does: were it to shrink with every keystroke, the
+	// windows above would change size under the user as they typed.
+	peak int
 }
 
 func newCompletion(f command.CompleteFunc, input string) *completion {
-	c := &completion{complete: f, rows: completionRows, style: completionPopup}
+	c := &completion{complete: f, rows: completionRows, style: completionBottom}
 	c.refresh(input)
 	return c
 }
@@ -229,17 +237,12 @@ func (e *Editor) panelFor(ms *miniState) (ui.Panel, int, int, bool) {
 		wide = completionMinWidth
 	}
 
-	// PtX and PtY are deliberately left unset: neither anchor consults them, so
-	// point's screen position is not plumbed through here at all.
-	anchor := view.AnchorCenter
-	if c.style == completionBottom {
-		anchor = view.AnchorBottom
-	}
-
+	// PtX and PtY are deliberately left unset: the centre anchor does not
+	// consult them, so point's screen position is not plumbed through here.
 	rect, ok := view.PlacePanel(view.PanelReq{
 		W:      wide + 2,     // the border
 		H:      rows + 1 + 2, // candidates, the prompt row, the border
-		Anchor: anchor,
+		Anchor: view.AnchorCenter,
 		Frame:  frame,
 	})
 	if !ok {
@@ -256,12 +259,7 @@ func (e *Editor) panelFor(ms *miniState) (ui.Panel, int, int, bool) {
 		})
 	}
 
-	title := ""
-	if n := len(c.ranked); n > 0 {
-		title = fmt.Sprintf("%d/%d", c.sel+1, n)
-	} else {
-		title = "no match"
-	}
+	title := c.countNote()
 
 	// The interior is the rect inset by the border, and the prompt is its first
 	// row, so that is where the cursor goes.
@@ -271,6 +269,41 @@ func (e *Editor) panelFor(ms *miniState) (ui.Panel, int, int, bool) {
 		cx = maxX
 	}
 	return ui.Panel{Rect: rect, Title: title, Lines: lines}, cx, cy, true
+}
+
+// countNote is the position readout: which candidate is selected, of how many.
+func (c *completion) countNote() string {
+	if n := len(c.ranked); n > 0 {
+		return fmt.Sprintf("%d/%d", c.sel+1, n)
+	}
+	return "no match"
+}
+
+// bottomRows lays the candidates out beneath the prompt for the bottom style,
+// in a screen sh rows tall, reporting false when there is no room for any.
+func (e *Editor) bottomRows(c *completion, sh int) ([]ui.PanelLine, bool) {
+	// The prompt takes a row and the windows keep a text row and a modeline;
+	// the list gets what is left, up to the configured count.
+	room := sh - 1 - 2
+	if room < 1 {
+		return nil, false
+	}
+	if c.rows > room {
+		c.rows = room
+		c.scrollToSelection()
+	}
+	shown := c.visibleRows()
+	c.peak = max(c.peak, shown)
+	lines := make([]ui.PanelLine, min(c.peak, c.rows))
+	for i := range shown {
+		idx := c.top + i
+		lines[i] = ui.PanelLine{
+			Text:     c.ranked[idx].Candidate,
+			Match:    c.ranked[idx].Match.Indices,
+			Selected: idx == c.sel,
+		}
+	}
+	return lines, true
 }
 
 // displayWidth measures s in screen columns.
@@ -294,10 +327,10 @@ type completionPrefs struct {
 }
 
 func defaultCompletionPrefs() completionPrefs {
-	return completionPrefs{style: completionPopup, rows: completionRows}
+	return completionPrefs{style: completionBottom, rows: completionRows}
 }
 
-// SetCompletionStyle selects the popup or the emacs-shaped bottom rendering.
+// SetCompletionStyle selects the emacs-shaped bottom rendering or the popup.
 // The value has already been validated by the config host; an unrecognised one
 // here is a programming error rather than a user's typo, so it is ignored rather
 // than reported to someone who cannot act on it.
@@ -325,6 +358,19 @@ func (e *Editor) decorateWithCompletion(f *ui.Frame) {
 	// Preferences are the editor's, not the session's: a session built before a
 	// config reload must still honour the new setting.
 	ms.comp.style, ms.comp.rows = e.comp.style, e.comp.rows
+	if ms.comp.style == completionBottom {
+		if e.scr == nil {
+			return
+		}
+		_, sh := e.scr.Size()
+		// No room means the prompt alone on the echo row, which the frame
+		// already has; the cursor stays where the renderer puts it for a
+		// prompt, on that row.
+		if rows, ok := e.bottomRows(ms.comp, sh); ok {
+			f.MiniRows, f.MiniNote = rows, ms.comp.countNote()
+		}
+		return
+	}
 	p, cx, cy, ok := e.panelFor(ms)
 	if !ok {
 		// The frame is too small for a readable panel. The prompt still works:

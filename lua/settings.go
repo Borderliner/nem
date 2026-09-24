@@ -26,9 +26,9 @@ type Settings struct {
 	// with a useful message rather than silently accepted.
 	UndoStyle string
 
-	// CompletionStyle is "popup" (a centred panel) or "bottom" (emacs-shaped
-	// rows above the echo line). Same prompt state either way; only the
-	// renderer differs.
+	// CompletionStyle is "bottom" (the prompt at the foot of the screen with
+	// its candidates below it, as emacs and Vertico draw it) or "popup" (a
+	// centred panel). Same prompt state either way; only the renderer differs.
 	CompletionStyle string
 
 	// CompletionRows is how many candidates a completion panel shows at once.
@@ -71,7 +71,7 @@ type Settings struct {
 func DefaultSettings() Settings {
 	return Settings{
 		TabWidth: 8, ScrollMargin: 2, UndoStyle: "linear",
-		CompletionStyle: "popup", CompletionRows: 10,
+		CompletionStyle: "bottom", CompletionRows: 10,
 		WhichKeyDelay: 300, AutosaveIdle: 30,
 		Backup: true, Clipboard: "osc52", LineNumbers: true,
 		DeleteSelection: true,

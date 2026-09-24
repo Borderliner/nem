@@ -858,7 +858,7 @@ func TestBoundKeysMatchWhatTheDecoderProduces(t *testing.T) {
 // line, and cannot work out why it does nothing.
 func TestV2SettingsApplyAndValidate(t *testing.T) {
 	h, _, _ := newHost(t, `
-		nem.set("completion-style", "bottom")
+		nem.set("completion-style", "popup")
 		nem.set("completion-rows", 15)
 		nem.set("which-key-delay", 0)
 		nem.set("autosave-idle", 60)
@@ -876,7 +876,7 @@ func TestV2SettingsApplyAndValidate(t *testing.T) {
 		got  any
 		want any
 	}{
-		{"completion-style", got.CompletionStyle, "bottom"},
+		{"completion-style", got.CompletionStyle, "popup"},
 		{"completion-rows", got.CompletionRows, 15},
 		{"which-key-delay", got.WhichKeyDelay, 0},
 		{"autosave-idle", got.AutosaveIdle, 60},

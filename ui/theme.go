@@ -147,6 +147,9 @@ type Theme struct {
 	// is the panel's selected row in another place - the same act of picking
 	// one item from a list - so it is reverse for the same reason.
 	ListCursor tcell.Style
+	// MiniNote styles the candidate count beside a prompt at the bottom of the
+	// screen: quiet, since it is secondary to what is being typed.
+	MiniNote tcell.Style
 
 	// Chrome, rendered through Lip Gloss and blitted in. The modeline is built
 	// from four separately styled segments rather than one flat bar, which is
@@ -203,6 +206,7 @@ func DefaultTheme() Theme {
 		PanelSelected: tcell.StyleDefault.Reverse(true),
 		PanelMatch:    tcell.StyleDefault.Bold(true),
 		ListCursor:    tcell.StyleDefault.Reverse(true),
+		MiniNote:      tcell.StyleDefault.Foreground(tcell.GetColor(colourQuiet)),
 
 		ModelineName:    lipgloss.NewStyle().Bold(true),
 		ModelineNameOff: lipgloss.NewStyle().Foreground(quiet),

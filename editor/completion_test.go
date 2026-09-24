@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -301,22 +302,102 @@ func TestPopupPanelIsCentredRegardlessOfPoint(t *testing.T) {
 	}
 }
 
-// Bottom style is the emacs-shaped rendering and sits against the bottom of the
-// frame, clear of the echo row.
-func TestBottomStyleSitsAboveTheEchoRow(t *testing.T) {
-	e, ms := promptOn(t, 80, 24, command.ReadOpts{
+// The default is the emacs shape, as Vertico draws it: the prompt at the foot
+// of the screen with the candidates listed beneath it, full width, the count
+// at the prompt's right, and the window above shrunk to make room - its
+// modeline intact directly over the prompt rather than covered by a panel.
+func TestBottomStyleListsCandidatesBelowThePrompt(t *testing.T) {
+	e, _ := promptOn(t, 60, 20, command.ReadOpts{
+		Prompt:   "M-x ",
+		Complete: command.CompleteFrom([]string{"forward-char", "forward-word", "kill-line"}),
+	}, "forw")
+	if e.comp.style != completionBottom {
+		t.Fatalf("default completion style is %v, want bottom", e.comp.style)
+	}
+
+	e.Redraw()
+
+	// Two matches, so the prompt is three rows from the bottom.
+	promptY := 20 - 3
+	if got := screenRow(t, e.scr.(tcell.SimulationScreen), promptY); !strings.HasPrefix(got, "M-x forw") || !strings.HasSuffix(strings.TrimRight(got, " "), "1/2") {
+		t.Errorf("prompt row = %q, want the prompt with the count at its right", got)
+	}
+	for i, want := range []string{"forward-char", "forward-word"} {
+		if got := screenRow(t, e.scr.(tcell.SimulationScreen), promptY+1+i); !strings.HasPrefix(got, want) {
+			t.Errorf("row %d = %q, want candidate %s", promptY+1+i, got, want)
+		}
+	}
+	if got := screenRow(t, e.scr.(tcell.SimulationScreen), promptY-1); !strings.Contains(got, "*scratch*") {
+		t.Errorf("row above the prompt = %q, want the window's modeline", got)
+	}
+	// The selected candidate is the bar, across the full width.
+	cells, w, _ := e.scr.(tcell.SimulationScreen).GetContents()
+	if _, _, attr := cells[(promptY+1)*w+w-1].Style.Decompose(); attr&tcell.AttrReverse == 0 {
+		t.Error("the selected candidate's bar does not reach the right edge")
+	}
+	if x, y, _ := e.scr.(tcell.SimulationScreen).GetCursor(); y != promptY || x != len("M-x forw") {
+		t.Errorf("cursor at (%d,%d), want the end of the prompt (%d,%d)", x, y, len("M-x forw"), promptY)
+	}
+}
+
+// The list keeps the height it has reached while the prompt is open, as
+// emacs's grow-only minibuffer does, so narrowing the list does not resize the
+// windows under the user as they type.
+func TestBottomStyleDoesNotShrinkWhileTyping(t *testing.T) {
+	e, ms := promptOn(t, 60, 20, command.ReadOpts{
+		Prompt:   "M-x ",
+		Complete: command.CompleteFrom([]string{"alpha", "beta", "gamma"}),
+	}, "")
+	if f := e.frame(); len(f.MiniRows) != 3 {
+		t.Fatalf("%d rows for three candidates, want 3", len(f.MiniRows))
+	}
+
+	ms.comp.refresh("gam")
+	f := e.frame()
+	if len(f.MiniRows) != 3 {
+		t.Fatalf("narrowed to one match, the list is %d rows; want it to stay 3", len(f.MiniRows))
+	}
+	if f.MiniRows[0].Text != "gamma" || f.MiniRows[1].Text != "" {
+		t.Errorf("rows = %+v, want gamma then blanks", f.MiniRows)
+	}
+}
+
+// On a short screen the list gives way: the windows keep a line of text and a
+// modeline, and the selection stays in view.
+func TestBottomStyleLeavesTheWindowsARow(t *testing.T) {
+	names := make([]string, 30)
+	for i := range names {
+		names[i] = fmt.Sprintf("cmd-%02d", i)
+	}
+	e, ms := promptOn(t, 40, 8, command.ReadOpts{Prompt: "M-x ", Complete: command.CompleteFrom(names)}, "")
+	ms.comp.move(20)
+
+	f := e.frame()
+	if got := len(f.MiniRows); got != 8-3 {
+		t.Fatalf("%d candidate rows on an 8-row screen, want 5", got)
+	}
+	var sel string
+	for _, r := range f.MiniRows {
+		if r.Selected {
+			sel = r.Text
+		}
+	}
+	if sel != "cmd-20" {
+		t.Errorf("selected row shows %q, want cmd-20 scrolled into view", sel)
+	}
+}
+
+// The centred popup is still there for those who prefer it.
+func TestPopupStyleIsASetting(t *testing.T) {
+	e, _ := promptOn(t, 80, 24, command.ReadOpts{
 		Prompt:   "M-x ",
 		Complete: command.CompleteFrom([]string{"one", "two"}),
 	}, "")
-	ms.comp.style = completionBottom
+	e.SetCompletionStyle("popup")
 
-	p, _, _, ok := e.panelFor(ms)
-	if !ok {
-		t.Fatal("no panel")
-	}
-	// The frame is the screen minus the echo row, so the panel must end above it.
-	if bottom := p.Rect.Y + p.Rect.H; bottom > 23 {
-		t.Errorf("panel reaches row %d, which is the echo row (23)", bottom-1)
+	f := e.frame()
+	if len(f.Panels) != 1 || len(f.MiniRows) != 0 {
+		t.Errorf("popup style gave %d panels and %d bottom rows, want one panel", len(f.Panels), len(f.MiniRows))
 	}
 }
 

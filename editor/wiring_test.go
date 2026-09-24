@@ -87,7 +87,7 @@ func TestConfigSettingsReachTheEditor(t *testing.T) {
 	e, _ := newTestEditor(t, "x")
 	e.applySettings(lua.Settings{
 		TabWidth: 4, ScrollMargin: 5, UndoStyle: "linear",
-		CompletionStyle: "bottom", CompletionRows: 15,
+		CompletionStyle: "popup", CompletionRows: 15,
 		WhichKeyDelay: 0, AutosaveIdle: 0,
 		Backup: false, Clipboard: "off", LineNumbers: false,
 		Syntax: false, Theme: "light", DeleteSelection: false,
@@ -96,7 +96,7 @@ func TestConfigSettingsReachTheEditor(t *testing.T) {
 	if e.th.ScrollMargin != 5 {
 		t.Errorf("scroll-margin = %d, want 5", e.th.ScrollMargin)
 	}
-	if e.comp.style != completionBottom {
+	if e.comp.style != completionPopup {
 		t.Error("completion-style did not reach the editor")
 	}
 	if e.comp.rows != 15 {

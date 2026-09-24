@@ -56,7 +56,8 @@ nem.set("syntax", true)          -- colour code; default true
 nem.set("theme", "auto")         -- syntax palette: "auto", "dark" or "light"
 
 -- Completion
-nem.set("completion-style", "popup")  -- "popup" (centred panel) or "bottom"; default "popup"
+nem.set("completion-style", "bottom") -- "bottom" (emacs/Vertico) or "popup" (centred
+                                      -- panel); default "bottom"
 nem.set("completion-rows", 10)        -- candidates visible at once; default 10
 
 -- Discovery

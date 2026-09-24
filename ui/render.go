@@ -56,7 +56,24 @@ type Frame struct {
 	// ListingOf reports which buffers are listings rather than text. Optional:
 	// a nil ListingOf treats every buffer as text. See ListingFunc.
 	ListingOf ListingFunc
+
+	// MiniRows lays a prompt's candidates out the emacs way, as Vertico does:
+	// the prompt on its row and the candidates on the rows below it, down to
+	// the bottom of the screen, full width. The windows give up the rows this
+	// takes rather than being drawn over, so every window and its modeline stay
+	// whole above the minibuffer. Empty means the minibuffer is the single echo
+	// row. See also MiniNote.
+	MiniRows []PanelLine
+	// MiniNote is drawn quietly at the right-hand end of the prompt row, when
+	// it fits beside what is typed: the candidate count.
+	MiniNote string
 }
+
+// minTreeRows is what the windows keep however many candidates want the rows:
+// one line of text and a modeline. A minibuffer that would take those is cut
+// short instead - a list with no view of the buffer it was opened from is a
+// worse trade than a shorter list.
+const minTreeRows = 2
 
 // ListingFunc reports whether a buffer is a listing - a directory, say - whose
 // lines are items rather than text.
@@ -92,10 +109,15 @@ func Render(scr tcell.Screen, f Frame, th Theme) {
 		return
 	}
 
-	// The echo area is a single row pinned to the bottom of the screen and is
-	// not part of the split tree, exactly as emacs's minibuffer window is not.
-	echoY := h - 1
-	treeH := h - 1
+	// The echo area is pinned to the bottom of the screen and is not part of
+	// the split tree, exactly as emacs's minibuffer window is not. It is one
+	// row, or more while a prompt lists its candidates beneath it.
+	miniRows := f.MiniRows
+	if room := h - 1 - minTreeRows; len(miniRows) > room {
+		miniRows = miniRows[:max(room, 0)]
+	}
+	echoY := h - 1 - len(miniRows)
+	treeH := echoY
 
 	rects := map[*view.Window]view.Rect{}
 	if treeH > 0 {
@@ -110,6 +132,7 @@ func Render(scr tcell.Screen, f Frame, th Theme) {
 	}
 
 	drawEcho(scr, echoY, w, f, th)
+	drawMiniRows(scr, echoY, w, miniRows, f, th)
 
 	// Panels last, over everything the tree drew, and before the cursor is
 	// placed: a prompt rendered inside a panel needs the hardware cursor to land
@@ -291,6 +314,34 @@ func drawEcho(scr tcell.Screen, y, width int, f Frame, th Theme) {
 		style = th.Mini
 	}
 	blit.Draw(scr, 0, y, width, 1, style.Render(f.Echo))
+}
+
+// drawMiniRows draws the candidates beneath the prompt row at y, and the
+// count at the prompt row's right-hand end.
+//
+// Candidates are drawn as the completion panel draws its rows, match emphasis
+// and selection bar included, so the two styles differ only in where the list
+// sits.
+func drawMiniRows(scr tcell.Screen, y, width int, rows []PanelLine, f Frame, th Theme) {
+	for i, ln := range rows {
+		drawPanelLine(scr, 0, y+1+i, width, ln, th)
+	}
+	if f.MiniNote == "" {
+		return
+	}
+	// Only where it clears what is typed by a gap: the prompt is the thing
+	// being edited and the count is a footnote to it.
+	used, note := cellWidth(f.Echo), cellWidth(f.MiniNote)
+	if x := width - note - 1; x >= used+2 {
+		drawPanelText(scr, x, y, note, f.MiniNote, th.MiniNote, nil, th)
+	}
+}
+
+// cellWidth measures s in screen columns, through text.Line so it agrees with
+// the text area about wide glyphs.
+func cellWidth(s string) int {
+	l := text.NewLine([]rune(s))
+	return int(l.Width())
 }
 
 // placeCursor puts the real hardware cursor at point.

@@ -101,14 +101,19 @@ undo unit; a new edit after undoing discards the redo branch.
 **Help** — `<f1> b` lists every binding, `<f1> k` describes a key. Pause on a
 prefix like `C-x` and a panel shows everything that can follow it.
 
-**Completion** — `M-x`, `C-x C-f` and `C-x b` open a centred panel that filters
-as you type, fuzzily: `fwc` finds `forward-char`. Matched characters are
-highlighted so you can see why something matched. `RET` takes the highlighted
-entry, and on a directory it walks into it and lists what is inside. The
-directory itself comes first, as `./` before you have typed anything, so
-`C-x C-f RET` opens it in dired. `M-RET` takes exactly what you typed, for a new
-file or buffer whose name happens to match an existing one. Buffers are listed most recently visited first, so
-`C-x b RET` flips back to the previous one.
+**Completion** — `M-x`, `C-x C-f` and `C-x b` list their candidates under the
+prompt at the bottom of the screen, as Vertico does, and filter them as you
+type, fuzzily: `fwc` finds `forward-char`. Matched characters are highlighted
+so you can see why something matched, and the windows shrink to make room
+rather than being covered. `nem.set("completion-style", "popup")` shows the
+same list in a centred panel instead.
+
+`RET` takes the highlighted entry, and on a directory it walks into it and
+lists what is inside. The directory itself comes first, as `./` before you have
+typed anything, so `C-x C-f RET` opens it in dired. `M-RET` takes exactly what
+you typed, for a new file or buffer whose name happens to match an existing
+one. Buffers are listed most recently visited first, so `C-x b RET` flips back
+to the previous one.
 
 **Line numbers** — shown by default, and drawn outside the text so they can
 never be selected or copied. `C-x n` toggles them.
