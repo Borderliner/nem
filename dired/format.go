@@ -164,11 +164,7 @@ func FormatEntry(e Entry, mark rune, opts Options, now time.Time) (string, []syn
 		add(col, col+1, ic.Class)
 	}
 
-	name := sanitize(e.Name)
-	if e.IsDir {
-		// A marker as in ls -F, not a path separator, so "/" on every OS.
-		name += "/"
-	}
+	name := ShownName(e)
 	start := NameColumn(opts)
 	end := start + utf8.RuneCountInString(name)
 	b.WriteString(name)
@@ -237,6 +233,23 @@ func NameColumn(opts Options) int {
 		col += iconWidth
 	}
 	return col
+}
+
+// ShownName is an entry's name as its line shows it: made safe for one line,
+// and a directory's with a "/" after it - a marker as in ls -F, not a path
+// separator, so "/" on every OS.
+func ShownName(e Entry) string {
+	name := sanitize(e.Name)
+	if e.IsDir {
+		name += "/"
+	}
+	return name
+}
+
+// NameEnd is the rune column just past an entry's name on its line. What
+// follows, if anything, is a symlink's target.
+func NameEnd(e Entry, opts Options) int {
+	return NameColumn(opts) + utf8.RuneCountInString(ShownName(e))
 }
 
 // iconWidth is the columns an icon takes before a name: the glyph, which the
