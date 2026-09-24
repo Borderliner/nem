@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/Borderliner/nem/keymap"
 	"github.com/Borderliner/nem/text"
@@ -87,7 +88,7 @@ func FoldCase(pat string) bool {
 // A pattern containing a newline never matches: v1 searches within single
 // lines only.
 func SearchForward(b *text.Buffer, pat string, from text.Pos, fold bool) (start, end text.Pos, ok bool) {
-	needle := []rune(pat)
+	needle := foldedNeedle(pat, fold)
 	if len(needle) == 0 || strings.ContainsRune(pat, '\n') {
 		return from, from, false
 	}
@@ -99,7 +100,7 @@ func SearchForward(b *text.Buffer, pat string, from text.Pos, fold bool) (start,
 			first = int(from.Col)
 		}
 		for i := first; i+len(needle) <= len(hay); i++ {
-			if matchAt(hay, needle, i, fold) {
+			if foldIf(hay[i], fold) == needle[0] && matchAt(hay, needle, i, fold) {
 				return text.Pos{Line: ln, Col: text.RuneIdx(i)},
 					text.Pos{Line: ln, Col: text.RuneIdx(i + len(needle))}, true
 			}
@@ -111,7 +112,7 @@ func SearchForward(b *text.Buffer, pat string, from text.Pos, fold bool) (start,
 // SearchBackward finds the last occurrence of pat beginning strictly before
 // from, scanning backward. It reports the match's bounds.
 func SearchBackward(b *text.Buffer, pat string, from text.Pos, fold bool) (start, end text.Pos, ok bool) {
-	needle := []rune(pat)
+	needle := foldedNeedle(pat, fold)
 	if len(needle) == 0 || strings.ContainsRune(pat, '\n') {
 		return from, from, false
 	}
@@ -124,7 +125,7 @@ func SearchBackward(b *text.Buffer, pat string, from text.Pos, fold bool) (start
 			last = int(from.Col)
 		}
 		for i := last - 1; i >= 0; i-- {
-			if matchAt(hay, needle, i, fold) {
+			if foldIf(hay[i], fold) == needle[0] && matchAt(hay, needle, i, fold) {
 				return text.Pos{Line: ln, Col: text.RuneIdx(i)},
 					text.Pos{Line: ln, Col: text.RuneIdx(i + len(needle))}, true
 			}
@@ -133,18 +134,47 @@ func SearchBackward(b *text.Buffer, pat string, from text.Pos, fold bool) (start
 	return from, from, false
 }
 
-// matchAt reports whether needle occurs in hay at index i.
+// matchAt reports whether needle, already folded when fold is set, occurs in
+// hay at index i.
 func matchAt(hay, needle []rune, i int, fold bool) bool {
 	for j, want := range needle {
-		got := hay[i+j]
-		if fold {
-			got, want = unicode.ToLower(got), unicode.ToLower(want)
-		}
-		if got != want {
+		if foldIf(hay[i+j], fold) != want {
 			return false
 		}
 	}
 	return true
+}
+
+// foldedNeedle is the pattern as runes, lower-cased once when the search
+// ignores case - rather than again at every position of every line.
+func foldedNeedle(pat string, fold bool) []rune {
+	needle := []rune(pat)
+	if fold {
+		for i, r := range needle {
+			needle[i] = foldRune(r)
+		}
+	}
+	return needle
+}
+
+// foldIf is foldRune when fold is set, and r unchanged otherwise.
+func foldIf(r rune, fold bool) rune {
+	if fold {
+		return foldRune(r)
+	}
+	return r
+}
+
+// foldRune is unicode.ToLower with ASCII handled inline: a search that finds
+// nothing folds every rune of every line it scans.
+func foldRune(r rune) rune {
+	if r < utf8.RuneSelf {
+		if 'A' <= r && r <= 'Z' {
+			return r + 'a' - 'A'
+		}
+		return r
+	}
+	return unicode.ToLower(r)
 }
 
 // --- incremental search --------------------------------------------------

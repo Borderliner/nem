@@ -973,3 +973,36 @@ func echoContains(f *commandtest.Fake, want string) bool {
 	}
 	return false
 }
+
+// Case folding covers letters beyond ASCII, forwards and backwards: the
+// folding was moved off the general path, and the first-rune check in front
+// of each full comparison must fold as the comparison does.
+func TestSearchFoldsBeyondASCII(t *testing.T) {
+	b := text.NewBuffer()
+	if err := b.Insert(text.Pos{}, []rune("Straße\nÉCOLE und Ecole\nNAÏVE")); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		pat  string
+		want text.Pos
+	}{
+		{"école", text.Pos{Line: 1, Col: 0}},
+		{"naïve", text.Pos{Line: 2, Col: 0}},
+		{"ecole", text.Pos{Line: 1, Col: 10}},
+		{"STRASSE", text.Pos{}}, // no full case folding: ß is not SS
+	} {
+		start, _, ok := command.SearchForward(b, tc.pat, text.Pos{}, true)
+		if tc.pat == "STRASSE" {
+			if ok {
+				t.Errorf("%q matched at %v; ß does not fold to SS", tc.pat, start)
+			}
+			continue
+		}
+		if !ok || start != tc.want {
+			t.Errorf("SearchForward(%q) = %v, %v; want %v", tc.pat, start, ok, tc.want)
+		}
+		if back, _, ok := command.SearchBackward(b, tc.pat, b.End(), true); !ok || back != tc.want {
+			t.Errorf("SearchBackward(%q) = %v, %v; want %v", tc.pat, back, ok, tc.want)
+		}
+	}
+}
