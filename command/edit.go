@@ -165,6 +165,11 @@ func deleteBackwardChar(e Env) error {
 	if n < 0 {
 		return edDeleteForward(e, -n)
 	}
+	if n == 1 {
+		if done, err := autoPairDelete(e); done || err != nil {
+			return err
+		}
+	}
 	return edDeleteBackward(e, n)
 }
 
@@ -403,6 +408,11 @@ func selfInsert(e Env) error {
 	n, _ := e.Arg()
 	if n < 1 {
 		n = 1
+	}
+	if n == 1 {
+		if done, err := autoPairInsert(e, r); done || err != nil {
+			return err
+		}
 	}
 	b, p := e.Buf(), e.Win().Pt
 

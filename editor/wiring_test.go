@@ -92,7 +92,7 @@ func TestConfigSettingsReachTheEditor(t *testing.T) {
 		WhichKeyDelay: 0, AutosaveIdle: 0,
 		Backup: false, Clipboard: "off", LineNumbers: false,
 		Syntax: false, Theme: "light", DeleteSelection: false,
-		OpenBinary: "text", Icons: "off", FillColumn: 64,
+		OpenBinary: "text", Icons: "off", FillColumn: 64, AutoPair: false,
 	})
 
 	if e.th.ScrollMargin != 5 {
@@ -104,7 +104,11 @@ func TestConfigSettingsReachTheEditor(t *testing.T) {
 	if command.FillColumn != 64 {
 		t.Error("fill-column did not reach the editor")
 	}
-	command.FillColumn = 70
+	if command.AutoPair {
+		t.Error("auto-pair did not reach the editor")
+	}
+	// Package-level settings: put them back for the tests that follow.
+	command.FillColumn, command.AutoPair = 70, true
 	if e.ext.mode != binaryText {
 		t.Error("open-binary did not reach the editor")
 	}

@@ -72,6 +72,9 @@ type Settings struct {
 	// FillColumn is the width M-q fills paragraphs to.
 	FillColumn int
 
+	// AutoPair makes an opening bracket or quote insert its partner too.
+	AutoPair bool
+
 	// Icons is "on", "off" or "auto": whether file icons show in dired and the
 	// file and buffer prompts. They need a Nerd Font, or a terminal that ships
 	// its symbols, and "auto" turns them on only where that looks likely. A
@@ -89,7 +92,7 @@ func DefaultSettings() Settings {
 		Backup: true, Clipboard: "osc52", LineNumbers: true,
 		DeleteSelection: true,
 		Syntax:          true, Theme: "auto",
-		OpenBinary: "ask", Icons: "auto", FillColumn: 70,
+		OpenBinary: "ask", Icons: "auto", FillColumn: 70, AutoPair: true,
 	}
 }
 
@@ -109,7 +112,7 @@ const (
 // outcome here: the user reads their config, sees the line, and cannot work out
 // why it has no effect.
 var knownSettings = []string{
-	"autosave-idle", "backup", "clipboard", "completion-rows", "completion-style",
+	"auto-pair", "autosave-idle", "backup", "clipboard", "completion-rows", "completion-style",
 	"delete-selection", "fill-column", "icons", "line-numbers", "open-binary", "scroll-margin", "syntax", "tab-width",
 	"theme", "undo-style", "which-key-delay",
 }
@@ -192,6 +195,12 @@ func (s *Settings) set(key string, v glua.LValue) error {
 			return fmt.Errorf("line-numbers must be true or false, got %s", v.Type())
 		}
 		s.LineNumbers = bool(b)
+	case "auto-pair":
+		b, ok := v.(glua.LBool)
+		if !ok {
+			return fmt.Errorf("auto-pair must be true or false, got %s", v.Type())
+		}
+		s.AutoPair = bool(b)
 	case "fill-column":
 		n, err := checkRange(key, v, 10, 1000)
 		if err != nil {

@@ -871,6 +871,7 @@ func TestV2SettingsApplyAndValidate(t *testing.T) {
 		nem.set("open-binary", "system")
 		nem.set("icons", false)
 		nem.set("fill-column", 72)
+		nem.set("auto-pair", false)
 	`)
 	mustLoad(t, h)
 	got := h.Settings()
@@ -892,6 +893,7 @@ func TestV2SettingsApplyAndValidate(t *testing.T) {
 		{"open-binary", got.OpenBinary, "system"},
 		{"icons", got.Icons, "off"},
 		{"fill-column", got.FillColumn, 72},
+		{"auto-pair", got.AutoPair, false},
 	} {
 		if c.got != c.want {
 			t.Errorf("%s = %v, want %v", c.name, c.got, c.want)

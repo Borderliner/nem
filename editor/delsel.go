@@ -1,6 +1,9 @@
 package editor
 
-import "github.com/Borderliner/nem/text"
+import (
+	"github.com/Borderliner/nem/command"
+	"github.com/Borderliner/nem/text"
+)
 
 // Delete-selection: typing or deleting with a region active replaces it.
 //
@@ -92,6 +95,31 @@ func (e *Editor) consumeSelection(name string) (skip bool, done func()) {
 		// An empty region is not a selection. The command runs as it always
 		// does, and the mark — which was set deliberately — stays put.
 		return false, nil
+	}
+
+	// With automatic pairs, a bracket or quote typed over a selection goes
+	// around it rather than replacing it: select a word, type ", and it is
+	// quoted. Only in a text buffer - in a prompt the selection is replaced as
+	// ever.
+	if closer, ok := command.PairFor(e.seq.LastRune); ok && name == "self-insert-command" &&
+		command.AutoPair && e.mini == nil {
+		b.BeginUndoGroup()
+		defer b.EndUndoGroup()
+		if err := b.Insert(hi, []rune{closer}); err != nil {
+			e.Echo("%v", err)
+			return true, nil
+		}
+		if err := b.Insert(lo, []rune{e.seq.LastRune}); err != nil {
+			e.Echo("%v", err)
+			return true, nil
+		}
+		// Point after the closer, the wrapped text having grown by the two.
+		if hi.Line == lo.Line {
+			hi.Col++
+		}
+		w.Pt = text.Pos{Line: hi.Line, Col: hi.Col + 1}
+		b.DeactivateMark()
+		return true, nil
 	}
 
 	b.BeginUndoGroup()

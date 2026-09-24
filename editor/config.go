@@ -122,6 +122,7 @@ func (e *Editor) applySettings(s lua.Settings) {
 	if s.FillColumn > 0 {
 		command.FillColumn = s.FillColumn
 	}
+	command.AutoPair = s.AutoPair
 	switch s.Icons {
 	case "on":
 		e.SetIcons(true)
