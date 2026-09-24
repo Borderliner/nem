@@ -124,6 +124,7 @@ by name, time or size.
 | `D` `R` `C` | delete · rename or move · copy — the marked files, or the one at point |
 | `+` `g` `w` `o` `q` | new directory · re-read · copy the name · open in the other window · leave |
 | `E` | open with the system's app — the marked files, or the one at point |
+| `C-x C-q` | edit the file names as text, to rename the files (below) |
 
 Each name has an icon for its kind - a folder, a language's mark, a picture,
 an archive - and so do the candidates at `C-x C-f` and `C-x b`. They need a
@@ -135,6 +136,15 @@ SSH nem cannot see your fonts; `nem.set("icons", true)` or `false` settles it.
 Deleting asks you to type `yes`, nothing is replaced without asking, and a
 rename carries any buffer visiting the file along with it. One listing follows
 you around the tree rather than a new buffer piling up per directory.
+
+`C-x C-q` makes the names editable, as emacs's wdired does, so renaming is
+text editing: `M-%` turns `IMG_` into `holiday-` across every name, a keyboard
+macro numbers them, `C-a` and `C-e` go to either end of a name. Only names
+change; the rest of each line stays put. `C-c C-c` renames the files to match
+and `C-c C-k` forgets the edits. The renames happen together, so two files can
+swap names, and all or none of them do: a name already taken, or two files
+given one name, is refused before anything moves. A name with a `/` moves the
+file into that directory, and an emptied name flags the file for `x`.
 
 **Search** — `C-s` is genuinely incremental: it moves as you type, backspace
 walks point back, and `C-g` returns you to where you started. `M-%` is

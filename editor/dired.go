@@ -46,6 +46,8 @@ type diredState struct {
 	// now is the clock the listing was formatted against, so a line redrawn
 	// later is dated the same way as its neighbours.
 	now time.Time
+	// wd is set while the names are being edited. See wdired.go.
+	wd *wdiredState
 }
 
 // errNotDired is returned by a dired command run anywhere else, say from M-x.
@@ -86,6 +88,7 @@ var diredBindings = []struct{ Spec, Command string }{
 	{"s", "dired-sort-toggle"},
 	{"w", "dired-copy-filename"},
 	{"E", "dired-do-open"},
+	{"C-x C-q", "wdired-change-to-wdired-mode"},
 	{"q", "quit-window"},
 }
 
@@ -105,7 +108,10 @@ func (e *Editor) DiredKeymap() *keymap.Map { return e.diredKeys }
 
 // modeKeys is the keymap of b's mode, or nil for a buffer of plain text.
 func (e *Editor) modeKeys(b *text.Buffer) *keymap.Map {
-	if e.diredOf(b) != nil {
+	if st := e.diredOf(b); st != nil {
+		if st.wd != nil {
+			return e.wdiredKeys
+		}
 		return e.diredKeys
 	}
 	return nil
@@ -121,6 +127,14 @@ func (e *Editor) diredOf(b *text.Buffer) *diredState {
 
 // isListing is the renderer's ListingFunc.
 func (e *Editor) isListing(b *text.Buffer) bool { return e.diredOf(b) != nil }
+
+// isEditingListing is the renderer's EditingOf: a listing whose names are
+// being edited, drawn with a cursor where the typing goes rather than a bar
+// across the line.
+func (e *Editor) isEditingListing(b *text.Buffer) bool {
+	st := e.diredOf(b)
+	return st != nil && st.wd != nil
+}
 
 // diredSpans colours a line of a listing from the Listing that produced it.
 func (st *diredState) spans(line int) []syntax.Span {
@@ -139,6 +153,9 @@ func (e *Editor) Dired(dir string) (*text.Buffer, error) {
 	}
 	for _, b := range e.buffers {
 		if st := e.dired[b]; st != nil && st.dir == abs {
+			if st.wd != nil {
+				return b, nil // reading it again would throw the edited names away
+			}
 			if err := e.diredReread(b, st); err != nil {
 				return nil, err
 			}
@@ -294,6 +311,9 @@ func (e *Editor) here() (*text.Buffer, *diredState, error) {
 	st := e.diredOf(b)
 	if st == nil {
 		return nil, nil, errNotDired
+	}
+	if st.wd != nil {
+		return nil, nil, errWdiredBusy
 	}
 	return b, st, nil
 }
@@ -569,6 +589,9 @@ func (e *Editor) diredPrompt() error {
 func (e *Editor) diredJump() error {
 	cur := e.active.Buf
 	if st := e.diredOf(cur); st != nil {
+		if st.wd != nil {
+			return errWdiredBusy
+		}
 		return e.diredUp(cur, st)
 	}
 	dir, focus := e.bufferDir(cur), ""
@@ -933,34 +956,61 @@ func (e *Editor) diredTransfer(b *text.Buffer, st *diredState, copying bool) err
 // file itself or anything under a renamed directory. Left alone, the next save
 // would quietly recreate the file at its old path.
 func (e *Editor) followRename(from, to string) {
+	e.followRenames([]fileMove{{from, to}})
+}
+
+// fileMove is one rename: a path and where it went.
+type fileMove struct{ from, to string }
+
+// followRenames is followRename for renames made together. Every buffer is
+// matched against the paths as they were before any of them, and gives up its
+// name before any takes a new one, so a swap - a to b and b to a - swaps the
+// buffers rather than sending both to one file.
+func (e *Editor) followRenames(moves []fileMove) {
+	type change struct {
+		b        *text.Buffer
+		from, to string
+	}
 	sep := string(filepath.Separator)
+	var changes []change
 	for _, b := range e.buffers {
 		p := b.Path()
-		var np string
-		switch {
-		case p == "":
-			continue
-		case p == from:
-			np = to
-		case strings.HasPrefix(p, from+sep):
-			np = to + p[len(from):]
-		default:
+		if p == "" {
 			continue
 		}
-		b.SetPath(np)
-		if name := e.uniqueNameFor(b, filepath.Base(np)); name != "" {
-			delete(e.byName, e.names[b])
-			e.names[b] = name
-			e.byName[name] = b
+		for _, m := range moves {
+			if p == m.from {
+				changes = append(changes, change{b, p, m.to})
+				break
+			}
+			if strings.HasPrefix(p, m.from+sep) {
+				changes = append(changes, change{b, p, m.to + p[len(m.from):]})
+				break
+			}
 		}
-		// The file on disk is the same file, so what nem knew about it still
-		// holds; only its name changed.
-		if stamp, ok := e.safe.stamps[p]; ok {
-			delete(e.safe.stamps, p)
-			e.safe.stamps[np] = stamp
+	}
+
+	// The file on disk is the same file, so what nem knew about it still
+	// holds; only its name changed.
+	stamps := make(map[string]stamp, len(changes))
+	for _, c := range changes {
+		if st, ok := e.safe.stamps[c.from]; ok {
+			stamps[c.to] = st
+			delete(e.safe.stamps, c.from)
 		}
-		e.forgetBranch(b)
-		e.retuneHighlight(b)
+		delete(e.byName, e.names[c.b])
+	}
+	for _, c := range changes {
+		c.b.SetPath(c.to)
+		if name := e.uniqueNameFor(c.b, filepath.Base(c.to)); name != "" {
+			e.names[c.b] = name
+		}
+		e.byName[e.names[c.b]] = c.b
+		if st, ok := stamps[c.to]; ok {
+			e.safe.stamps[c.to] = st
+		}
+		e.forgetBranch(c.b)
+		e.retuneHighlight(c.b)
 	}
 }
 
@@ -1047,7 +1097,7 @@ var detectIcons = icons.Detect
 func (e *Editor) SetIcons(on bool) {
 	e.icons = on
 	for _, b := range e.buffers {
-		if st := e.dired[b]; st != nil && st.opts.Icons != on {
+		if st := e.dired[b]; st != nil && st.wd == nil && st.opts.Icons != on {
 			st.opts.Icons = on
 			e.diredRender(b, st, "")
 		}

@@ -102,9 +102,11 @@ type Editor struct {
 	vcs map[*text.Buffer]branchEntry
 
 	// dired holds the listing behind every dired buffer, and diredKeys the
-	// keymap those buffers use. See dired.go.
-	dired     map[*text.Buffer]*diredState
-	diredKeys *keymap.Map
+	// keymap those buffers use - wdiredKeys while their names are being
+	// edited. See dired.go and wdired.go.
+	dired      map[*text.Buffer]*diredState
+	diredKeys  *keymap.Map
+	wdiredKeys *keymap.Map
 
 	// startup shows the welcome panel. It is set by the caller when nem was
 	// started with no file to open, and cleared by the first keystroke - see
@@ -201,28 +203,33 @@ func New(scr tcell.Screen) (*Editor, error) {
 	if err != nil {
 		return nil, fmt.Errorf("installing dired bindings: %w", err)
 	}
+	wk, err := newWdiredKeymap()
+	if err != nil {
+		return nil, fmt.Errorf("installing wdired bindings: %w", err)
+	}
 
 	th := ui.DefaultTheme()
 	e := &Editor{
-		reg:       reg,
-		keys:      km,
-		names:     map[*text.Buffer]string{},
-		byName:    map[string]*text.Buffer{},
-		ring:      command.NewKillRing(command.DefaultCapacity),
-		th:        th,
-		scr:       scr,
-		safe:      newSafety(),
-		comp:      defaultCompletionPrefs(),
-		delSel:    true,
-		hl:        map[*text.Buffer]*highlight.Cache{},
-		vcs:       map[*text.Buffer]branchEntry{},
-		dired:     map[*text.Buffer]*diredState{},
-		diredKeys: dk,
-		before:    map[string][]func(){},
-		after:     map[string][]func(){},
-		clip:      clipboard{read: defaultClipboardReader},
-		ext:       newExternalState(),
-		mem:       &memory.Memory{},
+		reg:        reg,
+		keys:       km,
+		names:      map[*text.Buffer]string{},
+		byName:     map[string]*text.Buffer{},
+		ring:       command.NewKillRing(command.DefaultCapacity),
+		th:         th,
+		scr:        scr,
+		safe:       newSafety(),
+		comp:       defaultCompletionPrefs(),
+		delSel:     true,
+		hl:         map[*text.Buffer]*highlight.Cache{},
+		vcs:        map[*text.Buffer]branchEntry{},
+		dired:      map[*text.Buffer]*diredState{},
+		diredKeys:  dk,
+		wdiredKeys: wk,
+		before:     map[string][]func(){},
+		after:      map[string][]func(){},
+		clip:       clipboard{read: defaultClipboardReader},
+		ext:        newExternalState(),
+		mem:        &memory.Memory{},
 	}
 
 	// recover-file closes over the editor rather than going through Env. It is
@@ -245,6 +252,9 @@ func New(scr tcell.Screen) (*Editor, error) {
 		return nil, fmt.Errorf("registering %s: %w", pasteCommand, err)
 	}
 	if err := registerDiredCommands(e, reg); err != nil {
+		return nil, fmt.Errorf("registering dired commands: %w", err)
+	}
+	if err := registerWdiredCommands(e, reg); err != nil {
 		return nil, fmt.Errorf("registering dired commands: %w", err)
 	}
 	if err := registerExternalCommands(e, reg); err != nil {

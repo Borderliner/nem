@@ -209,7 +209,10 @@ func (e *Editor) FileType(b *text.Buffer) string {
 	if b == nil {
 		return ""
 	}
-	if e.diredOf(b) != nil {
+	if st := e.diredOf(b); st != nil {
+		if st.wd != nil {
+			return "wdired"
+		}
 		return "dired"
 	}
 	switch name := e.cacheFor(b).Lexer().Name(); name {

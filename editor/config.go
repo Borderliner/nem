@@ -55,7 +55,7 @@ func (e *Editor) LoadConfig(path string) error {
 	h, err := lua.New(lua.Options{
 		Registry:    e.reg,
 		Keymap:      e.keys,
-		ModeKeymaps: map[string]*keymap.Map{"dired": e.diredKeys},
+		ModeKeymaps: map[string]*keymap.Map{"dired": e.diredKeys, "wdired": e.wdiredKeys},
 		ConfigPath:  path,
 		Timeout:     configTimeout,
 	})

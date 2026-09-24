@@ -20,6 +20,16 @@ func TestEveryBoundCommandExists(t *testing.T) {
 			missing = append(missing, b.Spec+" -> "+b.Command)
 		}
 	}
+	// The modes' keymaps too: dired's, and wdired's while names are edited.
+	for mode, table := range map[string][]struct{ Spec, Command string }{
+		"dired": diredBindings, "wdired": wdiredBindings,
+	} {
+		for _, b := range table {
+			if _, ok := r.Lookup(b.Command); !ok {
+				missing = append(missing, mode+": "+b.Spec+" -> "+b.Command)
+			}
+		}
+	}
 	sort.Strings(missing)
 	for _, m := range missing {
 		t.Errorf("bound key names a command no group registers: %s", m)

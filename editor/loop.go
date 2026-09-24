@@ -516,6 +516,7 @@ func (e *Editor) frame() ui.Frame {
 		BranchOf: e.BranchOf,
 
 		ListingOf: e.isListing,
+		EditingOf: e.isEditingListing,
 	}
 	if e.mini != nil {
 		f.Echo = e.mini.line()

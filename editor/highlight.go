@@ -26,6 +26,9 @@ func (e *Editor) spansOf(b *text.Buffer, line int) []syntax.Span {
 	}
 	// A listing is coloured from the Listing that produced it, not lexed.
 	if st := e.diredOf(b); st != nil {
+		if st.wd != nil {
+			return st.wdiredSpans(b, line, st.spans(line))
+		}
 		return st.spans(line)
 	}
 	return e.cacheFor(b).Spans(b, line)

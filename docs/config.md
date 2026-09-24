@@ -199,12 +199,14 @@ and nem will tell you which two bindings conflict. Rebinding an existing exact
 sequence simply replaces it.
 
 A third argument binds a key in a mode instead, where it applies only in that
-mode's buffers and takes precedence over the global binding. The one mode is
-`"dired"`:
+mode's buffers and takes precedence over the global binding. The modes are
+`"dired"`, for directory listings, and `"wdired"`, for a listing whose file
+names are being edited after `C-x C-q`:
 
 ```lua
 nem.bind("k", "dired-do-delete", "dired")   -- k deletes, as D does
 nem.bind("-", "dired-up-directory", "dired")
+nem.bind("C-c C-s", "wdired-finish-edit", "wdired")
 ```
 
 ## Defining your own commands
