@@ -339,3 +339,15 @@ func BenchmarkSearchMissInHugeFile(b *testing.B) {
 		}
 	}
 }
+
+// Starting up: a new editor, the config loaded (no file) and the first frame.
+func BenchmarkStartup(b *testing.B) {
+	cfg := filepath.Join(b.TempDir(), "init.lua")
+	b.ReportAllocs()
+	for b.Loop() {
+		e := benchScreen(b, 120, 40)
+		_ = e.LoadConfig(cfg)
+		e.Redraw()
+		e.CloseConfig()
+	}
+}
