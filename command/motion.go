@@ -337,7 +337,7 @@ func scrollBy(e Env, dir int) error {
 func gotoLine(e Env) error {
 	n, explicit := e.Arg()
 	if !explicit {
-		s, err := e.ReadString(ReadOpts{Prompt: "Goto line: "})
+		s, err := e.ReadString(ReadOpts{Prompt: "Goto line: ", History: "line"})
 		if err != nil {
 			return err
 		}

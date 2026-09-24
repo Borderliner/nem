@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Borderliner/nem/backup"
 	"github.com/Borderliner/nem/command"
 	"github.com/Borderliner/nem/editor"
 	"github.com/Borderliner/nem/ui"
@@ -75,6 +76,13 @@ func run(paths []string) (err error) {
 	_ = e.LoadConfig("")
 	defer e.CloseConfig()
 
+	// What the last session remembered - prompt history, recent files, where
+	// point was in each file - kept beside the backups. Without a state
+	// directory nem simply starts with none.
+	if dir, err := backup.DefaultRoot(); err == nil {
+		_ = e.UseStateDir(dir)
+	}
+
 	// Only the command line knows whether a file was asked for; the editor sees
 	// an empty *scratch* either way.
 	if len(paths) == 0 {
@@ -94,5 +102,7 @@ func run(paths []string) (err error) {
 		}
 	}
 
-	return e.Loop()
+	err = e.Loop()
+	e.SaveMemory()
+	return err
 }

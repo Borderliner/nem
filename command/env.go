@@ -166,6 +166,19 @@ type ReadOpts struct {
 	// refused where RequireMatch holds.
 	RequireMatch bool
 
+	// History names the kind of prompt this is - "command", "file",
+	// "search" - so what is entered here is remembered with what was entered
+	// at others of its kind, across sessions, and M-p and M-n bring it back.
+	// Empty keeps no history.
+	History string
+
+	// HistoryFirst lists the candidates entered here before first, most
+	// recent first, while nothing is typed: M-x opens on the commands used
+	// last. Not for prompts whose candidates are already in a meaningful
+	// order - switch-to-buffer's is by recency, and history would put the
+	// current buffer first.
+	HistoryFirst bool
+
 	// Icon, when non-nil, gives each candidate an icon to show beside it: a
 	// folder, the Go mark, a picture. Display only - the candidate is still
 	// the answer - and ignored when the icons setting is off.

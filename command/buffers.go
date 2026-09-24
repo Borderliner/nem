@@ -58,6 +58,7 @@ func RegisterBuffers(r *Registry) error {
 func findFile(e Env) error {
 	path, err := e.ReadString(ReadOpts{
 		Prompt:   "Find file: ",
+		History:  "file",
 		Complete: cachedPaths(completeFilename),
 		Descend:  IsDirCandidate,
 		Icon:     icons.ForCandidate,
@@ -106,6 +107,7 @@ func writeFile(e Env) error {
 	path, err := e.ReadString(ReadOpts{
 		Prompt:   "Write file: ",
 		Initial:  b.Path(),
+		History:  "file",
 		Complete: cachedPaths(completeWritePath),
 		Descend:  IsDirCandidate,
 		Icon:     icons.ForCandidate,
@@ -222,6 +224,7 @@ walk:
 func switchToBuffer(e Env) error {
 	name, err := e.ReadString(ReadOpts{
 		Prompt:   "Switch to buffer: ",
+		History:  "buffer",
 		Complete: completeBufferName(e),
 		Icon:     icons.ForBuffer,
 	})

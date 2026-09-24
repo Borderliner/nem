@@ -2,6 +2,7 @@ package editor
 
 import (
 	"fmt"
+	"slices"
 	"unicode/utf8"
 
 	"github.com/Borderliner/nem/command"
@@ -66,6 +67,9 @@ type completion struct {
 	style completionStyle
 	// icon gives each candidate its icon, when the prompt offers one.
 	icon func(string) icons.Icon
+	// history, when set, puts the candidates entered before first, most
+	// recent first, while nothing is typed. See ReadOpts.HistoryFirst.
+	history []string
 	// peak is the most candidate rows this prompt has shown. At the bottom of
 	// the screen the list keeps that height as it narrows, as emacs's
 	// grow-only minibuffer does: were it to shrink with every keystroke, the
@@ -95,6 +99,27 @@ func newCompletion(f command.CompleteFunc, input string) *completion {
 func (c *completion) refresh(input string) {
 	c.ranked = rankPastSharedPrefix(input, c.complete(input))
 	c.sel, c.top = 0, 0
+	if input == "" && len(c.history) > 0 {
+		at := make(map[string]int, len(c.history))
+		for i, h := range c.history {
+			if _, dup := at[h]; !dup {
+				at[h] = i
+			}
+		}
+		slices.SortStableFunc(c.ranked, func(a, b fuzzy.Ranked) int {
+			ia, oka := at[a.Candidate]
+			ib, okb := at[b.Candidate]
+			switch {
+			case oka && okb:
+				return ia - ib
+			case oka:
+				return -1
+			case okb:
+				return 1
+			}
+			return 0
+		})
+	}
 	for i, r := range c.ranked {
 		if r.Candidate == input {
 			copy(c.ranked[1:i+1], c.ranked[:i])

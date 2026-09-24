@@ -320,7 +320,7 @@ func isearchCmd(backward bool) Func {
 		// drives Update on every edit and Advance when C-s is pressed again
 		// inside the prompt. Advancing cannot happen here, because this call
 		// blocks until the prompt closes.
-		if _, err := e.ReadString(ReadOpts{Prompt: prompt, Session: s}); err != nil {
+		if _, err := e.ReadString(ReadOpts{Prompt: prompt, Session: s, History: "search"}); err != nil {
 			if errors.Is(err, ErrQuit) {
 				s.Abandon()
 				e.Echo("Quit")
@@ -345,7 +345,7 @@ func isearchCmd(backward bool) Func {
 var queryReplaceAnswers = []rune{'y', 'n', '!', 'q'}
 
 func queryReplace(e Env) error {
-	from, err := e.ReadString(ReadOpts{Prompt: "Query replace: "})
+	from, err := e.ReadString(ReadOpts{Prompt: "Query replace: ", History: "replace"})
 	if err != nil {
 		return err
 	}
@@ -353,7 +353,7 @@ func queryReplace(e Env) error {
 		e.Echo("Nothing to replace")
 		return nil
 	}
-	to, err := e.ReadString(ReadOpts{Prompt: fmt.Sprintf("Query replace %s with: ", from)})
+	to, err := e.ReadString(ReadOpts{Prompt: fmt.Sprintf("Query replace %s with: ", from), History: "replace"})
 	if err != nil {
 		return err
 	}
@@ -444,6 +444,8 @@ func executeExtendedCommand(e Env) error {
 		Prompt:       "M-x ",
 		Complete:     CompleteFrom(e.CommandNames()),
 		RequireMatch: true,
+		History:      "command",
+		HistoryFirst: true,
 	})
 	if err != nil {
 		return err

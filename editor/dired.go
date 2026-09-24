@@ -544,6 +544,7 @@ func registerDiredCommands(e *Editor, reg *command.Registry) error {
 func (e *Editor) diredPrompt() error {
 	ans, err := e.ReadString(command.ReadOpts{
 		Prompt:   "Dired: ",
+		History:  "directory",
 		Initial:  promptDir(e.bufferDir(e.active.Buf)),
 		Complete: command.DirectoryCompleter(),
 		Descend:  command.IsDirCandidate,
@@ -841,6 +842,7 @@ func (e *Editor) diredTransfer(b *text.Buffer, st *diredState, copying bool) err
 	}
 	ans, err := e.ReadString(command.ReadOpts{
 		Prompt:   fmt.Sprintf("%s %s to: ", verb, describeEntries(ens)),
+		History:  "file",
 		Initial:  promptDir(st.dir),
 		Complete: command.DirectoryCompleter(),
 		Descend:  command.IsDirCandidate,
@@ -966,6 +968,7 @@ func (e *Editor) followRename(from, to string) {
 func (e *Editor) diredMkdir(b *text.Buffer, st *diredState) error {
 	ans, err := e.ReadString(command.ReadOpts{
 		Prompt:  "Create directory: ",
+		History: "file",
 		Initial: promptDir(st.dir),
 	})
 	if err != nil {

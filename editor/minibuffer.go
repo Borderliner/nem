@@ -35,6 +35,8 @@ const (
 	miniNext       = "minibuffer-next-candidate"
 	miniPrev       = "minibuffer-previous-candidate"
 	miniAcceptText = "minibuffer-accept-literal"
+	miniHistPrev   = "minibuffer-previous-history"
+	miniHistNext   = "minibuffer-next-history"
 )
 
 // miniState is one active prompt.
@@ -53,6 +55,13 @@ type miniState struct {
 	// Its absence is what keeps an incremental search from growing a panel:
 	// C-s passes no Complete function, so there is nothing to show.
 	comp *completion
+
+	// history is what has been entered at prompts of this kind, most recent
+	// first. histAt is the entry the prompt shows, -1 for what was being
+	// typed; typed is that text, kept while the history is walked.
+	history []string
+	histAt  int
+	typed   string
 
 	done  bool
 	abort bool
@@ -73,6 +82,8 @@ func miniKeymap() *keymap.Map {
 		{"C-p", miniPrev},
 		{"<up>", miniPrev},
 		{"M-RET", miniAcceptText},
+		{"M-p", miniHistPrev},
+		{"M-n", miniHistNext},
 	} {
 		if err := bindSpec(m, b.spec, b.cmd); err != nil {
 			panic("editor: bad minibuffer binding: " + err.Error()) // a build-time constant is wrong
@@ -95,6 +106,7 @@ func newMiniState(opts command.ReadOpts, buf *text.Buffer, win *view.Window) *mi
 		opts:   opts,
 		keys:   miniKeymap(),
 		last:   buf.String(),
+		histAt: -1,
 	}
 	if opts.Complete != nil {
 		ms.comp = newCompletion(opts.Complete, ms.contents())
@@ -149,6 +161,13 @@ func (e *Editor) ReadString(opts command.ReadOpts) (string, error) {
 	win.Pt = buf.End()
 
 	ms := newMiniState(opts, buf, win)
+	if opts.History != "" {
+		ms.history = e.mem.HistoryOf(opts.History)
+		if ms.comp != nil && opts.HistoryFirst && len(ms.history) > 0 {
+			ms.comp.history = ms.history
+			ms.comp.refresh(ms.contents())
+		}
+	}
 	// The echo area is deliberately NOT saved and restored. A prompt's own text
 	// lives in ms.line(), not in e.echo, so there is nothing of the prompt's to
 	// clean up — and a message the prompt produced, such as a failing
@@ -166,7 +185,12 @@ func (e *Editor) ReadString(opts command.ReadOpts) (string, error) {
 	if ms.abort || e.quit {
 		return "", command.ErrQuit
 	}
-	return ms.contents(), nil
+	answer := ms.contents()
+	if opts.History != "" && answer != "" {
+		e.mem.AddHistory(opts.History, answer)
+		e.saveMemory()
+	}
+	return answer, nil
 }
 
 // readLoop is the nested event loop a prompt runs in.
@@ -193,13 +217,23 @@ func (ms *miniState) control(e *Editor, name string) {
 	case miniAcceptText:
 		ms.acceptLiteral(e)
 	case miniNext:
+		// Without a candidate list, the arrows walk the history, as in
+		// emacs: there is nothing else for them to move through.
 		if ms.comp != nil {
 			ms.comp.move(1)
+		} else {
+			ms.historyStep(e, -1)
 		}
 	case miniPrev:
 		if ms.comp != nil {
 			ms.comp.move(-1)
+		} else {
+			ms.historyStep(e, 1)
 		}
+	case miniHistPrev:
+		ms.historyStep(e, 1)
+	case miniHistNext:
+		ms.historyStep(e, -1)
 	case miniAbort:
 		ms.done, ms.abort = true, true
 		if ms.opts.Session != nil {
@@ -324,6 +358,29 @@ func (ms *miniState) replace(e *Editor, s string) {
 	}
 	ms.win.Pt = ms.buf.End()
 	e.afterMiniEdit()
+}
+
+// historyStep shows the history entry d steps older (d > 0) or newer, coming
+// back to what was being typed past the newest.
+func (ms *miniState) historyStep(e *Editor, d int) {
+	next := ms.histAt + d
+	switch {
+	case next >= len(ms.history):
+		e.Echo("Beginning of history; no preceding item")
+		return
+	case next < -1:
+		e.Echo("End of history")
+		return
+	}
+	if ms.histAt == -1 {
+		ms.typed = ms.contents()
+	}
+	ms.histAt = next
+	if next == -1 {
+		ms.replace(e, ms.typed)
+	} else {
+		ms.replace(e, ms.history[next])
+	}
 }
 
 // commonPrefix returns the longest prefix shared by every candidate.

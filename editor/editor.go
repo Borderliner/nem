@@ -27,6 +27,7 @@ import (
 	"github.com/Borderliner/nem/highlight"
 	"github.com/Borderliner/nem/keymap"
 	"github.com/Borderliner/nem/lua"
+	"github.com/Borderliner/nem/memory"
 	"github.com/Borderliner/nem/text"
 	"github.com/Borderliner/nem/ui"
 	"github.com/Borderliner/nem/view"
@@ -157,6 +158,11 @@ type Editor struct {
 	km         kmacroState
 	lastSeqLen int
 
+	// mem is what is remembered between sessions - prompt history, recent
+	// files, places in files. It persists only once UseStateDir is called,
+	// which main does and tests do not. See memory.go.
+	mem *memory.Memory
+
 	// icons shows a file's icon beside its name in dired and in the file and
 	// buffer prompts. Off until the config's icons setting is applied: the
 	// default, "auto", guesses from the terminal and its fonts, which is not
@@ -216,6 +222,7 @@ func New(scr tcell.Screen) (*Editor, error) {
 		after:     map[string][]func(){},
 		clip:      clipboard{read: defaultClipboardReader},
 		ext:       newExternalState(),
+		mem:       &memory.Memory{},
 	}
 
 	// recover-file closes over the editor rather than going through Env. It is
