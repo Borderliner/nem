@@ -253,6 +253,12 @@ func (e *Editor) keymapStack() []*keymap.Map {
 	if e.mini != nil {
 		return []*keymap.Map{e.mini.keys, e.keys}
 	}
+	// A buffer's mode comes before the global map in the same way, and for the
+	// same reason: it names only what it changes, so C-x C-f still works in a
+	// listing.
+	if m := e.modeKeys(e.active.Buf); m != nil {
+		return []*keymap.Map{m, e.keys}
+	}
 	return []*keymap.Map{e.keys}
 }
 
@@ -471,6 +477,8 @@ func (e *Editor) frame() ui.Frame {
 		SpansOf:  e.spansOf,
 		TypeOf:   e.FileType,
 		BranchOf: e.BranchOf,
+
+		ListingOf: e.isListing,
 	}
 	if e.mini != nil {
 		f.Echo = e.mini.line()

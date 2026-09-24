@@ -55,8 +55,8 @@ func (e *Editor) branchAt(b *text.Buffer, now time.Time) string {
 	if b == nil {
 		return ""
 	}
-	path := b.Path()
-	if path == "" {
+	dir := e.bufferDir(b)
+	if dir == "" {
 		return "" // a path-less buffer has no file and so no repository
 	}
 	if ent, ok := e.vcs[b]; ok && now.Sub(ent.at) < branchTTL {
@@ -64,7 +64,7 @@ func (e *Editor) branchAt(b *text.Buffer, now time.Time) string {
 	}
 	// The miss is cached too, including the empty answer. A file outside any
 	// repository would otherwise walk to the filesystem root on every frame.
-	br := gitBranch(path)
+	br := gitBranchIn(dir)
 	e.vcs[b] = branchEntry{branch: br, at: now}
 	return br
 }
@@ -77,8 +77,11 @@ func (e *Editor) branchAt(b *text.Buffer, now time.Time) string {
 func (e *Editor) forgetBranch(b *text.Buffer) { delete(e.vcs, b) }
 
 // gitBranch reports the branch checked out in the repository containing path.
-func gitBranch(path string) string {
-	dir, err := filepath.Abs(filepath.Dir(path))
+func gitBranch(path string) string { return gitBranchIn(filepath.Dir(path)) }
+
+// gitBranchIn reports the branch checked out in the repository containing dir.
+func gitBranchIn(dir string) string {
+	dir, err := filepath.Abs(dir)
 	if err != nil {
 		return ""
 	}
@@ -205,6 +208,9 @@ func readLimited(path string) (string, error) {
 func (e *Editor) FileType(b *text.Buffer) string {
 	if b == nil {
 		return ""
+	}
+	if e.diredOf(b) != nil {
+		return "dired"
 	}
 	switch name := e.cacheFor(b).Lexer().Name(); name {
 	case "text":

@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -57,7 +58,7 @@ func findFile(e Env) error {
 	path, err := e.ReadString(ReadOpts{
 		Prompt:   "Find file: ",
 		Complete: completeFilename,
-		Descend:  isDirCandidate,
+		Descend:  IsDirCandidate,
 	})
 	if err != nil {
 		return err
@@ -100,8 +101,8 @@ func writeFile(e Env) error {
 	path, err := e.ReadString(ReadOpts{
 		Prompt:   "Write file: ",
 		Initial:  b.Path(),
-		Complete: completeFilename,
-		Descend:  isDirCandidate,
+		Complete: completeWritePath,
+		Descend:  IsDirCandidate,
 	})
 	if err != nil {
 		return err
@@ -445,24 +446,42 @@ func completeBufferName(e Env) CompleteFunc {
 	}
 }
 
-// completeFilename completes a path against the directory it names.
+// completeFilename completes a path for find-file: the directory the input
+// names, then everything in it.
 //
 // Directories come back with a trailing separator so that repeated completion
 // walks down a tree rather than stalling at the directory itself.
-func completeFilename(prefix string) []string {
-	dir, base := filepath.Split(prefix)
+//
+// The directory itself is first, as ./ when the input names none. RET on it
+// answers with the directory, which find-file lists in dired - so C-x C-f RET
+// on an untouched prompt lists the working directory, as it does in emacs, and
+// RET straight after walking into src/ lists src/.
+func completeFilename(prefix string) []string { return pathCandidates(prefix, true, false) }
+
+// completeWritePath is write-file's completion. It has no entry for the
+// directory itself: a buffer cannot be written to a directory.
+func completeWritePath(prefix string) []string { return pathCandidates(prefix, false, false) }
+
+// CompleteDirectory completes a directory name: the directory the input names,
+// then the directories inside it. Dired's prompts use it, for where to list or
+// where to move something to.
+func CompleteDirectory(prefix string) []string { return pathCandidates(prefix, true, true) }
+
+// pathCandidates lists the directory prefix names, optionally led by the
+// directory itself and optionally directories only.
+func pathCandidates(prefix string, self, dirsOnly bool) []string {
+	dir, _ := filepath.Split(prefix)
 	lookIn := dir
 	if lookIn == "" {
 		lookIn = "."
 	}
+	// The part after the last separator deliberately does not filter: the
+	// directory selects which candidates exist, and the minibuffer's fuzzy
+	// ranking narrows them.
 	entries, err := os.ReadDir(lookIn)
 	if err != nil {
 		return nil
 	}
-	// base is deliberately unused for filtering: the directory selects which
-	// candidates exist, and the minibuffer's fuzzy ranking narrows them. The
-	// split is still needed to know which directory to read.
-	_ = base
 	// Hidden entries last. RET takes the first candidate when nothing has been
 	// typed, and sorted by name that was .git/ in nearly every repository.
 	sort.Slice(entries, func(i, j int) bool {
@@ -472,11 +491,29 @@ func completeFilename(prefix string) []string {
 		}
 		return a < b
 	})
+	sep := string(filepath.Separator)
 	var out []string
+	if self {
+		if dir == "" {
+			out = append(out, "."+sep)
+		} else {
+			out = append(out, dir)
+		}
+	}
 	for _, ent := range entries {
 		full := dir + ent.Name()
-		if ent.IsDir() {
-			full += string(filepath.Separator)
+		isDir := ent.IsDir()
+		if !isDir && ent.Type()&fs.ModeSymlink != 0 {
+			// A link to a directory is somewhere to walk into as well.
+			if fi, err := os.Stat(filepath.Join(lookIn, ent.Name())); err == nil {
+				isDir = fi.IsDir()
+			}
+		}
+		switch {
+		case isDir:
+			full += sep
+		case dirsOnly:
+			continue
 		}
 		out = append(out, full)
 	}
@@ -486,10 +523,18 @@ func completeFilename(prefix string) []string {
 // isHidden reports whether a directory entry is a dotfile.
 func isHidden(name string) bool { return strings.HasPrefix(name, ".") }
 
-// isDirCandidate reports whether a completeFilename candidate is a directory,
-// which completeFilename marks with a trailing separator. It is the Descend
+// IsDirCandidate reports whether a filename candidate is a directory to walk
+// into, which the completers mark with a trailing separator. It is the Descend
 // hook for the filename prompts, so RET on a directory lists it.
-func isDirCandidate(s string) bool {
+//
+// The ./ entry is the exception. It names the directory already listed, so
+// walking into it would change nothing; RET takes it as the answer instead.
+// (The directory itself under any other name is equal to the input, and the
+// minibuffer already takes a candidate equal to the input as the answer.)
+func IsDirCandidate(s string) bool {
+	if s == "."+string(filepath.Separator) {
+		return false
+	}
 	return s != "" && os.IsPathSeparator(s[len(s)-1])
 }
 

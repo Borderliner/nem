@@ -202,6 +202,8 @@ func TestFilenameCompletionListsMatchingEntries(t *testing.T) {
 	// a prefix match, but typing "abm" is not, and only fuzzy finds that.
 	got := complete(filepath.Join(dir, "al"))
 	want := []string{
+		// The directory itself leads, so RET can take it and list it.
+		dir + string(filepath.Separator),
 		filepath.Join(dir, "album.txt"),
 		filepath.Join(dir, "alpha.txt"),
 		// A directory keeps its separator so repeated completion can descend
@@ -213,8 +215,8 @@ func TestFilenameCompletionListsMatchingEntries(t *testing.T) {
 		t.Errorf("completing %q gave\n  %q\nwant\n  %q", "al", got, want)
 	}
 	// A trailing separator means "everything in this directory".
-	if got := complete(dir + string(filepath.Separator)); len(got) != 4 {
-		t.Errorf("listing the directory completed to %q, want all four entries", got)
+	if got := complete(dir + string(filepath.Separator)); len(got) != 5 {
+		t.Errorf("listing the directory completed to %q, want it and all four entries", got)
 	}
 	if got := complete("/no/such/directory/anywhere/x"); got != nil {
 		t.Errorf("unreadable directory returned %q, want nil", got)
@@ -244,6 +246,7 @@ func TestFilenameCompletionListsHiddenEntriesLast(t *testing.T) {
 	sep := string(filepath.Separator)
 	in := dir + sep
 	want := []string{
+		in,
 		in + "Makefile",
 		in + "cmd" + sep,
 		in + "main.go",
@@ -252,6 +255,55 @@ func TestFilenameCompletionListsHiddenEntriesLast(t *testing.T) {
 	}
 	if got := complete(in); !slices.Equal(got, want) {
 		t.Errorf("listing gave\n  %q\nwant\n  %q", got, want)
+	}
+}
+
+// With nothing typed the directory itself is offered as ./, first, and RET
+// takes it rather than walking into it: C-x C-f RET lists the working
+// directory, as in emacs.
+func TestFindFileOffersTheWorkingDirectoryFirst(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+
+	e := newEnv()
+	e.Replies = []string{""}
+	mustRun(t, e, "find-file")
+	opts := lastOpts(t, e)
+
+	sep := string(filepath.Separator)
+	got := opts.Complete("")
+	if want := []string{"." + sep, "a.txt"}; !slices.Equal(got, want) {
+		t.Errorf("completing nothing gave %q, want %q", got, want)
+	}
+	if opts.Descend("." + sep) {
+		t.Error("./ is walked into; RET on it should answer with the directory")
+	}
+}
+
+// Dired's prompts complete directories only, led by the one typed. A link to a
+// directory is a directory for this purpose.
+func TestCompleteDirectoryListsOnlyDirectories(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "file.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []string{"src", ".git"} {
+		if err := os.Mkdir(filepath.Join(dir, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sep := string(filepath.Separator)
+	in := dir + sep
+	want := []string{in, in + "src" + sep, in + ".git" + sep}
+	if err := os.Symlink(filepath.Join(dir, "src"), filepath.Join(dir, "link")); err == nil {
+		want = []string{in, in + "link" + sep, in + "src" + sep, in + ".git" + sep}
+	}
+
+	if got := command.CompleteDirectory(in); !slices.Equal(got, want) {
+		t.Errorf("CompleteDirectory(%q) =\n  %q\nwant\n  %q", in, got, want)
 	}
 }
 
@@ -268,7 +320,16 @@ func TestFilenamePromptsDescendIntoDirectories(t *testing.T) {
 	}
 	sep := string(filepath.Separator)
 
-	for _, cmd := range []string{"find-file", "write-file"} {
+	for _, tc := range []struct {
+		cmd   string
+		cands int
+	}{
+		// find-file also offers the directory itself; write-file cannot write
+		// to one.
+		{"find-file", 3},
+		{"write-file", 2},
+	} {
+		cmd := tc.cmd
 		t.Run(cmd, func(t *testing.T) {
 			e := newEnv("body")
 			e.Replies = []string{""}
@@ -279,8 +340,8 @@ func TestFilenamePromptsDescendIntoDirectories(t *testing.T) {
 				t.Fatalf("%s sets no Descend hook, so RET on a directory tries to visit it", cmd)
 			}
 			cands := opts.Complete(dir + sep)
-			if len(cands) != 2 {
-				t.Fatalf("setup: completion gave %q, want file.txt and sub", cands)
+			if len(cands) != tc.cands {
+				t.Fatalf("setup: completion gave %q, want %d candidates", cands, tc.cands)
 			}
 			for _, c := range cands {
 				if got, want := opts.Descend(c), strings.HasSuffix(c, sep); got != want {

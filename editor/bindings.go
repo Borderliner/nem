@@ -82,6 +82,8 @@ var defaultBindings = []struct{ Spec, Command string }{
 	{"C-x b", "switch-to-buffer"},
 	{"C-x k", "kill-buffer"},
 	{"C-x C-b", "list-buffers"},
+	{"C-x d", "dired"},
+	{"C-x C-j", "dired-jump"},
 
 	// Windows.
 	{"C-x 2", "split-window-below"},

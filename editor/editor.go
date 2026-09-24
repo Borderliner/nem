@@ -19,6 +19,7 @@ package editor
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 
@@ -99,6 +100,11 @@ type Editor struct {
 	// every frame and the answer costs a walk up the directory tree. See vcs.go.
 	vcs map[*text.Buffer]branchEntry
 
+	// dired holds the listing behind every dired buffer, and diredKeys the
+	// keymap those buffers use. See dired.go.
+	dired     map[*text.Buffer]*diredState
+	diredKeys *keymap.Map
+
 	// startup shows the welcome panel. It is set by the caller when nem was
 	// started with no file to open, and cleared by the first keystroke - see
 	// dismissStartup. Nothing sets it again, which is what makes the panel a
@@ -170,23 +176,30 @@ func New(scr tcell.Screen) (*Editor, error) {
 		return nil, fmt.Errorf("installing bindings: %w", err)
 	}
 
+	dk, err := newDiredKeymap()
+	if err != nil {
+		return nil, fmt.Errorf("installing dired bindings: %w", err)
+	}
+
 	th := ui.DefaultTheme()
 	e := &Editor{
-		reg:    reg,
-		keys:   km,
-		names:  map[*text.Buffer]string{},
-		byName: map[string]*text.Buffer{},
-		ring:   command.NewKillRing(command.DefaultCapacity),
-		th:     th,
-		scr:    scr,
-		safe:   newSafety(),
-		comp:   defaultCompletionPrefs(),
-		delSel: true,
-		hl:     map[*text.Buffer]*highlight.Cache{},
-		vcs:    map[*text.Buffer]branchEntry{},
-		before: map[string][]func(){},
-		after:  map[string][]func(){},
-		clip:   clipboard{read: defaultClipboardReader},
+		reg:       reg,
+		keys:      km,
+		names:     map[*text.Buffer]string{},
+		byName:    map[string]*text.Buffer{},
+		ring:      command.NewKillRing(command.DefaultCapacity),
+		th:        th,
+		scr:       scr,
+		safe:      newSafety(),
+		comp:      defaultCompletionPrefs(),
+		delSel:    true,
+		hl:        map[*text.Buffer]*highlight.Cache{},
+		vcs:       map[*text.Buffer]branchEntry{},
+		dired:     map[*text.Buffer]*diredState{},
+		diredKeys: dk,
+		before:    map[string][]func(){},
+		after:     map[string][]func(){},
+		clip:      clipboard{read: defaultClipboardReader},
 	}
 
 	// recover-file closes over the editor rather than going through Env. It is
@@ -207,6 +220,9 @@ func New(scr tcell.Screen) (*Editor, error) {
 	}
 	if err := registerPasteCommand(e, reg); err != nil {
 		return nil, fmt.Errorf("registering %s: %w", pasteCommand, err)
+	}
+	if err := registerDiredCommands(e, reg); err != nil {
+		return nil, fmt.Errorf("registering dired commands: %w", err)
 	}
 
 	scratch := e.NewBuffer(ui.ScratchName)
@@ -334,11 +350,15 @@ func (e *Editor) NewBuffer(name string) *text.Buffer {
 
 // OpenFile returns the buffer visiting path, reading it if it is not open yet.
 // A path that does not exist yields an empty buffer carrying it, which is how
-// find-file creates a new file.
+// find-file creates a new file. A directory is listed in dired, so find-file
+// and the command line can both be pointed at one.
 func (e *Editor) OpenFile(path string) (*text.Buffer, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		abs = path
+	}
+	if fi, err := os.Stat(abs); err == nil && fi.IsDir() {
+		return e.Dired(abs)
 	}
 	for _, b := range e.buffers {
 		if b.Path() == abs {
@@ -389,6 +409,7 @@ func (e *Editor) KillBuffer(b *text.Buffer) error {
 	}
 	delete(e.byName, e.names[b])
 	delete(e.names, b)
+	delete(e.dired, b)
 	e.forgetHighlight(b)
 	e.forgetBranch(b)
 	for i, c := range e.buffers {
@@ -582,11 +603,36 @@ func (e *Editor) Run(name string) error {
 // CommandNames lists interactive command names, sorted, for M-x completion.
 func (e *Editor) CommandNames() []string { return e.reg.Names() }
 
-// Bindings maps key sequences to command names, for describe-bindings.
-func (e *Editor) Bindings() map[string]string { return e.keys.Bindings() }
+// Bindings maps key sequences to command names, for describe-bindings. In a
+// buffer with a mode of its own - a dired listing - the mode's keys are
+// included and win, since they are what those keys do there.
+func (e *Editor) Bindings() map[string]string {
+	out := e.keys.Bindings()
+	if m := e.modeKeys(e.active.Buf); m != nil {
+		for spec, cmd := range m.Bindings() {
+			out[spec] = cmd
+		}
+	}
+	return out
+}
 
-// Where lists the sequences bound to a command, for describe-key.
-func (e *Editor) Where(cmd string) []string { return e.keys.Where(cmd) }
+// Where lists the sequences bound to a command, for describe-key. A global key
+// the current mode has taken over is left out: in dired, C-n no longer runs
+// next-line.
+func (e *Editor) Where(cmd string) []string {
+	m := e.modeKeys(e.active.Buf)
+	if m == nil {
+		return e.keys.Where(cmd)
+	}
+	out := m.Where(cmd)
+	for _, spec := range e.keys.Where(cmd) {
+		if seq, err := keymap.ParseSpec(spec); err == nil && m.Lookup(seq).Kind != keymap.Undefined {
+			continue
+		}
+		out = append(out, spec)
+	}
+	return out
+}
 
 // --- session -------------------------------------------------------------
 

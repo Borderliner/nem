@@ -247,22 +247,37 @@ func TestSwitchToBufferRetReturnsToThePreviousBuffer(t *testing.T) {
 	}
 }
 
-// RET straight after walking into a directory opens its first entry in listing
-// order. Before, every entry tied on the directory's own path and the shortest
-// name won, which put .hidden ahead of notes.txt.
-func TestFindFileRetAfterDescendingOpensTheFirstEntry(t *testing.T) {
+// Straight after walking into a directory, the directory itself is
+// highlighted and RET lists it in dired. C-n moves to its first entry in
+// listing order - notes.txt, not .hidden: every entry ties on the directory's
+// own path, and ranked on that the shortest name used to win.
+func TestFindFileAfterDescending(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, filepath.Join("sub", "notes.txt"), filepath.Join("sub", ".hidden"))
+	sub := filepath.Join(dir, "sub")
 
-	e := runKeys(t, "", func(scr tcell.SimulationScreen) {
-		time.Sleep(60 * time.Millisecond)
-		prompted(t, scr, findFileKeys, filepath.Join(dir, "su"), "RET")
-		time.Sleep(40 * time.Millisecond)
-		stroke(t, scr, "RET")
+	t.Run("RET lists the directory", func(t *testing.T) {
+		e := runKeys(t, "", func(scr tcell.SimulationScreen) {
+			time.Sleep(60 * time.Millisecond)
+			prompted(t, scr, findFileKeys, filepath.Join(dir, "su"), "RET")
+			time.Sleep(40 * time.Millisecond)
+			stroke(t, scr, "RET")
+		})
+		st := e.diredOf(e.Buf())
+		if st == nil || st.dir != sub {
+			t.Errorf("visiting %q, want a listing of %s", e.BufferName(e.Buf()), sub)
+		}
 	})
 
-	want := filepath.Join(dir, "sub", "notes.txt")
-	if got := e.Buf().Path(); got != want {
-		t.Errorf("visiting %q, want %q", got, want)
-	}
+	t.Run("C-n RET opens the first entry", func(t *testing.T) {
+		e := runKeys(t, "", func(scr tcell.SimulationScreen) {
+			time.Sleep(60 * time.Millisecond)
+			prompted(t, scr, findFileKeys, filepath.Join(dir, "su"), "RET")
+			time.Sleep(40 * time.Millisecond)
+			stroke(t, scr, "C-n", "RET")
+		})
+		if got, want := e.Buf().Path(), filepath.Join(sub, "notes.txt"); got != want {
+			t.Errorf("visiting %q, want %q", got, want)
+		}
+	})
 }
