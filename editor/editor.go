@@ -312,6 +312,9 @@ func New(scr tcell.Screen) (*Editor, error) {
 	if err := registerImenuCommands(e, reg); err != nil {
 		return nil, fmt.Errorf("registering imenu commands: %w", err)
 	}
+	if err := registerBidiCommands(e, reg); err != nil {
+		return nil, fmt.Errorf("registering bidi commands: %w", err)
+	}
 	if err := registerExternalCommands(e, reg); err != nil {
 		return nil, fmt.Errorf("registering external commands: %w", err)
 	}

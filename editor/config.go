@@ -107,6 +107,14 @@ func (e *Editor) applySettings(s lua.Settings) {
 
 	e.th.LineNumbers = s.LineNumbers
 	e.th.HighlightLine = s.HighlightLine
+	switch s.Bidi {
+	case "on":
+		e.th.Bidi = true
+	case "off":
+		e.th.Bidi = false
+	default:
+		e.th.Bidi = !ui.TerminalDoesBidi()
+	}
 	e.SetDeleteSelection(s.DeleteSelection)
 	e.th.Syntax = s.Syntax
 	// "auto" guesses from the terminal; an explicit choice always wins, because

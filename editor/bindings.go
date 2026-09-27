@@ -16,8 +16,10 @@ import (
 // loop before keymap lookup, not as an ordinary command.
 var defaultBindings = []struct{ Spec, Command string }{
 	// Motion.
-	{"C-f", "forward-char"}, {"<right>", "forward-char"},
-	{"C-b", "backward-char"}, {"<left>", "backward-char"},
+	// The arrows go the way the line reads, as emacs's do: in a line of
+	// Persian, <right> goes back. C-f and C-b go forward and back regardless.
+	{"C-f", "forward-char"}, {"<right>", "right-char"},
+	{"C-b", "backward-char"}, {"<left>", "left-char"},
 	{"C-n", "next-line"}, {"<down>", "next-line"},
 	{"C-p", "previous-line"}, {"<up>", "previous-line"},
 	{"M-f", "forward-word"},

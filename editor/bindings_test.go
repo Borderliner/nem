@@ -91,7 +91,7 @@ func TestWhereFindsAllBindings(t *testing.T) {
 	if got := m.Where("undo"); len(got) < 2 {
 		t.Errorf("Where(undo) = %v, want at least two bindings", got)
 	}
-	if got := m.Where("forward-char"); len(got) != 2 {
-		t.Errorf("Where(forward-char) = %v, want C-f and <right>", got)
+	if got := m.Where("next-line"); len(got) != 2 {
+		t.Errorf("Where(next-line) = %v, want C-n and <down>", got)
 	}
 }

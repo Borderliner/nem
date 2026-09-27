@@ -539,8 +539,9 @@ func (e *Editor) frame() ui.Frame {
 		TypeOf:   e.FileType,
 		BranchOf: e.BranchOf,
 
-		ListingOf: e.isListing,
-		CursorOf:  e.showsCursor,
+		ListingOf:   e.isListing,
+		CursorOf:    e.showsCursor,
+		DirectionOf: e.isProse,
 	}
 	if e.mini != nil {
 		f.Echo = e.mini.line()

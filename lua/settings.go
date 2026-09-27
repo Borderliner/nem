@@ -91,6 +91,11 @@ type Settings struct {
 
 	// HighlightLine lays a faint band under the line point is on.
 	HighlightLine bool
+
+	// Bidi is "on", "off" or "auto": whether nem lays out right-to-left
+	// text itself. "auto" does unless the terminal does it; a script sets it
+	// with true, false or "auto".
+	Bidi string
 }
 
 // DefaultSettings returns the built-in defaults, which are what the editor uses
@@ -104,7 +109,7 @@ func DefaultSettings() Settings {
 		DeleteSelection: true,
 		Syntax:          true, Theme: "auto",
 		OpenBinary: "ask", Icons: "auto", FillColumn: 70, AutoPair: true,
-		AutoRevert: true, HighlightLine: true,
+		AutoRevert: true, HighlightLine: true, Bidi: "auto",
 	}
 }
 
@@ -124,7 +129,7 @@ const (
 // outcome here: the user reads their config, sees the line, and cannot work out
 // why it has no effect.
 var knownSettings = []string{
-	"auto-pair", "auto-revert", "autosave-idle", "backup", "clipboard", "completion-rows", "completion-style",
+	"auto-pair", "auto-revert", "autosave-idle", "backup", "bidi", "clipboard", "completion-rows", "completion-style",
 	"delete-selection", "fill-column", "hl-line", "icons", "line-numbers", "open-binary", "scroll-margin", "syntax", "tab-width",
 	"shell", "theme", "undo-style", "which-key-delay",
 }
@@ -258,6 +263,21 @@ func (s *Settings) set(key string, v glua.LValue) error {
 			return fmt.Errorf("shell must be a string, got %s", v.Type())
 		}
 		s.Shell = string(str)
+	case "bidi":
+		switch v := v.(type) {
+		case glua.LBool:
+			s.Bidi = "off"
+			if v {
+				s.Bidi = "on"
+			}
+		case glua.LString:
+			if v != "auto" {
+				return fmt.Errorf(`bidi must be true, false or "auto", got %q`, string(v))
+			}
+			s.Bidi = "auto"
+		default:
+			return fmt.Errorf(`bidi must be true, false or "auto", got %s`, v.Type())
+		}
 	case "hl-line":
 		b, ok := v.(glua.LBool)
 		if !ok {
