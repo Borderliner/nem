@@ -224,6 +224,10 @@ func drawPanelText(scr tcell.Screen, x, y, width int, s string, base tcell.Style
 		return
 	}
 	l := text.NewLine([]rune(s))
+	if th.usesBidi(l.View()) {
+		drawPanelTextBidi(scr, x, y, width, &l, base, match, spans, th)
+		return
+	}
 
 	// match is ascending, and so are the clusters, so one cursor walks both.
 	// spans are walked the same way, by the draw loop's own walker.
@@ -263,5 +267,37 @@ func drawPanelText(scr tcell.Screen, x, y, width int, s string, base tcell.Style
 			continue
 		}
 		scr.SetContent(x+int(c.Col), y, c.Runes[0], c.Runes[1:], style)
+	}
+}
+
+// drawPanelTextBidi is drawPanelText for a row holding right-to-left text:
+// the same styling, laid out in visual order, left to right as a list is.
+func drawPanelTextBidi(scr tcell.Screen, x, y, width int, l *text.Line, base tcell.Style, match []int, spans []syntax.Span, th Theme) {
+	matched := make(map[int]bool, len(match))
+	for _, m := range match {
+		matched[m] = true
+	}
+	for _, cell := range layoutBidi(l, false).cells {
+		c := cell.c
+		if int(cell.x)+int(c.Width) > width {
+			continue
+		}
+		style := base
+		if cl, ok := spanClassAt(spans, int(c.Start)); ok && int(cl) < numSyntaxClasses {
+			style = overlay(base, th.SyntaxStyle[cl])
+		}
+		for r := c.Start; r < c.Start+text.RuneIdx(len(c.Runes)); r++ {
+			if matched[int(r)] {
+				style = overlay(style, th.PanelMatch)
+				break
+			}
+		}
+		if c.Runes[0] == '\t' {
+			for k := text.ColIdx(0); k < c.Width; k++ {
+				scr.SetContent(x+int(cell.x+k), y, ' ', nil, style)
+			}
+			continue
+		}
+		scr.SetContent(x+int(cell.x), y, cell.glyphs[0], cell.glyphs[1:], style)
 	}
 }

@@ -56,6 +56,12 @@ type Frame struct {
 	// ListingOf reports which buffers are listings rather than text. Optional:
 	// a nil ListingOf treats every buffer as text. See ListingFunc.
 	ListingOf ListingFunc
+	// DirectionOf reports which buffers' lines each take their direction
+	// from their first letter - prose - and so are set against the right
+	// edge when that letter is Persian or Arabic. Every other buffer's lines
+	// go left to right, as code's do. Optional: nil means none. See bidi.go.
+	DirectionOf ListingFunc
+
 	// CursorOf reports which listings show point as a cursor rather than as
 	// a bar across the row: one being edited as text, as a directory's file
 	// names are to rename them, or one read as text, as a compilation's
@@ -133,7 +139,8 @@ func Render(scr tcell.Screen, f Frame, th Theme) {
 			info := modelineInfo{Name: f.NameOf, Type: f.TypeOf, Branch: f.BranchOf}
 			listing := f.isListing(win.Buf)
 			bar := listing && (f.CursorOf == nil || !f.CursorOf(win.Buf))
-			drawWindow(scr, rect, win, win == f.Active, listing, bar, th, info, f.SpansOf)
+			auto := f.DirectionOf != nil && f.DirectionOf(win.Buf)
+			drawWindow(scr, rect, win, win == f.Active, listing, bar, auto, th, info, f.SpansOf)
 		}
 		for _, d := range f.Tree.Dividers(w, treeH) {
 			drawDivider(scr, d, th)
@@ -168,7 +175,7 @@ func rowStyle(win *view.Window, ln int, active, bar bool, th Theme) tcell.Style 
 }
 
 // drawWindow draws one pane: its visible buffer text, then its modeline.
-func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active, listing, bar bool, th Theme, info modelineInfo, spansOf SpansFunc) {
+func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active, listing, bar, auto bool, th Theme, info modelineInfo, spansOf SpansFunc) {
 	if rect.W <= 0 || rect.H <= 0 || win == nil || win.Buf == nil {
 		return
 	}
@@ -216,8 +223,14 @@ func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active, list
 				spans = spansOf(win.Buf, ln)
 			}
 			reg := region.onLine(ln, l)
+			row := rowStyle(win, ln, active, bar, th)
+			if th.usesBidi(l.View()) {
+				drawLineBidi(scr, textX, rect.Y+i, textW,
+					l, win.LeftCol, th, paren.onLine(ln), reg, spans, row, auto)
+				continue
+			}
 			drawLine(scr, textX, rect.Y+i, textW,
-				l, win.LeftCol, th, paren.onLine(ln), reg, spans, rowStyle(win, ln, active, bar, th))
+				l, win.LeftCol, th, paren.onLine(ln), reg, spans, row)
 		}
 	}
 
@@ -339,7 +352,11 @@ func drawEcho(scr tcell.Screen, y, width int, f Frame, th Theme) {
 	if f.MiniOn {
 		style = th.Mini
 	}
-	blit.Draw(scr, 0, y, width, 1, style.Render(f.Echo))
+	s := f.Echo
+	if th.usesBidi([]rune(s)) {
+		s, _ = bidiString(s)
+	}
+	blit.Draw(scr, 0, y, width, 1, style.Render(s))
 }
 
 // drawMiniRows draws the candidates beneath the prompt row at y, and the
@@ -385,6 +402,21 @@ func placeCursor(scr tcell.Screen, w, h, echoY int, rects map[*view.Window]view.
 	}
 	if f.MiniOn {
 		x := int(f.MiniPt)
+		if rs := []rune(f.Echo); th.usesBidi(rs) {
+			// MiniPt counts columns in the prompt as stored; the prompt is
+			// drawn in visual order, so the cursor goes where its character
+			// was drawn.
+			at := text.RuneIdx(len(rs))
+			line := text.NewLine(rs)
+			for c := range line.Clusters() {
+				if c.Col >= f.MiniPt {
+					at = c.Start
+					break
+				}
+			}
+			_, pos := bidiString(f.Echo)
+			x = pos(at)
+		}
 		if x < 0 {
 			x = 0
 		}
@@ -412,9 +444,12 @@ func placeCursor(scr tcell.Screen, w, h, echoY int, rects map[*view.Window]view.
 	textW := rect.W - gw
 
 	pt := f.Active.Buf.ClampPos(f.Active.Pt)
-	col := f.Active.Buf.Line(pt.Line).DisplayCol(pt.Col)
-
-	sx := int(col - f.Active.LeftCol)
+	l := f.Active.Buf.Line(pt.Line)
+	sx := int(l.DisplayCol(pt.Col) - f.Active.LeftCol)
+	if th.usesBidi(l.View()) {
+		auto := f.DirectionOf != nil && f.DirectionOf(f.Active.Buf)
+		sx = bidiCursorCol(l, pt.Col, text.ColIdx(textW), f.Active.LeftCol, auto)
+	}
 	sy := pt.Line - f.Active.Top
 	if sx < 0 {
 		sx = 0

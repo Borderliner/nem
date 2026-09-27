@@ -153,6 +153,11 @@ type Theme struct {
 	ListCursor    tcell.Style
 	CurrentLine   tcell.Style
 	HighlightLine bool
+
+	// Bidi lays out right-to-left text - Persian, Arabic, Hebrew - in the
+	// order it is read, and joins Arabic-script letters. It is off where the
+	// terminal does that itself; see TerminalDoesBidi and bidi.go.
+	Bidi bool
 	// MiniNote styles the candidate count beside a prompt at the bottom of the
 	// screen: quiet, since it is secondary to what is being typed.
 	MiniNote tcell.Style
@@ -215,6 +220,7 @@ func DefaultTheme() Theme {
 		PanelSelected: tcell.StyleDefault.Reverse(true),
 		PanelMatch:    tcell.StyleDefault.Bold(true),
 		HighlightLine: true,
+		Bidi:          !TerminalDoesBidi(),
 		MiniNote:      tcell.StyleDefault.Foreground(tcell.GetColor(colourQuiet)),
 		PanelNote:     tcell.StyleDefault.Foreground(tcell.GetColor(colourQuiet)),
 
