@@ -69,6 +69,6 @@ func (e *Editor) imenu() error {
 	}
 	w.Pt = text.Pos{Line: line, Col: text.RuneIdx(col)}
 	w.GoalCol = view.GoalColUnset
-	w.Top = max(0, line-e.TextHeight()/3)
+	w.SetTop(max(0, line-e.TextHeight()/3))
 	return nil
 }

@@ -179,7 +179,7 @@ func (e *Editor) visitLocation(b *text.Buffer, ll locations, i int, sel bool) er
 	w.Visit(fb)
 	w.Pt = fb.ClampPos(text.Pos{Line: line, Col: text.RuneIdx(col)})
 	w.GoalCol = view.GoalColUnset
-	w.Top = max(0, w.Pt.Line-e.TextHeight()/2)
+	w.SetTop(max(0, w.Pt.Line-e.TextHeight()/2))
 	if !sel {
 		e.active = from
 	}

@@ -26,6 +26,7 @@ type Window struct {
 	Buf     *text.Buffer
 	Pt      text.Pos
 	Top     int         // first visible buffer line
+	TopRow  int         // first visible row of Top, when lines are wrapped
 	LeftCol text.ColIdx // leftmost visible display column
 	GoalCol text.ColIdx // GoalColUnset when not established
 
@@ -71,9 +72,13 @@ func (w *Window) Visit(b *text.Buffer) {
 	w.Buf = b
 	w.Pt = b.ClampPos(b.SavePoint())
 	w.Top = min(max(b.SaveTop(), 0), w.Pt.Line)
+	w.TopRow = 0
 	w.LeftCol = 0
 	w.GoalCol = GoalColUnset
 }
+
+// SetTop puts line at the top of the window, from its first row.
+func (w *Window) SetTop(line int) { w.Top, w.TopRow = line, 0 }
 
 // ScrollToPoint adjusts Top so that point is visible in a text area of
 // textHeight rows, keeping margin rows of context above and below it where the
@@ -116,7 +121,7 @@ func (w *Window) ScrollToPoint(textHeight, margin int) {
 	if top < 0 {
 		top = 0
 	}
-	w.Top = top
+	w.Top, w.TopRow = top, 0
 }
 
 // ScrollToPointHorizontally adjusts LeftCol so point is visible in a text area

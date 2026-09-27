@@ -120,7 +120,8 @@ func (e *Editor) shellRun(line, dir string, stdin []byte, insert, replace bool) 
 		e.showBeside(ob)
 		for _, w := range e.tree.Windows() {
 			if w.Buf == ob {
-				w.Pt, w.Top = text.Pos{}, 0
+				w.Pt = text.Pos{}
+				w.SetTop(0)
 			}
 		}
 		if code != 0 {

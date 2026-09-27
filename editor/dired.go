@@ -289,7 +289,7 @@ func (e *Editor) diredRender(b *text.Buffer, st *diredState, focus string) {
 		if fresh {
 			// A directory just entered starts at the top, header in view,
 			// whatever the last one was scrolled to.
-			w.Top = 0
+			w.SetTop(0)
 		}
 	}
 	b.SetSavePoint(after(saved))

@@ -359,7 +359,8 @@ func (e *Editor) runCompile(line, dir string, async bool) error {
 	e.showBeside(b)
 	for _, w := range e.tree.Windows() {
 		if w.Buf == b {
-			w.Pt, w.Top = text.Pos{Line: outputFrom}, 0
+			w.Pt = text.Pos{Line: outputFrom}
+			w.SetTop(0)
 		}
 	}
 	return nil

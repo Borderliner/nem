@@ -146,7 +146,8 @@ func (e *Editor) showResults(name string, st *grepState) error {
 	}
 	for _, w := range e.tree.Windows() {
 		if w.Buf == b {
-			w.Pt, w.Top = st.pointOn(first), 0
+			w.Pt = st.pointOn(first)
+			w.SetTop(0)
 		}
 	}
 	e.Echo("%s", st.summary())

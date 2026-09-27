@@ -179,7 +179,7 @@ func (t *Tree) Split(target *Window, vertical bool) (*Window, error) {
 		}
 	}
 
-	nw := &Window{Buf: target.Buf, Pt: target.Pt, Top: target.Top, GoalCol: target.GoalCol}
+	nw := &Window{Buf: target.Buf, Pt: target.Pt, Top: target.Top, TopRow: target.TopRow, GoalCol: target.GoalCol}
 	replace(&t.Root, target, &Split{
 		Vertical: vertical,
 		A:        &Leaf{Win: target},
