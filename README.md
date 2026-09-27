@@ -323,9 +323,13 @@ back to nem's own kill ring when there is no text to be had.
 re-indenting it, as a single undo step.
 
 **Your work is kept** — a backup of the previous contents on first save, an
-autosave every 30 seconds while modified, and a refusal to overwrite a file that
-changed on disk underneath you. Nothing is written beside your file; it all goes
-under `~/.local/state/nem`.
+autosave after 30 seconds' pause or 300 keystrokes, and a refusal to overwrite a
+file that changed on disk underneath you. A save replaces the file whole or not
+at all, so a full disk or a crash mid-save cannot leave it cut short. Closing
+the terminal, a dropped SSH connection or a shutdown writes every unsaved buffer
+away before nem exits, and a bug in nem is caught and reported rather than
+taking your work with it. Nothing is written beside your file; it all goes under
+`~/.local/state/nem`.
 
 **`.editorconfig`** — a project's `.editorconfig` is honoured: its
 indentation settings decide what `TAB` inserts, and `trim_trailing_whitespace`

@@ -87,7 +87,8 @@ nem.set("which-key-delay", 1000) -- ms a prefix waits before listing what follow
                                  -- default 1000, 0 disables
 
 -- Safety
-nem.set("autosave-idle", 30)     -- seconds of idleness before autosaving; 0 disables
+nem.set("autosave-idle", 30)     -- seconds of idleness before autosaving, which
+                                 -- 300 keystrokes also bring on; 0 disables
 nem.set("backup", true)          -- keep the previous contents on first save; default true
 nem.set("auto-revert", true)     -- read a file again when it changes on disk, if the
                                  -- buffer has no edits of its own; default true
@@ -192,6 +193,12 @@ Never beside your file. Everything lives under `$XDG_STATE_HOME/nem` (usually
 So a git working tree stays clean, and two files with the same name in different
 projects cannot collide. If nem tells you an autosave is newer than the file on
 disk, `M-x recover-file` restores it.
+
+When the terminal closes, an SSH connection drops or the system shuts down, nem
+writes every unsaved buffer away before it exits: a file's to its autosave, and a
+buffer with no file - `*scratch*` typed into - to `rescued/` in the same place.
+nem's own bugs are caught as they happen: the unsaved work is autosaved, the
+session carries on, and a report for sending in goes to `faults/`.
 
 A save also refuses to overwrite a file that changed on disk underneath you,
 asking first rather than clobbering it silently.
