@@ -12,6 +12,7 @@ import (
 	"github.com/Borderliner/nem/icons"
 	"github.com/Borderliner/nem/lua"
 	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/ui"
 )
 
 // Dired driven through HandleKey, as a user drives it. Prompts are answered by
@@ -26,6 +27,16 @@ func listed(t *testing.T, e *Editor, dir string) (*text.Buffer, *diredState) {
 	}
 	e.active.Visit(b)
 	return b, e.dired[b]
+}
+
+// showsHeader reports whether a screen row is st's header, drawn from the
+// first column. The header leads with the directory's whole path, and a
+// temporary directory can be deeper than the screen is wide - on macOS and
+// Windows it is - so the row may hold only the start of the header, cut off by
+// the truncation marker.
+func showsHeader(row string, st *diredState) bool {
+	shown := strings.TrimSuffix(strings.TrimRight(row, " "), string(ui.TruncMarker))
+	return shown != "" && strings.HasPrefix(st.list.Lines[0], shown)
 }
 
 // atEntry reports the entry point is on, failing when it is on none.
@@ -475,7 +486,7 @@ func TestDiredRenders(t *testing.T) {
 	dir := t.TempDir()
 	writeFiles(t, dir, filepath.Join("sub", "x"), "file.txt")
 	e, scr := newTestEditor(t)
-	listed(t, e, dir)
+	_, st := listed(t, e, dir)
 
 	e.Redraw()
 
@@ -491,7 +502,7 @@ func TestDiredRenders(t *testing.T) {
 		}
 		return sb.String()
 	}
-	if got := row(0); !strings.HasPrefix(got, " ") || !strings.Contains(got, filepath.Base(dir)) {
+	if got := row(0); !showsHeader(got, st) {
 		t.Errorf("row 0 = %q, want the header with no line number", got)
 	}
 	if got := row(dired.FirstEntry); !strings.Contains(got, "../") {
@@ -605,7 +616,7 @@ func TestDiredOpensWithTheHeaderInView(t *testing.T) {
 	}
 	e.active.Visit(b)
 	e.Redraw()
-	if got := screenRow(t, scr, 0); !strings.Contains(got, filepath.Base(dir)) {
+	if got := screenRow(t, scr, 0); !showsHeader(got, e.diredOf(b)) {
 		t.Fatalf("row 0 = %q, want the header", got)
 	}
 
@@ -613,7 +624,11 @@ func TestDiredOpensWithTheHeaderInView(t *testing.T) {
 	goTo(t, e, "sub")
 	press(t, e, "RET")
 	e.Redraw()
-	if got := screenRow(t, scr, 0); !strings.Contains(got, "sub/") {
+	sub := e.diredOf(e.active.Buf)
+	if sub == nil || sub.dir != filepath.Join(dir, "sub") {
+		t.Fatalf("RET on sub/ left a window on %q, want sub's listing", e.BufferName(e.active.Buf))
+	}
+	if got := screenRow(t, scr, 0); !showsHeader(got, sub) {
 		t.Errorf("after walking into sub, row 0 = %q, want its header", got)
 	}
 }
