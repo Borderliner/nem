@@ -217,6 +217,8 @@ func (e *Editor) HandleKey(k keymap.Key) {
 	// not come back. Dismissing here rather than per branch is what keeps the
 	// key itself from being consumed.
 	e.dismissStartup()
+	// A key from another keyboard layout is read as the one it is meant as.
+	k = e.commandKey(k)
 	// Straight after C-x e, a bare e plays the macro again.
 	if e.kmacroRepeatKey(k) {
 		return

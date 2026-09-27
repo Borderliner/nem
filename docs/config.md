@@ -55,6 +55,10 @@ nem.set("line-numbers", true)    -- show a line-number gutter; default true
 nem.set("hl-line", true)         -- a faint band under the cursor's line; default true
 nem.set("bidi", "auto")          -- lay out right-to-left text: true, false, or "auto"
                                  -- (on unless the terminal does it itself)
+nem.set("keyboard-layout", "auto") -- read C-ط as C-x, and so on, on Persian, Arabic,
+                                 -- Hebrew, Russian, Ukrainian and Greek keyboards;
+                                 -- "arabic" follows the Arabic keyboard where it and
+                                 -- the Persian one differ (ط د ذ ز ظ); false: off
 nem.set("delete-selection", true)-- typing replaces the selection; default true
 nem.set("fill-column", 70)       -- width M-q re-wraps paragraphs to; default 70
 nem.set("auto-pair", true)       -- ( [ { " ' ` insert their partner; default true

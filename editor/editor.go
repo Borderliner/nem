@@ -126,6 +126,9 @@ type Editor struct {
 	// changed on disk into buffers without edits. See process.go, revert.go.
 	shell      string
 	autoRevert bool
+	// layout is how letters of other keyboard layouts are read as keys. See
+	// layout.go.
+	layout keymap.Layout
 
 	// startup shows the welcome panel. It is set by the caller when nem was
 	// started with no file to open, and cleared by the first keystroke - see

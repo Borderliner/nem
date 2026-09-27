@@ -96,6 +96,13 @@ type Settings struct {
 	// text itself. "auto" does unless the terminal does it; a script sets it
 	// with true, false or "auto".
 	Bidi string
+
+	// KeyboardLayout is "auto", "arabic" or "off": whether keys typed with
+	// another keyboard layout - C-ط for C-x on a Persian one - are read as
+	// the keys they sit on. "arabic" follows the Arabic keyboard for the
+	// letters it puts elsewhere than the Persian one does. A script sets it
+	// with "auto", "arabic" or false.
+	KeyboardLayout string
 }
 
 // DefaultSettings returns the built-in defaults, which are what the editor uses
@@ -109,7 +116,7 @@ func DefaultSettings() Settings {
 		DeleteSelection: true,
 		Syntax:          true, Theme: "auto",
 		OpenBinary: "ask", Icons: "auto", FillColumn: 70, AutoPair: true,
-		AutoRevert: true, HighlightLine: true, Bidi: "auto",
+		AutoRevert: true, HighlightLine: true, Bidi: "auto", KeyboardLayout: "auto",
 	}
 }
 
@@ -130,7 +137,7 @@ const (
 // why it has no effect.
 var knownSettings = []string{
 	"auto-pair", "auto-revert", "autosave-idle", "backup", "bidi", "clipboard", "completion-rows", "completion-style",
-	"delete-selection", "fill-column", "hl-line", "icons", "line-numbers", "open-binary", "scroll-margin", "syntax", "tab-width",
+	"delete-selection", "fill-column", "hl-line", "icons", "keyboard-layout", "line-numbers", "open-binary", "scroll-margin", "syntax", "tab-width",
 	"shell", "theme", "undo-style", "which-key-delay",
 }
 
@@ -277,6 +284,21 @@ func (s *Settings) set(key string, v glua.LValue) error {
 			s.Bidi = "auto"
 		default:
 			return fmt.Errorf(`bidi must be true, false or "auto", got %s`, v.Type())
+		}
+	case "keyboard-layout":
+		switch v := v.(type) {
+		case glua.LBool:
+			s.KeyboardLayout = "off"
+			if v {
+				s.KeyboardLayout = "auto"
+			}
+		case glua.LString:
+			if v != "auto" && v != "arabic" {
+				return fmt.Errorf(`keyboard-layout must be "auto", "arabic" or false, got %q`, string(v))
+			}
+			s.KeyboardLayout = string(v)
+		default:
+			return fmt.Errorf(`keyboard-layout must be "auto", "arabic" or false, got %s`, v.Type())
 		}
 	case "hl-line":
 		b, ok := v.(glua.LBool)

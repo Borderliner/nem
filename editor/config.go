@@ -107,6 +107,14 @@ func (e *Editor) applySettings(s lua.Settings) {
 
 	e.th.LineNumbers = s.LineNumbers
 	e.th.HighlightLine = s.HighlightLine
+	switch s.KeyboardLayout {
+	case "arabic":
+		e.layout = keymap.LayoutArabic
+	case "off":
+		e.layout = keymap.LayoutOff
+	default:
+		e.layout = keymap.LayoutAuto
+	}
 	switch s.Bidi {
 	case "on":
 		e.th.Bidi = true

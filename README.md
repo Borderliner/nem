@@ -288,7 +288,14 @@ neither, so nem lays the text out itself, by the Unicode bidirectional
 algorithm. In prose a line takes its direction from its first letter, and one
 in Persian sits against the right edge; in code every line stays left to
 right, with any Persian in it - a comment, a string - reading right to left
-where it is. The arrow keys go the way the line reads. Konsole, GNOME Terminal
+where it is. The arrow keys go the way the line reads.
+
+Key bindings work whatever keyboard layout is switched on. With a Persian
+keyboard, Ctrl on the x key sends `C-ط`; nem reads it as the `C-x` it sits on,
+as emacs's reverse-im does - and the same for Arabic, Hebrew, Russian,
+Ukrainian and Greek keyboards. Only where a key is a command: with Ctrl or Alt,
+after a prefix (`C-x ب` is `C-x f`), in dired's listing, answering y or n.
+Typed on its own, a letter is still the letter. Konsole, GNOME Terminal
 and mlterm lay the text out themselves, so there nem leaves it to them;
 `nem.set("bidi", true)` or `false` decides it.
 

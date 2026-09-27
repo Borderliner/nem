@@ -221,7 +221,7 @@ func (e *Editor) waitProcess(p *process, line string) ([]byte, error) {
 		}
 		switch ev := ev.(type) {
 		case *tcell.EventKey:
-			if k := DecodeKey(ev, e.keys.TreatCtrlHAsBackspace); quitKey(k) && !stopped {
+			if k := e.answerKey(DecodeKey(ev, e.keys.TreatCtrlHAsBackspace), nil); quitKey(k) && !stopped {
 				stopped = true
 				e.Echo("Stopping %s…", describeCommand(line))
 				p.kill()

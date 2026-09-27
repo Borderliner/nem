@@ -507,7 +507,7 @@ func (e *Editor) ReadChar(prompt string, valid []rune) (rune, error) {
 			e.handleEvent(ev)
 			continue
 		}
-		k := DecodeKey(ke, e.keys.TreatCtrlHAsBackspace)
+		k := e.answerKey(DecodeKey(ke, e.keys.TreatCtrlHAsBackspace), valid)
 		if k.Ctrl && !k.Meta && k.Rune == 'g' {
 			return 0, command.ErrQuit
 		}
@@ -555,7 +555,7 @@ func (e *Editor) ReadKey(prompt string) (keymap.Key, error) {
 			e.handleEvent(ev)
 			continue
 		}
-		if k := DecodeKey(ke, e.keys.TreatCtrlHAsBackspace); k != (keymap.Key{}) {
+		if k := e.answerKey(DecodeKey(ke, e.keys.TreatCtrlHAsBackspace), nil); k != (keymap.Key{}) {
 			return k, nil
 		}
 	}
