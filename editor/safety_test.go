@@ -500,3 +500,30 @@ func TestBackupDisabledWritesNothing(t *testing.T) {
 		t.Error("BackupRoot is empty; a user told an autosave exists needs to know where to look")
 	}
 }
+
+// Typing without a pause brings on an autosave every few hundred keystrokes,
+// as emacs's does. Waiting for a pause alone, an hour of steady typing had
+// nothing saved.
+func TestAutosaveComesWithEnoughKeystrokes(t *testing.T) {
+	e, _, file := safeEditor(t)
+	edit(t, visit(t, e, file), "x")
+	t0 := time.Now()
+	for i := range autosaveKeys - 1 {
+		e.NoteInput(t0.Add(time.Duration(i) * time.Millisecond))
+	}
+	now := t0.Add(time.Second)
+	if e.AutosaveDue(now) {
+		t.Fatal("due a keystroke early")
+	}
+	e.NoteInput(now)
+	if !e.AutosaveDue(now) {
+		t.Fatalf("not due after %d keystrokes without a pause", autosaveKeys)
+	}
+	if err := e.RunAutosave(now); err != nil {
+		t.Fatal(err)
+	}
+	e.NoteInput(now.Add(time.Millisecond))
+	if e.AutosaveDue(now.Add(time.Millisecond)) {
+		t.Error("due again at the next keystroke; the count did not start over")
+	}
+}

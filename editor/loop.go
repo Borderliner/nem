@@ -92,8 +92,15 @@ func (e *Editor) Loop() error {
 			if !ok {
 				return nil // the screen finalized underneath us
 			}
-			e.NoteInput(time.Now())
+			now := time.Now()
+			e.NoteInput(now)
 			e.HandleEvent(ev)
+			// Reported through the echo area by RunAutosave itself; a
+			// failure must not stop the loop. Here for the keystrokes of
+			// someone typing without a pause; below for the pause.
+			if e.AutosaveDue(now) {
+				_ = e.RunAutosave(now)
+			}
 		case <-fire:
 			e.fireWhichKey()
 		case now := <-stall.C:
@@ -103,8 +110,6 @@ func (e *Editor) Loop() error {
 		case <-revert.C:
 			e.revertChanged()
 		case now := <-tick:
-			// Reported through the echo area by RunAutosave itself; a failure
-			// must not stop the loop.
 			if e.AutosaveDue(now) {
 				_ = e.RunAutosave(now)
 			}

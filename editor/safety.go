@@ -29,6 +29,12 @@ import (
 // contents reach the autosave store.
 const DefaultAutosaveIdle = 30 * time.Second
 
+// autosaveKeys is how many keystrokes bring on an autosave without a pause,
+// as emacs's auto-save-interval does. Waiting for the editor to sit idle
+// alone, someone typing steadily for an hour had nothing saved all that
+// hour, and a crash lost it all.
+const autosaveKeys = 300
+
 // stamp is what a file looked like on disk when nem last read or wrote it.
 // Comparing it against a fresh stat is how an edit made by something else — a
 // git checkout, another editor, a formatter — is noticed before nem overwrites
@@ -75,6 +81,8 @@ type safety struct {
 	// idle editor rewriting the same autosave on every pass through the loop.
 	lastInput  time.Time
 	autosaveAt time.Time
+	// keys counts the keystrokes since the last autosave.
+	keys int
 
 	// errReported suppresses repeat complaints about the same broken store. A
 	// store that cannot be written must say so once; saying so every idle
@@ -123,10 +131,14 @@ func (e *Editor) SetAutosaveIdle(d time.Duration) { e.safe.idle = d }
 
 // NoteInput records that a keystroke arrived, restarting the idle clock. The
 // event loop calls this for every key event.
-func (e *Editor) NoteInput(now time.Time) { e.safe.lastInput = now }
+func (e *Editor) NoteInput(now time.Time) {
+	e.safe.lastInput = now
+	e.safe.keys++
+}
 
 // AutosaveDue reports whether enough idle time has passed, since the last
-// keystroke, to be worth writing recovery files.
+// keystroke, to be worth writing recovery files - or enough keystrokes, for
+// someone who never pauses that long.
 //
 // It is false when nothing has been typed since the previous autosave, so an
 // editor left alone writes once and then stays quiet.
@@ -138,7 +150,7 @@ func (e *Editor) AutosaveDue(now time.Time) bool {
 	if s.lastInput.IsZero() || !s.autosaveAt.Before(s.lastInput) {
 		return false
 	}
-	if now.Sub(s.lastInput) < s.idle {
+	if now.Sub(s.lastInput) < s.idle && s.keys < autosaveKeys {
 		return false
 	}
 	return e.anyModifiedWithPath()
@@ -153,7 +165,7 @@ func (e *Editor) AutosaveDue(now time.Time) bool {
 // they have none.
 func (e *Editor) RunAutosave(now time.Time) error {
 	s := &e.safe
-	s.autosaveAt = s.lastInput
+	s.autosaveAt, s.keys = s.lastInput, 0
 	if s.store == nil || !s.enabled {
 		return nil
 	}
