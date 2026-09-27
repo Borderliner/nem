@@ -183,3 +183,50 @@ func TestSaveAsSetsPath(t *testing.T) {
 		t.Errorf("file = %q, want %q", string(got), "hi")
 	}
 }
+
+// FinalNewline reports what the file was read with, and SetFinalNewline
+// changes what is written back - in either line-ending style - without
+// touching the text or the undo history.
+func TestFinalNewlineIsWhatSavingWrites(t *testing.T) {
+	for _, tc := range []struct {
+		name, content string
+		had           bool
+		flipped       string // the file saved with the flag the other way
+	}{
+		{"LF with", "a\nb\n", true, "a\nb"},
+		{"LF without", "a\nb", false, "a\nb\n"},
+		{"CRLF with", "a\r\nb\r\n", true, "a\r\nb"},
+		{"CRLF without", "a\r\nb", false, "a\r\nb\r\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := filepath.Join(t.TempDir(), "f.txt")
+			if err := os.WriteFile(p, []byte(tc.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			b, err := LoadFile(p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := b.FinalNewline(); got != tc.had {
+				t.Fatalf("FinalNewline() = %v, want %v", got, tc.had)
+			}
+			b.SetFinalNewline(!tc.had)
+			if b.Modified() {
+				t.Error("setting the final newline marked the buffer modified")
+			}
+			if _, ok := b.Undo(); ok {
+				t.Error("setting the final newline left something to undo")
+			}
+			if err := b.Save(); err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.ReadFile(p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != tc.flipped {
+				t.Errorf("saved %q, want %q", got, tc.flipped)
+			}
+		})
+	}
+}

@@ -86,6 +86,21 @@ func decodeLines(data []byte) (lines []*Line, crlf, finalNL bool) {
 	return lines, crlf, finalNL
 }
 
+// FinalNewline reports whether saving ends the file with a newline after its
+// last line.
+//
+// That newline is not in the buffer as an empty last line: a file read with
+// one is shown without it, as every editor shows it, and the buffer only
+// remembers to write it back. So a buffer whose last line is empty ends its
+// file with a newline even when this is false - the one that ends the line
+// before.
+func (b *Buffer) FinalNewline() bool { return b.finalNL }
+
+// SetFinalNewline sets whether saving ends the file with a newline after its
+// last line. It is not an edit: nothing on screen changes, nor does the undo
+// history, as nothing does when a file is read with or without one.
+func (b *Buffer) SetFinalNewline(on bool) { b.finalNL = on }
+
 // bytes renders the buffer using its recorded line ending style.
 func (b *Buffer) bytes() []byte {
 	sep := "\n"
