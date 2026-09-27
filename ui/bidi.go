@@ -63,6 +63,15 @@ const maxBidiLine = 10000
 // layoutBidi lays l out in visual order: its direction its own when auto,
 // left to right otherwise.
 func layoutBidi(l *text.Line, auto bool) bidiLayout {
+	return layoutBidiRows(l, []text.RuneIdx{0}, auto)[0]
+}
+
+// layoutBidiRows lays l out a row at a time, for a line wrapped into rows
+// beginning at starts. The levels are the whole line's - a paragraph is one
+// paragraph however it is folded - and each row is put in visual order on
+// its own, as the Unicode Bidirectional Algorithm orders a paragraph broken
+// into lines.
+func layoutBidiRows(l *text.Line, starts []text.RuneIdx, auto bool) []bidiLayout {
 	rs := l.View()
 	dir := bidi.LTR
 	if auto {
@@ -71,28 +80,50 @@ func layoutBidi(l *text.Line, auto bool) bidiLayout {
 	levels := bidi.Levels(rs, dir)
 	shaped := bidi.Shape(rs)
 
-	clusters := make([]text.Cluster, 0, len(rs))
-	for c := range l.Clusters() {
-		clusters = append(clusters, c)
-	}
-	lv := make([]uint8, len(clusters))
-	for i, c := range clusters {
-		lv[i] = levels[c.Start]
-	}
-
-	lay := bidiLayout{rtl: dir == bidi.RTL, cells: make([]bidiCell, 0, len(clusters))}
-	for _, i := range bidi.Order(lv) {
-		c := clusters[i]
-		glyphs := shaped[c.Start : int(c.Start)+len(c.Runes)]
-		if lv[i]%2 == 1 {
-			if m, ok := bidi.Mirror(glyphs[0]); ok {
-				glyphs = append([]rune{m}, glyphs[1:]...)
+	lays := make([]bidiLayout, len(starts))
+	row := make([]text.Cluster, 0, len(rs)/len(starts)+8)
+	k := 0
+	order := func() {
+		// A row that wraps ends in the blanks it broke after, which hang
+		// past the edge. Laid out, they would widen the row past the window,
+		// and in a row going right to left push its first letter off the
+		// right edge; they are left out, as the algorithm lets trailing
+		// whitespace be.
+		if k < len(starts)-1 {
+			for len(row) > 0 && isBlank(row[len(row)-1]) {
+				row = row[:len(row)-1]
 			}
 		}
-		lay.cells = append(lay.cells, bidiCell{c: c, x: lay.width, glyphs: glyphs})
-		lay.width += c.Width
+		lv := make([]uint8, len(row))
+		for i, c := range row {
+			lv[i] = levels[c.Start]
+		}
+		lay := bidiLayout{rtl: dir == bidi.RTL, cells: make([]bidiCell, 0, len(row))}
+		for _, i := range bidi.Order(lv) {
+			c := row[i]
+			glyphs := shaped[c.Start : int(c.Start)+len(c.Runes)]
+			if lv[i]%2 == 1 {
+				if m, ok := bidi.Mirror(glyphs[0]); ok {
+					glyphs = append([]rune{m}, glyphs[1:]...)
+				}
+			}
+			lay.cells = append(lay.cells, bidiCell{c: c, x: lay.width, glyphs: glyphs})
+			lay.width += c.Width
+		}
+		lays[k] = lay
+		row = row[:0]
 	}
-	return lay
+	for c := range l.Clusters() {
+		for k+1 < len(starts) && c.Start >= starts[k+1] {
+			order()
+			k++
+		}
+		row = append(row, c)
+	}
+	for ; k < len(starts); k++ {
+		order()
+	}
+	return lays
 }
 
 // origin is the screen column, within a text area avail wide and scrolled
@@ -156,7 +187,15 @@ func drawLineBidi(scr tcell.Screen, x, y, width int, l *text.Line, left text.Col
 		}
 	}
 
-	off := lay.origin(avail, left)
+	drawBidiCells(scr, x, y, avail, lay.origin(avail, left), lay, th, hl, reg, spans, row)
+	if truncated {
+		scr.SetContent(x+width-1, y, TruncMarker, nil, th.Trunc)
+	}
+}
+
+// drawBidiCells draws a layout's cells from column off of a text area avail
+// wide at x, leaving out any that would cross its edges.
+func drawBidiCells(scr tcell.Screen, x, y int, avail, off text.ColIdx, lay bidiLayout, th Theme, hl lineHL, reg regionHL, spans []syntax.Span, row tcell.Style) {
 	for _, cell := range lay.cells {
 		c := cell.c
 		sx := off + cell.x
@@ -179,9 +218,6 @@ func drawLineBidi(scr tcell.Screen, x, y, width int, l *text.Line, left text.Col
 			continue
 		}
 		scr.SetContent(x+int(sx), y, cell.glyphs[0], cell.glyphs[1:], style)
-	}
-	if truncated {
-		scr.SetContent(x+width-1, y, TruncMarker, nil, th.Trunc)
 	}
 }
 
@@ -221,3 +257,6 @@ func TerminalDoesBidi() bool {
 	}
 	return false
 }
+
+// isBlank reports whether c is a space or a tab.
+func isBlank(c text.Cluster) bool { return c.Runes[0] == ' ' || c.Runes[0] == '\t' }
