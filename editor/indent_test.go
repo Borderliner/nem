@@ -80,6 +80,84 @@ func TestTabIndentsAsTheFileDoes(t *testing.T) {
 	wantText(t, e, "key:\n    ")
 }
 
+// --- saving ---------------------------------------------------------------
+
+// onDisk is the file b was saved to, as bytes.
+func onDisk(t *testing.T, b *text.Buffer) string {
+	t.Helper()
+	got, err := os.ReadFile(b.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(got)
+}
+
+// An .editorconfig's trim_trailing_whitespace and insert_final_newline are
+// done to the buffer as it is saved, so the screen shows what the file holds,
+// and the whole of it undoes in one step.
+func TestSavingTidiesAsTheEditorconfigAsks(t *testing.T) {
+	e, _ := newTestEditor(t)
+	b := configured(t, e, "notes.txt", "[*]\ntrim_trailing_whitespace = true\ninsert_final_newline = true\n", "a  \n\t\nb c \t")
+	e.Active().Pt = text.Pos{Line: 2, Col: 5} // in the whitespace that goes
+	press(t, e, "C-a", "x", "C-e")            // modified, point back at the end
+	press(t, e, "C-x", "C-s")
+
+	if got, want := onDisk(t, b), "a\n\nxb c\n"; got != want {
+		t.Errorf("saved %q, want %q", got, want)
+	}
+	wantText(t, e, "a\n\nxb c")
+	wantPt(t, e, 2, 4)
+	if b.Modified() {
+		t.Error("the buffer is modified after saving")
+	}
+
+	press(t, e, "C-/")
+	wantText(t, e, "a  \n\t\nxb c \t")
+}
+
+// insert_final_newline = false leaves no newline at the end: neither the one
+// a file is read with, nor the empty lines it would end with.
+func TestSavingDropsTheFinalNewlineWhenAsked(t *testing.T) {
+	e, _ := newTestEditor(t)
+	b := configured(t, e, "a.txt", "[*]\ninsert_final_newline = false\n", "a\n\n\n")
+	press(t, e, "M->", "x", "<backspace>")
+	press(t, e, "C-x", "C-s")
+
+	if got, want := onDisk(t, b), "a"; got != want {
+		t.Errorf("saved %q, want %q", got, want)
+	}
+	wantText(t, e, "a")
+	wantPt(t, e, 0, 1)
+}
+
+// Without the rules, a file is saved exactly as it is.
+func TestSavingWithoutTheRulesChangesNothing(t *testing.T) {
+	e, _ := newTestEditor(t)
+	b := configured(t, e, "a.txt", "[*]\nindent_style = space\n", "a  \nb")
+	press(t, e, "C-e", "x")
+	press(t, e, "C-x", "C-s")
+	if got, want := onDisk(t, b), "a  x\nb"; got != want {
+		t.Errorf("saved %q, want %q", got, want)
+	}
+}
+
+// The rules are the ones for where the file is going: write-file into a
+// directory whose .editorconfig asks for them applies them.
+func TestWritingElsewhereTidiesForTheNewPlace(t *testing.T) {
+	e, _ := newTestEditor(t, "a  ", "b")
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".editorconfig"), []byte("root = true\n[*.md]\ntrim_trailing_whitespace = true\ninsert_final_newline = true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "out.md")
+	if err := e.SaveBuffer(e.Buf(), path); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := onDisk(t, e.Buf()), "a\nb\n"; got != want {
+		t.Errorf("saved %q, want %q", got, want)
+	}
+}
+
 // C-x TAB shifts by the prefix argument, in columns.
 func TestIndentRigidlyByColumns(t *testing.T) {
 	e, _ := newTestEditor(t)

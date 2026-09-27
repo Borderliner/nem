@@ -582,6 +582,11 @@ func (e *Editor) SaveBuffer(b *text.Buffer, path string) error {
 	// than it protects.
 	e.backupBeforeWrite(target)
 
+	// What the file's .editorconfig asks of a save - no trailing whitespace,
+	// a final newline or none - is done to the buffer before it is written,
+	// so the screen shows what the file holds. See indent.go.
+	e.tidyForSave(b, target)
+
 	if path == "" {
 		if err := b.Save(); err != nil {
 			return err
