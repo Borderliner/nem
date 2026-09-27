@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -418,8 +419,9 @@ func TestWhichKeyListsAModesKeys(t *testing.T) {
 	press(t, e, "C-x")
 	e.fireWhichKey()
 	body := wkText(t, e)
-	for _, want := range []string{"C-q → wdired-change", "find-file"} {
-		if !strings.Contains(body, want) {
+	// However wide the key column is padded, for the longest key under C-x.
+	for _, want := range []string{`C-q +→ wdired-change`, "find-file"} {
+		if !regexp.MustCompile(want).MatchString(body) {
 			t.Errorf("C-x in a listing does not offer %q:\n%s", want, body)
 		}
 	}
@@ -461,11 +463,13 @@ func TestWhichKeyShortensNamesBeforeDroppingKeys(t *testing.T) {
 	if strings.Contains(body, "more") {
 		t.Errorf("keys were left out:\n%s", body)
 	}
-	if !strings.Contains(body, "save-buffers-kill…") {
+	// How short depends on how many keys C-x has and how wide the widest is,
+	// so only that it was cut, and still says what it is.
+	if strings.Contains(body, "save-buffers-kill-terminal") || !regexp.MustCompile(`save-buf[a-z-]*…`).MatchString(body) {
 		t.Errorf("the longest name was not cut short:\n%s", body)
 	}
-	for _, want := range []string{"find-file", "9   → kmacro-start", "undo"} {
-		if !strings.Contains(body, want) {
+	for _, want := range []string{"find-file", `9 +→ kmacro-`, "undo"} {
+		if !regexp.MustCompile(want).MatchString(body) {
 			t.Errorf("panel does not mention %q:\n%s", want, body)
 		}
 	}
