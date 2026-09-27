@@ -10,6 +10,11 @@
 //	  -> ~/.local/state/nem/backups/home/reza/p/main.go~
 //	  -> ~/.local/state/nem/autosave/home/reza/p/main.go#
 //
+// On Windows the volume is mirrored as a directory of its own:
+//
+//	C:\Users\reza\p\main.go
+//	  -> %LOCALAPPDATA%\nem\backups\C\Users\reza\p\main.go~
+//
 // Mirroring the whole path rather than flattening it keeps the store browsable
 // and means two files with the same base name in different projects cannot
 // overwrite each other's backups.
@@ -103,6 +108,12 @@ func (s *Store) AutosavePath(file string) string {
 // A path that resolves to the filesystem root leaves nothing to mirror, so the
 // suffix alone becomes the file name. Nobody edits "/", but the result still has
 // to land inside the store rather than beside it.
+//
+// A Windows path starts with a volume, C: or \\host\share, and a volume cannot
+// sit in the middle of another path: backups\C:\Users is not a name Windows
+// will create. The volume becomes an ordinary directory instead, so
+// C:\Users\x\f.txt mirrors to C\Users\x\f.txt. Unix has no volumes, and there
+// this changes nothing.
 func (s *Store) mirror(subdir, file, suffix string) string {
 	abs, err := filepath.Abs(file)
 	if err != nil {
@@ -111,8 +122,27 @@ func (s *Store) mirror(subdir, file, suffix string) string {
 		// which is the property that matters.
 		abs = filepath.Clean(file)
 	}
-	rel := strings.TrimPrefix(abs, string(filepath.Separator))
-	return filepath.Join(s.root, subdir, rel+suffix)
+	vol := filepath.VolumeName(abs)
+	rel := strings.TrimPrefix(abs[len(vol):], string(filepath.Separator))
+	return filepath.Join(s.root, subdir, volumeDir(vol), rel+suffix)
+}
+
+// volumeDir turns a volume name into a relative directory: C: becomes C, and
+// \\host\share becomes host\share. The colon and the ? of a \\?\ device path
+// are dropped because Windows allows neither in a file name.
+//
+// The result is cleaned as a rooted path before the root is taken off, and a
+// rooted path cannot climb, so whatever the volume held - dropping ? could turn
+// a component into ".." - it cannot carry the mirror out of the store.
+func volumeDir(vol string) string {
+	d := strings.Map(func(r rune) rune {
+		if r == ':' || r == '?' {
+			return -1
+		}
+		return r
+	}, vol)
+	sep := string(filepath.Separator)
+	return strings.TrimPrefix(filepath.Join(sep, d), sep)
 }
 
 // contains reports whether p lies strictly beneath the store's root. Equality

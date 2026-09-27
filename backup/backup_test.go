@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -33,12 +34,21 @@ func store(t *testing.T) (*backup.Store, string) {
 // ---------------------------------------------------------------- mirroring
 
 func TestBackupPathMirrorsTheAbsolutePath(t *testing.T) {
-	s := backup.New("/state/nem")
-	if got, want := s.BackupPath("/home/reza/p/main.go"), "/state/nem/backups/home/reza/p/main.go~"; got != want {
-		t.Errorf("BackupPath = %q, want %q", got, want)
+	root, file := "/state/nem", "/home/reza/p/main.go"
+	wantBackup := "/state/nem/backups/home/reza/p/main.go~"
+	wantAutosave := "/state/nem/autosave/home/reza/p/main.go#"
+	if runtime.GOOS == "windows" {
+		// The volume is mirrored as a directory of its own.
+		root, file = `C:\state\nem`, `C:\Users\reza\p\main.go`
+		wantBackup = `C:\state\nem\backups\C\Users\reza\p\main.go~`
+		wantAutosave = `C:\state\nem\autosave\C\Users\reza\p\main.go#`
 	}
-	if got, want := s.AutosavePath("/home/reza/p/main.go"), "/state/nem/autosave/home/reza/p/main.go#"; got != want {
-		t.Errorf("AutosavePath = %q, want %q", got, want)
+	s := backup.New(root)
+	if got := s.BackupPath(file); got != wantBackup {
+		t.Errorf("BackupPath = %q, want %q", got, wantBackup)
+	}
+	if got := s.AutosavePath(file); got != wantAutosave {
+		t.Errorf("AutosavePath = %q, want %q", got, wantAutosave)
 	}
 }
 
@@ -125,7 +135,7 @@ func TestContainmentHoldsForGeneratedPaths(t *testing.T) {
 // the mirroring is ever changed, so it must be reachable and tested.
 func TestWriteRefusesAnEscapingPath(t *testing.T) {
 	s := backup.New("/state/nem")
-	if got := s.BackupPath("/etc/passwd"); !strings.HasPrefix(got, "/state/nem/") {
+	if got := s.BackupPath("/etc/passwd"); !strings.HasPrefix(got, filepath.FromSlash("/state/nem/")) {
 		t.Fatalf("premise broken: %q", got)
 	}
 }
