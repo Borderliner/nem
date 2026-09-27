@@ -174,6 +174,36 @@ func TestProjectGrep(t *testing.T) {
 }
 
 // With nothing typed, C-x p g searches for the word at point.
+// A project search takes ripgrep's options before its pattern: the file
+// types and globs choose the files, -w whole words, and g searches again
+// with them.
+func TestProjectGrepTakesRipgrepOptions(t *testing.T) {
+	root := aProject(t, map[string]string{
+		"a.go":        "needle\nneedles\n",
+		"b.md":        "needle\n",
+		"vendor/c.go": "needle\n",
+	})
+	e, scr := newTestEditor(t)
+	visiting(t, e, filepath.Join(root, "a.go"))
+	feed(t, scr, txt("-t go -w -g '!vendor/**' needle"), key(t, "RET"))
+	press(t, e, "C-x", "p", "g")
+	st := e.grepOf(e.active.Buf)
+	if st == nil {
+		t.Fatalf("no results; echo %q", e.Message())
+	}
+	if len(st.matches) != 1 || st.matches[0].File != "a.go" || st.matches[0].Line != 0 {
+		t.Fatalf("found %+v; want a.go's first line alone", st.matches)
+	}
+	press(t, e, "g")
+	if st := e.grepOf(e.active.Buf); len(st.matches) != 1 {
+		t.Errorf("searching again found %+v; the options were lost", st.matches)
+	}
+
+	feed(t, scr, txt("-t nope needle"), key(t, "RET"))
+	press(t, e, "C-x", "p", "g")
+	wantEcho(t, e, `unknown file type "nope"`)
+}
+
 func TestProjectGrepDefault(t *testing.T) {
 	root := aProject(t, map[string]string{"a.go": "call(widget)\n", "b.go": "widget := 1\n"})
 	e, scr := newTestEditor(t)

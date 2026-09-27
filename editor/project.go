@@ -526,7 +526,7 @@ func (e *Editor) projectGrep(root string) error {
 	if ans == "" {
 		return nil
 	}
-	return e.grepSearch(root, ans, searchRegexp(ans))
+	return e.grepSearch(root, ans)
 }
 
 // projectQueryReplace is C-x p r: M-% across every file of the project that

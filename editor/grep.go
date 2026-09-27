@@ -42,6 +42,9 @@ type grepState struct {
 	buf     *text.Buffer
 	pattern string
 	re      *regexp.Regexp
+	// query is a project search's options - its file types and globs, and
+	// -u - for searching again with g.
+	query   project.Query
 	matches []project.Match
 	more    bool
 
@@ -100,11 +103,16 @@ func (e *Editor) grepOf(b *text.Buffer) *grepState {
 	return e.grep[b]
 }
 
-// grepSearch searches the project at root for pattern and shows the results
-// in the other window, selecting it. Nothing found shows nothing: an empty
-// list would only have to be closed again.
-func (e *Editor) grepSearch(root, pattern string, re *regexp.Regexp) error {
-	return e.showResults(grepName, &grepState{root: root, pattern: pattern, re: re, cur: -1})
+// grepSearch searches the files at root for query, typed as a ripgrep
+// command line - see project.ParseQuery - and shows the results in the other
+// window, selecting it. Nothing found shows nothing: an empty list would
+// only have to be closed again.
+func (e *Editor) grepSearch(root, query string) error {
+	q, err := project.ParseQuery(query)
+	if err != nil {
+		return err
+	}
+	return e.showResults(grepName, &grepState{root: root, pattern: query, re: q.Regexp(), query: q, cur: -1})
 }
 
 // occur lists the lines of b that re matches, as grepSearch lists a
@@ -172,13 +180,13 @@ func (e *Editor) grepRun(st *grepState) error {
 		}
 		return nil
 	}
-	files, err := project.Files(st.root)
+	files, err := project.FilesWith(st.root, st.query.NoIgnore)
 	if err != nil && !errors.Is(err, project.ErrTooManyFiles) {
 		return err
 	}
 	e.Echo("Searching %s…", project.Name(st.root))
 	e.Redraw()
-	st.matches, st.more = project.Search(st.root, files, st.re, e.openLines(st.root))
+	st.matches, st.more = project.Search(st.root, st.query.Filter(files), st.re, e.openLines(st.root))
 	return nil
 }
 
