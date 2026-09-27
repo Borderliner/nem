@@ -212,6 +212,10 @@ type Editor struct {
 	host *lua.Host
 
 	quit bool
+
+	// faults counts the bugs nem has caught itself in this session. See
+	// fault.go.
+	faults int
 }
 
 // New returns an editor with every built-in command registered, the default

@@ -2,11 +2,12 @@ package editor
 
 import (
 	"errors"
-	"github.com/Borderliner/nem/text"
+	"runtime/debug"
 	"time"
 
 	"github.com/Borderliner/nem/command"
 	"github.com/Borderliner/nem/keymap"
+	"github.com/Borderliner/nem/text"
 	"github.com/Borderliner/nem/ui"
 	"github.com/Borderliner/nem/view"
 	"github.com/gdamore/tcell/v2"
@@ -84,6 +85,9 @@ func (e *Editor) Loop() error {
 			stall.Stop()
 		}
 
+		// Each step is guarded: a bug met anywhere in it is reported and the
+		// loop carries on, rather than ending the session with every unsaved
+		// buffer in it. See fault.go.
 		select {
 		case ev, ok := <-events:
 			if timer != nil {
@@ -94,7 +98,7 @@ func (e *Editor) Loop() error {
 			}
 			now := time.Now()
 			e.NoteInput(now)
-			e.HandleEvent(ev)
+			e.guard("the event loop", func() { e.HandleEvent(ev) })
 			// Reported through the echo area by RunAutosave itself; a
 			// failure must not stop the loop. Here for the keystrokes of
 			// someone typing without a pause; below for the pause.
@@ -102,13 +106,15 @@ func (e *Editor) Loop() error {
 				_ = e.RunAutosave(now)
 			}
 		case <-fire:
-			e.fireWhichKey()
+			e.guard("which-key", e.fireWhichKey)
 		case now := <-stall.C:
-			if e.pasteStalled(now) {
-				e.endPaste()
-			}
+			e.guard("pasting", func() {
+				if e.pasteStalled(now) {
+					e.endPaste()
+				}
+			})
 		case <-revert.C:
-			e.revertChanged()
+			e.guard("reverting", e.revertChanged)
 		case now := <-tick:
 			if e.AutosaveDue(now) {
 				_ = e.RunAutosave(now)
@@ -118,7 +124,7 @@ func (e *Editor) Loop() error {
 		// marker, and a frame per pasted character was most of why a paste
 		// crawled.
 		if !e.paste.active {
-			e.Redraw()
+			e.guard("drawing", e.Redraw)
 		}
 	}
 	return nil
@@ -384,6 +390,23 @@ func (e *Editor) dispatchReporting(name string) {
 	}
 }
 
+// run runs name's hooks and, unless skip, the command itself. A panic in any
+// of them is a bug, and is caught here: the command fails with it, and the
+// session carries on. See fault.go.
+func (e *Editor) run(name string, skip bool) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = e.fault(name, r, debug.Stack())
+		}
+	}()
+	e.runHooks(e.before, name)
+	if !skip {
+		err = e.reg.Run(name, e)
+	}
+	e.runHooks(e.after, name)
+	return err
+}
+
 // dispatch runs one command and performs every piece of cross-command
 // bookkeeping.
 //
@@ -439,12 +462,7 @@ func (e *Editor) dispatch(name string) error {
 		defer closeGroup()
 	}
 
-	var err error
-	e.runHooks(e.before, name)
-	if !skip {
-		err = e.reg.Run(name, e)
-	}
-	e.runHooks(e.after, name)
+	err := e.run(name, skip)
 
 	e.keepPromptWindow()
 	// Outside the childDispatched guard on purpose: clamping is idempotent and
