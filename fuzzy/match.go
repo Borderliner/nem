@@ -199,23 +199,50 @@ func leadingPenalty(j int) int {
 // would lock onto a@0 and never reconsider.
 //
 // d[i][j] is the best total score for matching q[0..i] with q[i] landing exactly
-// on c[j]. The maximum over j of the last row is the answer.
+// on c[lo+j]. The maximum over j of the last row is the answer.
+//
+// The table spans only c[lo..hi], from the first rune q[0] matches to the last
+// rune q[n-1] does: no alignment starts before the one or ends after the
+// other, so the columns cut off are ones that could never be part of the
+// answer, and the table is the same without them. For a word matched deep in
+// a long path it is a fraction of the width.
 func bestAlignment(q, c []rune, ignoreCase bool) (int, []int) {
-	n, m := len(q), len(c)
+	n := len(q)
+	head, tail := q[0], q[n-1]
+	if ignoreCase {
+		head, tail = fold(head), fold(tail)
+	}
+	lo, hi := 0, len(c)-1
+	for ; lo <= hi; lo++ {
+		if r := c[lo]; r == head || ignoreCase && fold(r) == head {
+			break
+		}
+	}
+	for ; hi >= lo; hi-- {
+		if r := c[hi]; r == tail || ignoreCase && fold(r) == tail {
+			break
+		}
+	}
+	if lo > hi {
+		// Unreachable, as below: the caller has established that q fits in c.
+		return 0, nil
+	}
+	w := c[lo : hi+1]
+	m := len(w)
 	s := scratchPool.Get().(*scratch)
 	defer scratchPool.Put(s)
 	s.resize(n, m)
 	d, par, bon := s.d, s.par, s.bon
-	qf, cf := s.folded(q, c, ignoreCase)
+	qf, wf := s.folded(q, w, ignoreCase)
 
-	for j := range c {
-		bon[j] = boundaryBonus(c, j)
+	for j := range w {
+		bon[j] = boundaryBonus(c, lo+j)
 	}
 
 	for j := 0; j < m; j++ {
-		if qf[0] == cf[j] {
-			score := scoreMatch + bon[j] - leadingPenalty(j)
-			if ignoreCase && q[0] == c[j] {
+		if qf[0] == wf[j] {
+			score := scoreMatch + bon[j] - leadingPenalty(lo+j)
+			if ignoreCase && q[0] == w[j] {
 				score += bonusCaseMatch
 			}
 			d[j] = score
@@ -238,13 +265,13 @@ func bestAlignment(q, c []rune, ignoreCase bool) (int, []int) {
 					acc, accK = v, k
 				}
 			}
-			if qf[i] != cf[j] {
+			if qf[i] != wf[j] {
 				d[row+j], par[row+j] = negInf, -1
 				continue
 			}
 
 			base := scoreMatch + bon[j]
-			if ignoreCase && q[i] == c[j] {
+			if ignoreCase && q[i] == w[j] {
 				base += bonusCaseMatch
 			}
 
@@ -281,7 +308,7 @@ func bestAlignment(q, c []rune, ignoreCase bool) (int, []int) {
 
 	idx := make([]int, n)
 	for i, j := n-1, bestJ; i >= 0; i-- {
-		idx[i] = j
+		idx[i] = lo + j
 		j = par[i*m+j]
 	}
 	return bestScore, idx
