@@ -324,6 +324,27 @@ func TestShiftingUndoesAsOneStep(t *testing.T) {
 
 // A buffer that refuses the edit is left exactly as it was - even one that
 // would have accepted the first lines, and refuses only a later one.
+// A replaced IndentFor that says a level has no width does not bring the
+// editor down: it is taken as one column.
+func TestAZeroWidthLevelIsOneColumn(t *testing.T) {
+	was := command.IndentFor
+	t.Cleanup(func() { command.IndentFor = was })
+	command.IndentFor = func(*text.Buffer) command.Indent { return command.Indent{} }
+
+	f := commandtest.New("a", "b")
+	if err := tryRun(t, f, "indent-for-tab-command"); err != nil {
+		t.Fatal(err)
+	}
+	textIs(t, f, " a\nb")
+	activate(f, text.Pos{}, text.Pos{Line: 1, Col: 1})
+	for _, name := range []string{"indent-for-tab-command", "indent-rigidly-left-to-tab-stop", "indent-rigidly"} {
+		if err := tryRun(t, f, name); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	textIs(t, f, "  a\n b")
+}
+
 func TestShiftingIsRefusedWhole(t *testing.T) {
 	f := fileFake(t, "app.py", "", "a", "b", "c")
 	f.Buf().SetReadOnly(true)

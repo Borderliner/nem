@@ -71,6 +71,16 @@ func defaultIndentFor(b *text.Buffer) Indent {
 	return Indent{Tabs: tabs, Width: width}
 }
 
+// levelOf is IndentFor(b) made safe to work with: a level at least one
+// column wide. The default never says otherwise, but IndentFor can be
+// replaced, and TAB divides by the width - a panic there would cost the user
+// every unsaved buffer.
+func levelOf(b *text.Buffer) Indent {
+	ind := IndentFor(b)
+	ind.Width = max(1, ind.Width)
+	return ind
+}
+
 // tabWidth is the display's tab width, as a number of columns.
 func tabWidth() int { return max(1, int(text.TabWidth)) }
 
@@ -228,7 +238,7 @@ func indentForTab(e Env) error {
 		n = 1
 	}
 	b, p := e.Buf(), e.Win().Pt
-	ind := IndentFor(b)
+	ind := levelOf(b)
 	if b.MarkActive() && b.Mark() != p {
 		first, last := lineBlock(e)
 		return shiftLines(e, first, last, ind, func(w int) int { return w + n*ind.Width })
@@ -255,7 +265,7 @@ func indentForTab(e Env) error {
 // level left. A line with less than a level of indentation loses what it has.
 func indentRigidlyLeft(e Env) error {
 	b := e.Buf()
-	ind := IndentFor(b)
+	ind := levelOf(b)
 	first, last := lineBlock(e)
 	return shiftLines(e, first, last, ind, func(w int) int { return w - ind.Width })
 }
@@ -268,7 +278,7 @@ func indentRigidlyLeft(e Env) error {
 // a jump, and shifting every line between it and point would be a surprise.
 func indentRigidly(e Env) error {
 	b := e.Buf()
-	ind := IndentFor(b)
+	ind := levelOf(b)
 	by := ind.Width
 	if n, explicit := e.Arg(); explicit {
 		by = n
