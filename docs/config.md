@@ -19,6 +19,7 @@ Emacs notation, with the modifiers you would expect:
 | `<f5>` `<up>` `<home>` `<pgdn>` | Named keys, in angle brackets |
 | `SPC` `RET` `TAB` `DEL` `ESC` | Named ASCII keys |
 | `S-<up>` | Shift+Up |
+| `<backtab>` | Shift+Tab - the same key as `S-<tab>` |
 
 Shift is only meaningful on named keys. For ordinary characters the character
 itself carries the case, so write `X`, never `S-x` — the latter is an error.
@@ -143,6 +144,33 @@ A file with no extension is matched on its `#!` line, so a script called
 `deploy` starting with `#!/bin/sh` is highlighted as shell.
 
 Anything unmatched renders plain, including `*scratch*`.
+
+### `.editorconfig`
+
+nem reads [EditorConfig](https://editorconfig.org) files; there is nothing to
+turn on. For a file it reads the `.editorconfig` in the file's directory and in
+each one above it, stopping at one that says `root = true`. Nearer files win
+over farther ones and later sections over earlier ones, and `unset` takes a
+property back out. Section globs support `*`, `**`, `?`, `[abc]`, `[!abc]`,
+`{a,b}` and `{1..10}`; a glob without a `/` matches the file's name in any
+directory below, one with a `/` is anchored where the `.editorconfig` is.
+Changed files are read again straight away.
+
+| Property | What nem does |
+|---|---|
+| `indent_style`, `indent_size`, `tab_width` | what `TAB`, `S-TAB` and `C-x TAB` insert and remove |
+| `trim_trailing_whitespace = true` | trailing spaces and tabs go when the file is saved |
+| `insert_final_newline = true` / `false` | the saved file ends with a newline / never does |
+
+The save-time rules are edits to the buffer, one undo step made just before
+writing, so the screen matches the file. Other properties are ignored, and
+`tab_width` only changes how tabs are counted when shifting lines, not how wide
+they are drawn - that is the `tab-width` setting.
+
+Without an `.editorconfig`, nem looks at the file's first thousand lines:
+mostly tabs means tabs, mostly spaces means spaces at the step the lines most
+often indent by. A file with no indented lines yet goes by its language, and
+one nem does not recognise gets tabs.
 
 ### Where backups and autosaves go
 

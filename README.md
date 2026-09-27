@@ -80,6 +80,32 @@ a character, `M-SPC` and `M-\` squeeze or delete the spaces around point, `M-^`
 joins a line to the one above and `M-m` goes to its first non-blank character.
 `M-=` counts words and `C-x =` describes the character under point.
 
+**Indentation** — `TAB` indents the way the file already does: a tab in Go or
+a Makefile, spaces elsewhere, as many as the file uses. nem asks the file's
+`.editorconfig` first, then looks at how the lines already there are indented,
+and failing both goes by the language: two spaces for JavaScript, TypeScript,
+JSON, YAML, Lua, Ruby, HTML and CSS, four for Python, Rust, C, Java, Kotlin,
+C#, PHP, shell and SQL, and a tab for anything it does not recognise. With a
+region, `TAB` shifts every line it touches a level right and keeps the region,
+so it can be pressed again; `S-TAB` shifts them back, and `C-x TAB` shifts
+them by the prefix argument in columns (`C-u -2 C-x TAB` is two to the left).
+Only indentation moves, so shifting left never eats text.
+
+**Regions and lines** — `C-x C-u` and `C-x C-l` upcase and downcase the
+region. `M-x sort-lines` sorts the lines the region covers (in reverse with
+`C-u`), `M-x reverse-region` turns them upside down, and `M-x
+delete-trailing-whitespace` strips the spaces and tabs from the ends of the
+buffer's lines, or the region's. Each is one undo.
+
+| Key | Does |
+|---|---|
+| `TAB` | indent at point the file's way; with a region, shift its lines a level right |
+| `S-TAB` · `C-x TAB` | shift the line, or the region's lines, a level left · by `C-u` columns |
+| `C-x C-u` · `C-x C-l` | upcase · downcase the region |
+| `C-M-%` | query-replace a regexp, `\&` and `\1`…`\9` in the replacement |
+| `M-s o` · `M-g i` | list the lines matching a regexp · go to a definition by name |
+| `M-!` · `M-\|` · `M-&` | run a shell command · on the region · in the background |
+
 **It remembers** — `M-p` and `M-n` bring back what you typed at a prompt, in
 this session or an earlier one, and `M-x` lists the commands you used last
 first. `C-x C-r` opens a recent file, and a file opens again where you left
@@ -199,7 +225,11 @@ directory; `C-g` stops one you are waiting for.
 
 **Search** — `C-s` is genuinely incremental: it moves as you type, backspace
 walks point back, and `C-g` returns you to where you started. `M-%` is
-query-replace with `y`/`n`/`!`/`q`. `M-s o` is emacs's occur: every line of
+query-replace with `y`/`n`/`!`/`q`, and `C-M-%` does the same for a regexp,
+with `\&` for the match and `\1`…`\9` for its groups in the replacement (few
+terminals can send `C-M-%`; `M-x query-replace-regexp` always works). `M-x
+replace-string` and `M-x replace-regexp` replace everything after point, or in
+the region, without asking. `M-s o` is emacs's occur: every line of
 the buffer matching a regexp, listed like a project search's results, each
 leading back to its line. `M-g i` is imenu: a function, type, class or
 heading of the buffer by name, with its line beside it - for Go, Python,
@@ -267,6 +297,11 @@ autosave every 30 seconds while modified, and a refusal to overwrite a file that
 changed on disk underneath you. Nothing is written beside your file; it all goes
 under `~/.local/state/nem`.
 
+**`.editorconfig`** — a project's `.editorconfig` is honoured: its
+indentation settings decide what `TAB` inserts, and `trim_trailing_whitespace`
+and `insert_final_newline` are applied when a file is saved - to the buffer,
+so what you see is what was written, and `C-/` brings the whitespace back.
+
 **Files changed elsewhere** — a buffer with no edits of its own follows its
 file: after a `git checkout`, a formatter, a build that generates code, it is
 read again by itself, as emacs's `global-auto-revert-mode` has it. A buffer
@@ -313,8 +348,8 @@ See [docs/config.md](docs/config.md).
 ## Not yet
 
 Mouse support · line wrapping (long lines truncate with `$` and scroll
-horizontally instead) · undo tree · multi-line search patterns · language-aware
-indentation
+horizontally instead) · undo tree · multi-line search patterns · indentation
+that knows a language's syntax (TAB follows the file's style, not its braces)
 
 ## Design
 
