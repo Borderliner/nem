@@ -213,8 +213,12 @@ type Editor struct {
 
 	quit bool
 
-	// faults counts the bugs nem has caught itself in this session. See
-	// fault.go.
+	// signals delivers the signals that end a session from outside - the
+	// terminal closing, the system shutting down - and stopped is the one
+	// that did, once one has. See fault.go.
+	signals <-chan os.Signal
+	stopped *SignalError
+	// faults counts the bugs nem has caught itself in this session.
 	faults int
 }
 

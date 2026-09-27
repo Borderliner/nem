@@ -119,13 +119,18 @@ func (e *Editor) Loop() error {
 			if e.AutosaveDue(now) {
 				_ = e.RunAutosave(now)
 			}
+		case sig := <-e.signals:
+			e.stop(sig)
 		}
 		// Nothing is drawn while a paste streams in: the text lands at the end
 		// marker, and a frame per pasted character was most of why a paste
 		// crawled.
-		if !e.paste.active {
+		if !e.paste.active && !e.quit {
 			e.guard("drawing", e.Redraw)
 		}
+	}
+	if e.stopped != nil {
+		return e.stopped
 	}
 	return nil
 }
@@ -147,6 +152,11 @@ func (e *Editor) Loop() error {
 // read from the terminal here is recorded if a macro is being defined, since
 // the prompt that asked for it never passes it through HandleEvent.
 func (e *Editor) nextEvent() tcell.Event {
+	// A signal is ending the session: every prompt gives up, and the command
+	// that opened it with it.
+	if e.stopped != nil {
+		return nil
+	}
 	if len(e.km.queue) > 0 {
 		ev := e.km.queue[0]
 		e.km.queue = e.km.queue[1:]
@@ -156,9 +166,15 @@ func (e *Editor) nextEvent() tcell.Event {
 	if e.events == nil {
 		ev = e.scr.PollEvent()
 	} else {
-		var ok bool
-		if ev, ok = <-e.events; !ok {
-			return nil // the screen finalized underneath us
+		select {
+		case got, ok := <-e.events:
+			if !ok {
+				return nil // the screen finalized underneath us
+			}
+			ev = got
+		case sig := <-e.signals:
+			e.stop(sig)
+			return nil
 		}
 	}
 	e.recordEvent(ev)

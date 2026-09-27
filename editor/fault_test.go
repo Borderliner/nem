@@ -4,10 +4,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/Borderliner/nem/backup"
 	"github.com/Borderliner/nem/command"
+	"github.com/gdamore/tcell/v2"
 )
 
 // kept lists the files in the store's directory for kind.
@@ -59,6 +62,48 @@ func TestEmergencySaveKeepsEveryUnsavedBuffer(t *testing.T) {
 		t.Fatalf("rescued %q, want scratch alone", rescued)
 	}
 	wantFileHolds(t, rescued[0], "unsaved in scratch")
+}
+
+// runLoop runs the event loop until it returns, and returns what it did.
+func runLoop(t *testing.T, e *Editor) <-chan error {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() { done <- e.Loop() }()
+	return done
+}
+
+// The terminal closing ends the session without a word - there is nobody to
+// ask - but with every unsaved buffer written away first. It used to kill
+// nem where it stood, with the work in it; so it does from inside a prompt.
+func TestASignalEndsTheSessionWithTheWorkSaved(t *testing.T) {
+	for _, prompt := range []bool{false, true} {
+		e, store, file := safeEditor(t)
+		scr := e.scr.(tcell.SimulationScreen)
+		edit(t, visit(t, e, file), "typed, never saved")
+		sigs := make(chan os.Signal, 1)
+		e.SetSignals(sigs)
+
+		// The hook runs as find-file starts, just before its prompt opens:
+		// the signal arrives with the prompt waiting for a file name.
+		opening := make(chan struct{})
+		e.BeforeCommand("find-file", func() { close(opening) })
+		done := runLoop(t, e)
+		if prompt {
+			feed(t, scr, key(t, "C-x", "C-f"))
+			<-opening
+		}
+		sigs <- syscall.SIGHUP
+		select {
+		case err := <-done:
+			se, ok := err.(*SignalError)
+			if !ok || se.Signal != syscall.SIGHUP || len(se.Saved) != 1 {
+				t.Fatalf("prompt open %v: the loop returned %v, want the hang-up with one buffer saved", prompt, err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("prompt open %v: the loop is still running after the hang-up", prompt)
+		}
+		wantFileHolds(t, store.AutosavePath(file), "typed, never saved")
+	}
 }
 
 // A bug in a command is caught: the command fails with it, the unsaved work
