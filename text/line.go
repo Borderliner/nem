@@ -40,6 +40,15 @@ type Line struct {
 	width ColIdx
 	valid bool
 	tabW  ColIdx // TabWidth in effect when the cache was built
+
+	// keep is how much of a stale cache an edit left good: the runes before
+	// it are as they were when it was built, so their clusters still are.
+	// Zero when all of it must go.
+	keep RuneIdx
+	// plain is how many runes at the start are ASCII: all of them, for most
+	// lines of code, which is what lets a caller skip work only text in
+	// other scripts needs. Known once the cache is built.
+	plain int
 }
 
 // NewLine returns a Line holding a copy of rs.
@@ -59,21 +68,36 @@ func NewLine(rs []rune) Line {
 // rune is a cluster of its own, one column wide. Everything else goes through
 // uniseg a run at a time, each run ending at such a boundary, so segmenting
 // can restart there exactly as it would have continued.
+//
+// After an edit only the clusters from just before it are measured again: a
+// keystroke at the end of a 200KB line re-measured all of it, which was most
+// of what the keystroke cost.
 func (l *Line) build() {
 	tw := effectiveTabWidth()
 	if l.valid && l.tabW == tw {
 		return
 	}
-	if cap(l.segs) >= len(l.runes) {
-		l.segs = l.segs[:0]
-	} else {
-		l.segs = make([]segment, 0, len(l.runes))
-	}
 
 	rs := l.runes
 	n := len(rs)
-	col := ColIdx(0)
-	for i := 0; i < n; {
+	i, col := 0, ColIdx(0)
+	if k := l.reusable(tw); k > 0 {
+		last := l.segs[k-1]
+		l.segs = l.segs[:k]
+		i, col = int(last.start)+last.n, last.col+last.w
+	} else if cap(l.segs) >= n {
+		l.segs = l.segs[:0]
+	} else {
+		l.segs = make([]segment, 0, n)
+	}
+	if l.plain >= i {
+		l.plain = i
+		for l.plain < n && rs[l.plain] < 0x80 {
+			l.plain++
+		}
+	}
+
+	for i < n {
 		r := rs[i]
 		switch {
 		case r >= 0x20 && r < 0x7f && (i+1 == n || rs[i+1] < 0x80):
@@ -101,6 +125,32 @@ func (l *Line) build() {
 	l.width = col
 	l.valid = true
 	l.tabW = tw
+	l.keep = 0
+}
+
+// reusable is how many of the cache's segments an edit left good: those
+// wholly before l.keep, less any at the end that the text after them could
+// now join onto. The prefix is kept only up to a boundary the fast path can
+// vouch for - two ASCII runes, or the end of the line - since a combining
+// mark or a joiner typed after a cluster changes it.
+func (l *Line) reusable(tw ColIdx) int {
+	if l.keep <= 0 || l.tabW != tw {
+		return 0
+	}
+	rs := l.runes
+	k := sort.Search(len(l.segs), func(j int) bool {
+		return int(l.segs[j].start)+l.segs[j].n > int(l.keep)
+	})
+	for ; k > 0; k-- {
+		p := int(l.segs[k-1].start) + l.segs[k-1].n
+		if p > len(rs) {
+			continue
+		}
+		if p == len(rs) || (rs[p-1] < 0x80 && rs[p] < 0x80) {
+			break
+		}
+	}
+	return k
 }
 
 // segmentRun appends the clusters of runes [from, to) starting at display
@@ -128,7 +178,27 @@ func (l *Line) segmentRun(from, to int, col, tw ColIdx) ColIdx {
 // setRunes replaces the line's content and invalidates the cache.
 func (l *Line) setRunes(rs []rune) {
 	l.runes = rs
+	l.valid, l.keep = false, 0
+}
+
+// edited replaces the line's content after an edit at rune index at, which
+// leaves the cache good for the runes before it.
+func (l *Line) edited(rs []rune, at RuneIdx) {
+	l.runes = rs
+	if l.valid {
+		l.keep = at
+	} else {
+		l.keep = min(l.keep, at)
+	}
 	l.valid = false
+}
+
+// ASCII reports whether every rune of the line is ASCII: nothing to lay out
+// right to left, nothing wide. It is learnt while the line is measured, so
+// asking costs nothing for a line on screen.
+func (l *Line) ASCII() bool {
+	l.build()
+	return l.plain == len(l.runes)
 }
 
 // Len returns the number of runes in the line.

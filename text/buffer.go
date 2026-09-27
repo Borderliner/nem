@@ -357,7 +357,7 @@ func (b *Buffer) insertRaw(at Pos, rs []rune) error {
 	parts := splitRuneLines(rs)
 
 	if len(parts) == 1 {
-		b.lines[at.Line].setRunes(slices.Insert(cur, int(at.Col), parts[0]...))
+		b.lines[at.Line].edited(slices.Insert(cur, int(at.Col), parts[0]...), at.Col)
 	} else {
 		// The line splits. The text after the cut moves to the last new line,
 		// and is copied out before the head reuses its array.
@@ -367,7 +367,7 @@ func (b *Buffer) insertRaw(at Pos, rs []rune) error {
 
 		built := make([]*Line, 0, len(parts))
 		head := b.lines[at.Line]
-		head.setRunes(append(cur[:at.Col], parts[0]...))
+		head.edited(append(cur[:at.Col], parts[0]...), at.Col)
 		built = append(built, head)
 		for _, p := range parts[1 : len(parts)-1] {
 			l := NewLine(p)
@@ -404,12 +404,12 @@ func (b *Buffer) deleteRaw(from, to Pos) ([]rune, error) {
 	// In place, for the reasons insertRaw gives.
 	first := b.lines[from.Line]
 	if to.Line == from.Line {
-		first.setRunes(slices.Delete(first.runes, int(from.Col), int(to.Col)))
+		first.edited(slices.Delete(first.runes, int(from.Col), int(to.Col)), from.Col)
 	} else {
 		// The last line's remainder joins the first; that line is about to be
 		// dropped, so its runes can be read while the first line's array is
 		// overwritten from the cut onwards.
-		first.setRunes(append(first.runes[:from.Col], b.lines[to.Line].runes[to.Col:]...))
+		first.edited(append(first.runes[:from.Col], b.lines[to.Line].runes[to.Col:]...), from.Col)
 		b.lines = slices.Delete(b.lines, from.Line+1, to.Line+1)
 	}
 
