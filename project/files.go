@@ -63,7 +63,7 @@ func Files(root string) ([]string, error) {
 func FilesWith(root string, noIgnore bool) ([]string, error) {
 	var files []string
 	var err error
-	if exists(filepath.Join(root, ".git")) {
+	if inRepository(root) {
 		files, err = gitFiles(root, noIgnore)
 	}
 	if files == nil {
@@ -135,6 +135,22 @@ func gitFiles(root string, noIgnore bool) ([]string, error) {
 		return files[:MaxFiles], ErrTooManyFiles
 	}
 	return files, nil
+}
+
+// inRepository reports whether dir is in a git repository: it or a directory
+// above it has a .git. git lists the files of a directory inside one from
+// there, as paths from there, as it lists a repository's from its top.
+func inRepository(dir string) bool {
+	for {
+		if exists(filepath.Join(dir, ".git")) {
+			return true
+		}
+		up := filepath.Dir(dir)
+		if up == dir {
+			return false
+		}
+		dir = up
+	}
 }
 
 // errStop ends a walk that has listed MaxFiles.
