@@ -48,9 +48,17 @@ func (th Theme) usesBidi(rs []rune) bool { return th.Bidi && bidi.HasRTL(rs) }
 
 // lineUsesBidi is usesBidi for a buffer's line, which knows without looking
 // at every rune when they are all ASCII - as a line of code nearly always is.
+//
+// A line longer than maxBidiLine is drawn as stored, as emacs gives up the
+// same work on long lines: laying out a line means every one of its
+// clusters, however few fit the window, and a line that long is data, not a
+// paragraph anyone reads.
 func (th Theme) lineUsesBidi(l *text.Line) bool {
-	return th.Bidi && !l.ASCII() && bidi.HasRTL(l.View())
+	return th.Bidi && len(l.View()) <= maxBidiLine && !l.ASCII() && bidi.HasRTL(l.View())
 }
+
+// maxBidiLine is the longest line laid out right to left.
+const maxBidiLine = 10000
 
 // layoutBidi lays l out in visual order: its direction its own when auto,
 // left to right otherwise.
@@ -63,7 +71,7 @@ func layoutBidi(l *text.Line, auto bool) bidiLayout {
 	levels := bidi.Levels(rs, dir)
 	shaped := bidi.Shape(rs)
 
-	var clusters []text.Cluster
+	clusters := make([]text.Cluster, 0, len(rs))
 	for c := range l.Clusters() {
 		clusters = append(clusters, c)
 	}
