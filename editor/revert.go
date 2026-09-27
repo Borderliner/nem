@@ -25,14 +25,14 @@ var errNothingToRevert = errors.New("this buffer has no file to read again")
 func registerRevertCommands(e *Editor, reg *command.Registry) error {
 	return reg.Register(command.Command{
 		Name:        "revert-buffer",
-		Doc:         "Read the buffer's file again, throwing away any edits after asking; a listing is read again.",
+		Doc:         "Read the buffer's file again, throwing away any edits after asking; a listing is read again, a compilation run again.",
 		Interactive: true,
 		Fn:          func(command.Env) error { return e.revertBuffer() },
 	})
 }
 
 // revertBuffer is C-x x g: the buffer's file read again. What a listing
-// shows, or a search, is got again the way each gets it.
+// shows, or a search, or a compilation, is got again the way each gets it.
 func (e *Editor) revertBuffer() error {
 	b := e.active.Buf
 	switch {
@@ -40,6 +40,8 @@ func (e *Editor) revertBuffer() error {
 		return e.Run("dired-revert")
 	case e.grepOf(b) != nil:
 		return e.Run("grep-revert")
+	case e.compileOf(b) != nil:
+		return e.Run("recompile")
 	case b.Path() == "":
 		return errNothingToRevert
 	}

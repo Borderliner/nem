@@ -15,7 +15,6 @@ import (
 	"github.com/Borderliner/nem/project"
 	"github.com/Borderliner/nem/syntax"
 	"github.com/Borderliner/nem/text"
-	"github.com/Borderliner/nem/view"
 )
 
 // A project search's results: a listing of the matching lines grouped under
@@ -52,7 +51,6 @@ type grepState struct {
 var (
 	errNotGrep       = errors.New("not a search's results")
 	errNoMoreMatches = errors.New("no more matches")
-	errNoSearch      = errors.New("no search to step through; C-x p g searches the project")
 )
 
 // grepBindings is the results' keymap. Printable keys are free to take, the
@@ -110,7 +108,7 @@ func (e *Editor) grepSearch(root, pattern string, re *regexp.Regexp) error {
 		b.SetReadOnly(true)
 	}
 	e.grep[b] = st
-	e.lastGrep = b
+	e.nextErrorBuf = b
 	e.grepRender(b, st)
 	first := st.firstMatchLine()
 
@@ -272,6 +270,20 @@ func (st *grepState) lineSpans(line int) []syntax.Span {
 	return st.spans[line]
 }
 
+// count, target, lineOf, current and setCurrent make the results a list of
+// locations, for M-g n and the keys they share with a compilation's errors.
+func (st *grepState) count() int { return len(st.matches) }
+
+func (st *grepState) target(i int) (string, int, int) {
+	m := st.matches[i]
+	return fromRel(st.root, m.File), m.Line, m.Col
+}
+
+func (st *grepState) lineOf(i int) int { return st.lineOfMatch(i) }
+func (st *grepState) current() int     { return st.cur }
+func (st *grepState) setCurrent(i int) { st.cur = i }
+func (st *grepState) noun() string     { return "match" }
+
 // pointOn is where point rests on line: at a match's text, or a heading's
 // file name.
 func (st *grepState) pointOn(line int) text.Pos {
@@ -325,7 +337,7 @@ func (st *grepState) step(line, dir int, ok func(int) bool) (int, bool) {
 	return line, false
 }
 
-// registerGrepCommands adds the results' commands and the next-error pair.
+// registerGrepCommands adds the results' commands.
 func registerGrepCommands(e *Editor, reg *command.Registry) error {
 	inGrep := func(fn func(b *text.Buffer, st *grepState) error) func(command.Env) error {
 		return func(command.Env) error {
@@ -361,7 +373,7 @@ func registerGrepCommands(e *Editor, reg *command.Registry) error {
 			e.active.Pt = st.pointOn(line)
 			if show {
 				if i, ok := st.matchNear(line); ok {
-					return e.grepVisit(b, st, i, false)
+					return e.visitLocation(b, st, i, false)
 				}
 			}
 			return nil
@@ -378,7 +390,7 @@ func registerGrepCommands(e *Editor, reg *command.Registry) error {
 					e.Echo("No match on this line")
 					return nil
 				}
-				return e.grepVisit(b, st, i, true)
+				return e.visitLocation(b, st, i, true)
 			})},
 		{Name: "grep-display-match", Doc: "Show the match at point in the other window, staying here.",
 			Fn: inGrep(func(b *text.Buffer, st *grepState) error {
@@ -387,7 +399,7 @@ func registerGrepCommands(e *Editor, reg *command.Registry) error {
 					e.Echo("No match on this line")
 					return nil
 				}
-				return e.grepVisit(b, st, i, false)
+				return e.visitLocation(b, st, i, false)
 			})},
 		{Name: "grep-next-match", Doc: "Move to the next match, ARG matches on, showing it in the other window.",
 			Fn: moveTo(1, isMatch, true)},
@@ -413,86 +425,12 @@ func registerGrepCommands(e *Editor, reg *command.Registry) error {
 				e.Echo("%s", st.summary())
 				return nil
 			})},
-		{Name: "next-error", Doc: "Go to the next match of the last search, ARG matches on.",
-			Fn: func(command.Env) error {
-				n, _ := e.Arg()
-				return e.nextMatch(n)
-			}},
-		{Name: "previous-error", Doc: "Go to the previous match of the last search, ARG matches back.",
-			Fn: func(command.Env) error {
-				n, _ := e.Arg()
-				return e.nextMatch(-n)
-			}},
 	}
 	for _, c := range cmds {
 		c.Interactive = true
 		if err := reg.Register(c); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-// nextMatch is M-g n and M-g p: the match n on from the last one gone to, in
-// the window being worked in - or, from the results themselves, in the other.
-func (e *Editor) nextMatch(n int) error {
-	b := e.lastGrep
-	st := e.grepOf(b)
-	if st == nil {
-		return errNoSearch
-	}
-	i := st.cur + n
-	if st.cur < 0 && n < 0 {
-		i = -1
-	}
-	if i < 0 || i >= len(st.matches) {
-		return errNoMoreMatches
-	}
-	if err := e.grepVisit(b, st, i, e.active.Buf == b); err != nil {
-		return err
-	}
-	e.Echo("Match %d of %d", i+1, len(st.matches))
-	return nil
-}
-
-// grepVisit opens match i and puts point on it, centred in view.
-//
-// From the results it is shown in the other window, splitting the frame if
-// there is only one, and that window is selected if sel; from anywhere else
-// it is shown where you are. The results follow, point moving to the match
-// in every window showing them.
-func (e *Editor) grepVisit(b *text.Buffer, st *grepState, i int, sel bool) error {
-	m := st.matches[i]
-	fb, err := e.OpenFile(filepath.Join(st.root, filepath.FromSlash(m.File)))
-	if err != nil {
-		return err
-	}
-	st.cur = i
-	for _, w := range e.tree.Windows() {
-		if w.Buf == b {
-			w.Pt = st.pointOn(st.lineOfMatch(i))
-		}
-	}
-
-	from := e.active
-	if e.active.Buf == b {
-		if len(e.tree.Windows()) < 2 {
-			if err := e.SplitWindow(true); err != nil {
-				return err
-			}
-		} else {
-			e.OtherWindow(1)
-		}
-	} else {
-		sel = true
-	}
-	w := e.active
-	w.Visit(fb)
-	w.Pt = fb.ClampPos(text.Pos{Line: m.Line, Col: text.RuneIdx(m.Col)})
-	w.GoalCol = view.GoalColUnset
-	w.Top = max(0, w.Pt.Line-e.TextHeight()/2)
-	if !sel {
-		e.active = from
 	}
 	return nil
 }

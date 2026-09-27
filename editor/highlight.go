@@ -34,6 +34,9 @@ func (e *Editor) spansOf(b *text.Buffer, line int) []syntax.Span {
 	if st := e.grepOf(b); st != nil {
 		return st.lineSpans(line)
 	}
+	if st := e.compileOf(b); st != nil {
+		return st.lineSpans(line)
+	}
 	return e.cacheFor(b).Spans(b, line)
 }
 

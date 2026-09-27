@@ -108,14 +108,23 @@ type Editor struct {
 	diredKeys  *keymap.Map
 	wdiredKeys *keymap.Map
 
-	// grep holds the results behind every search's buffer, grepKeys their
-	// keymap, and lastGrep the search M-g n steps through. See grep.go.
+	// grep holds the results behind every search's buffer, and grepKeys
+	// their keymap. See grep.go.
 	grep     map[*text.Buffer]*grepState
 	grepKeys *keymap.Map
-	lastGrep *text.Buffer
+	// nextErrorBuf is the list of locations M-g n steps through: the last
+	// search's results, or the last compilation. See locations.go.
+	nextErrorBuf *text.Buffer
 
-	// autoRevert reads files changed on disk into buffers without edits.
-	// See revert.go.
+	// compile holds the command behind every output buffer, compileKeys
+	// their keymap, and compileCommands the command last run in each
+	// directory, which the prompt offers there next time. See compile.go.
+	compile         map[*text.Buffer]*compileState
+	compileKeys     *keymap.Map
+	compileCommands map[string]string
+	// shell runs shell commands, "" meaning /bin/sh; autoRevert reads files
+	// changed on disk into buffers without edits. See process.go, revert.go.
+	shell      string
 	autoRevert bool
 
 	// startup shows the welcome panel. It is set by the caller when nem was
@@ -221,6 +230,10 @@ func New(scr tcell.Screen) (*Editor, error) {
 	if err != nil {
 		return nil, fmt.Errorf("installing grep bindings: %w", err)
 	}
+	ck, err := newCompileKeymap()
+	if err != nil {
+		return nil, fmt.Errorf("installing compilation bindings: %w", err)
+	}
 
 	th := ui.DefaultTheme()
 	e := &Editor{
@@ -241,12 +254,16 @@ func New(scr tcell.Screen) (*Editor, error) {
 		wdiredKeys: wk,
 		grep:       map[*text.Buffer]*grepState{},
 		grepKeys:   gk,
-		autoRevert: true,
-		before:     map[string][]func(){},
-		after:      map[string][]func(){},
-		clip:       clipboard{read: defaultClipboardReader},
-		ext:        newExternalState(),
-		mem:        &memory.Memory{},
+
+		compile:         map[*text.Buffer]*compileState{},
+		compileKeys:     ck,
+		compileCommands: map[string]string{},
+		autoRevert:      true,
+		before:          map[string][]func(){},
+		after:           map[string][]func(){},
+		clip:            clipboard{read: defaultClipboardReader},
+		ext:             newExternalState(),
+		mem:             &memory.Memory{},
 	}
 
 	// recover-file closes over the editor rather than going through Env. It is
@@ -279,6 +296,15 @@ func New(scr tcell.Screen) (*Editor, error) {
 	}
 	if err := registerProjectCommands(e, reg); err != nil {
 		return nil, fmt.Errorf("registering project commands: %w", err)
+	}
+	if err := registerLocationCommands(e, reg); err != nil {
+		return nil, fmt.Errorf("registering next-error commands: %w", err)
+	}
+	if err := registerCompileCommands(e, reg); err != nil {
+		return nil, fmt.Errorf("registering compilation commands: %w", err)
+	}
+	if err := registerShellCommands(e, reg); err != nil {
+		return nil, fmt.Errorf("registering shell commands: %w", err)
 	}
 	if err := registerRevertCommands(e, reg); err != nil {
 		return nil, fmt.Errorf("registering revert commands: %w", err)
@@ -500,8 +526,12 @@ func (e *Editor) KillBuffer(b *text.Buffer) error {
 	delete(e.names, b)
 	delete(e.dired, b)
 	delete(e.grep, b)
-	if e.lastGrep == b {
-		e.lastGrep = nil
+	if st := e.compile[b]; st != nil && st.running {
+		st.proc.kill()
+	}
+	delete(e.compile, b)
+	if e.nextErrorBuf == b {
+		e.nextErrorBuf = nil
 	}
 	e.forgetHighlight(b)
 	e.forgetBranch(b)

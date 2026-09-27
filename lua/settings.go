@@ -81,6 +81,10 @@ type Settings struct {
 	// script sets it with true, false or "auto".
 	Icons string
 
+	// Shell is the program M-!, M-| and compile run commands with, given the
+	// command after -c. Empty means /bin/sh, as Makefiles use.
+	Shell string
+
 	// AutoRevert reads a buffer without edits again when its file changes on
 	// disk.
 	AutoRevert bool
@@ -119,7 +123,7 @@ const (
 var knownSettings = []string{
 	"auto-pair", "auto-revert", "autosave-idle", "backup", "clipboard", "completion-rows", "completion-style",
 	"delete-selection", "fill-column", "icons", "line-numbers", "open-binary", "scroll-margin", "syntax", "tab-width",
-	"theme", "undo-style", "which-key-delay",
+	"shell", "theme", "undo-style", "which-key-delay",
 }
 
 // set validates one key/value pair and stores it.
@@ -245,6 +249,12 @@ func (s *Settings) set(key string, v glua.LValue) error {
 			return err
 		}
 		s.Clipboard = str
+	case "shell":
+		str, ok := v.(glua.LString)
+		if !ok {
+			return fmt.Errorf("shell must be a string, got %s", v.Type())
+		}
+		s.Shell = string(str)
 	case "auto-revert":
 		b, ok := v.(glua.LBool)
 		if !ok {

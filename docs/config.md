@@ -86,6 +86,8 @@ nem.set("auto-revert", true)     -- read a file again when it changes on disk, i
 
 -- System
 nem.set("clipboard", "osc52")    -- "osc52" or "off"; default "osc52"
+nem.set("shell", "/bin/bash")    -- runs M-!, M-|, M-& and compile commands, given the
+                                 -- command after -c; default "" means /bin/sh
 nem.set("undo-style", "linear")  -- "linear" is the default and currently the only mode
 ```
 
@@ -203,8 +205,8 @@ sequence simply replaces it.
 A third argument binds a key in a mode instead, where it applies only in that
 mode's buffers and takes precedence over the global binding. The modes are
 `"dired"`, for directory listings, `"wdired"`, for a listing whose file names
-are being edited after `C-x C-q`, and `"grep"`, for a project search's
-results:
+are being edited after `C-x C-q`, `"grep"`, for a project search's results,
+and `"compilation"`, for the output of `M-x compile` and `M-&`:
 
 ```lua
 nem.bind("k", "dired-do-delete", "dired")   -- k deletes, as D does

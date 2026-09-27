@@ -55,7 +55,7 @@ func (e *Editor) LoadConfig(path string) error {
 	h, err := lua.New(lua.Options{
 		Registry:    e.reg,
 		Keymap:      e.keys,
-		ModeKeymaps: map[string]*keymap.Map{"dired": e.diredKeys, "wdired": e.wdiredKeys, "grep": e.grepKeys},
+		ModeKeymaps: map[string]*keymap.Map{"dired": e.diredKeys, "wdired": e.wdiredKeys, "grep": e.grepKeys, "compilation": e.compileKeys},
 		ConfigPath:  path,
 		Timeout:     configTimeout,
 	})
@@ -138,7 +138,7 @@ func (e *Editor) applySettings(s lua.Settings) {
 	e.SetWhichKeyDelay(time.Duration(s.WhichKeyDelay) * time.Millisecond)
 	e.SetAutosaveIdle(time.Duration(s.AutosaveIdle) * time.Second)
 	e.SetBackupEnabled(s.Backup)
-	e.autoRevert = s.AutoRevert
+	e.shell, e.autoRevert = s.Shell, s.AutoRevert
 	if s.Clipboard == "off" {
 		e.SetClipboardMode(ClipboardOff)
 	} else {

@@ -121,8 +121,17 @@ var defaultBindings = []struct{ Spec, Command string }{
 	{"C-x p t", "project-toggle-test"},
 	{"C-x p k", "project-kill-buffers"},
 	{"C-x p S", "project-save-buffers"},
+	{"C-x p c", "project-compile"},
+
+	// Shell commands and compiling. See shell.go and compile.go; compile and
+	// recompile themselves are M-x commands, as in emacs.
+	{"M-!", "shell-command"},
+	{"M-|", "shell-command-on-region"},
+	{"M-&", "async-shell-command"},
 	{"M-g n", "next-error"},
+	{"M-g M-n", "next-error"},
 	{"M-g p", "previous-error"},
+	{"M-g M-p", "previous-error"},
 	{"C-x `", "next-error"},
 
 	// Windows.

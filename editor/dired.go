@@ -117,6 +117,9 @@ func (e *Editor) modeKeys(b *text.Buffer) *keymap.Map {
 	if e.grepOf(b) != nil {
 		return e.grepKeys
 	}
+	if e.compileOf(b) != nil {
+		return e.compileKeys
+	}
 	return nil
 }
 
@@ -128,16 +131,20 @@ func (e *Editor) diredOf(b *text.Buffer) *diredState {
 	return e.dired[b]
 }
 
-// isListing is the renderer's ListingFunc: a directory, or a search's
-// results.
-func (e *Editor) isListing(b *text.Buffer) bool { return e.diredOf(b) != nil || e.grepOf(b) != nil }
+// isListing is the renderer's ListingFunc: a directory, a search's results,
+// or a command's output.
+func (e *Editor) isListing(b *text.Buffer) bool {
+	return e.diredOf(b) != nil || e.grepOf(b) != nil || e.compileOf(b) != nil
+}
 
 // showsCursor is the renderer's CursorOf: a listing whose names are being
 // edited, drawn with a cursor where the typing goes rather than a bar across
-// the line.
+// the line, and a command's output, which is read as text.
 func (e *Editor) showsCursor(b *text.Buffer) bool {
-	st := e.diredOf(b)
-	return st != nil && st.wd != nil
+	if st := e.diredOf(b); st != nil {
+		return st.wd != nil
+	}
+	return e.compileOf(b) != nil
 }
 
 // diredSpans colours a line of a listing from the Listing that produced it.
@@ -627,6 +634,9 @@ func (e *Editor) bufferDir(b *text.Buffer) string {
 	}
 	if st := e.grepOf(b); st != nil {
 		return st.root
+	}
+	if st := e.compileOf(b); st != nil {
+		return st.dir
 	}
 	if b != nil && b.Path() != "" {
 		return filepath.Dir(b.Path())

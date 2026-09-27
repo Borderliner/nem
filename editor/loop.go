@@ -55,8 +55,10 @@ func (e *Editor) Loop() error {
 		tick = t.C
 	}
 
-	// Files are looked at for changes every few seconds, for buffers to
-	// follow them. See revert.go.
+	// Commands still running when nem exits are stopped rather than left
+	// orphaned; and files are looked at for changes every few seconds, for
+	// buffers to follow them. See revert.go.
+	defer e.stopProcesses()
 	revert := time.NewTicker(revertEvery)
 	defer revert.Stop()
 
@@ -183,8 +185,13 @@ func (e *Editor) handleEvent(ev tcell.Event) {
 	case *tcell.EventInterrupt:
 		// A system app that failed to start, reported from the goroutine that
 		// waited on it. See launch.
-		if f, ok := ev.Data().(openFailure); ok {
-			e.Echo("%v", f.err)
+		switch d := ev.Data().(type) {
+		case openFailure:
+			e.Echo("%v", d.err)
+		case processWake:
+			// Output from a command running in the background; see
+			// process.go.
+			e.processWoke(d.p)
 		}
 	case *tcell.EventFocus:
 		// Back from another window, where files may have changed.

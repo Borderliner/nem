@@ -162,6 +162,7 @@ yours.
 | `C-x p d` `C-x p D` | list one of its directories · list its top |
 | `C-x p t` | go from a file to its test and back: `foo.go` ↔ `foo_test.go`, `app.ts` ↔ `app.test.ts`, … |
 | `C-x p S` `C-x p k` | save its modified files · kill its buffers |
+| `C-x p c` | compile the project, from its top directory (below) |
 
 In the search results `RET` opens a match in the other window, `n` and `p`
 show each in turn there, `{` and `}` jump between files, and `g` searches
@@ -172,6 +173,29 @@ A project's files come from `git ls-files` in a repository, so `.gitignore`
 is honoured; elsewhere the tree is walked, passing over `node_modules` and its
 kind. A `.projectile` file narrows the list with projectile's syntax: `-/build`
 or `*.min.js` leaves things out, `+/src` keeps only `src`.
+
+**Compiling** — `M-x compile` runs a build, the tests, a linter, anything, and
+shows the output beside you as it comes; `C-x p c` does it from the project's
+top. The first time it offers what the project's build files suggest - `go
+build ./...` beside a `go.mod`, `cargo build` beside a `Cargo.toml`, `make -k`
+otherwise - and after that the command you ran there last. Every line naming a
+place in a file leads there: errors and warnings from gcc, clang, go, rust,
+tsc and javac, Python tracebacks, JavaScript stack frames, go test's failures.
+`M-g n` and `M-g p` step through them from any buffer.
+
+In the output, `RET` goes to the error on its line, `n` and `p` show each in
+the other window, `g` runs the command again and `C-c C-k` stops it. A test
+failure that names only `foo_test.go` finds the one file of the project it can
+be, and asks which when several can.
+
+**Shell commands** — `M-!` runs a command and shows its output: in the echo
+area if it is a line, in a buffer if it is more. `C-u M-!` puts the output at
+point instead. `M-|` runs a command with the region as its input, and `C-u
+M-|` replaces the region with the output, which is how anything becomes a
+filter: `C-u M-| sort`, `C-u M-| jq .`, `C-u M-| column -t`. A command that
+fails changes nothing. `M-&`, or a command ending in `&`, runs in the
+background into its own buffer. Commands run with `sh`, from the buffer's
+directory; `C-g` stops one you are waiting for.
 
 **Search** — `C-s` is genuinely incremental: it moves as you type, backspace
 walks point back, and `C-g` returns you to where you started. `M-%` is
