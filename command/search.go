@@ -19,6 +19,7 @@ import (
 
 	"github.com/Borderliner/nem/keymap"
 	"github.com/Borderliner/nem/text"
+	"github.com/Borderliner/nem/view"
 )
 
 // RegisterSearch adds the search, replace and help commands to r.
@@ -244,6 +245,13 @@ type Isearch struct {
 	e        Env
 	backward bool
 
+	// win and buf are the window and buffer the session searches. A command
+	// run at the prompt can switch the window to another buffer, or make
+	// another window current; positions in buf mean nothing there, so the
+	// session moves point only while win still shows buf.
+	win *view.Window
+	buf *text.Buffer
+
 	// origin is where point was when the session opened, and where Abandon
 	// returns it. lastGood is the most recent successful match, where point
 	// waits out a failing pattern.
@@ -269,8 +277,15 @@ type Isearch struct {
 // NewIsearch opens a session searching forward, or backward when backward is
 // set, from the active window's current point.
 func NewIsearch(e Env, backward bool) *Isearch {
-	p := e.Win().Pt
-	return &Isearch{e: e, backward: backward, origin: p, lastGood: p}
+	w := e.Win()
+	return &Isearch{e: e, backward: backward, win: w, buf: w.Buf, origin: w.Pt, lastGood: w.Pt}
+}
+
+// goTo moves point to p, if the session's window still shows its buffer.
+func (s *Isearch) goTo(p text.Pos) {
+	if s.win.Buf == s.buf {
+		s.win.Pt = s.buf.ClampPos(p)
+	}
 }
 
 // Update re-runs the search for a changed pattern and moves point to the
@@ -279,7 +294,8 @@ func (s *Isearch) Update(pat string) {
 	extends := s.matched && s.pat != "" && strings.HasPrefix(pat, s.pat)
 	s.pat, s.edge = pat, false
 	if pat == "" {
-		s.e.Win().Pt, s.lastGood = s.origin, s.origin
+		s.goTo(s.origin)
+		s.lastGood = s.origin
 		s.matched, s.failing = false, false
 		return
 	}
@@ -315,7 +331,7 @@ func (s *Isearch) Step(backward bool) {
 		// other direction had run out.
 		s.backward, s.edge = backward, false
 	}
-	from := s.e.Win().Pt
+	from := s.lastGood
 	if s.matched {
 		from = s.at
 		if !backward {
@@ -345,7 +361,7 @@ func (s *Isearch) Advance() { s.Step(s.backward) }
 // Abandon restores point to where the session opened. This is C-g, and it is
 // the behaviour users rely on most.
 func (s *Isearch) Abandon() {
-	s.e.Win().Pt = s.origin
+	s.goTo(s.origin)
 }
 
 // Pattern returns the pattern currently being searched for.
@@ -374,16 +390,16 @@ func (s *Isearch) Prompt() string {
 func (s *Isearch) search(from text.Pos, backward bool) (start, end text.Pos, ok bool) {
 	fold := FoldCase(s.pat)
 	if backward {
-		return SearchBackward(s.e.Buf(), s.pat, from, fold)
+		return SearchBackward(s.buf, s.pat, from, fold)
 	}
-	return SearchForward(s.e.Buf(), s.pat, from, fold)
+	return SearchForward(s.buf, s.pat, from, fold)
 }
 
 // bufferEdge is where a wrapped search starts: the top of the buffer going
 // forward, the bottom going back.
 func (s *Isearch) bufferEdge(backward bool) text.Pos {
 	if backward {
-		return s.e.Buf().End()
+		return s.buf.End()
 	}
 	return text.Pos{}
 }
@@ -397,14 +413,15 @@ func (s *Isearch) land(start, end text.Pos) {
 	if s.backward {
 		p = start
 	}
-	s.e.Win().Pt, s.lastGood = p, p
+	s.goTo(p)
+	s.lastGood = p
 }
 
 // fail marks the search as having no match, leaving point at the last one it
 // had. The prompt says so while it is open, and the echo area after.
 func (s *Isearch) fail() {
 	s.failing = true
-	s.e.Win().Pt = s.lastGood
+	s.goTo(s.lastGood)
 	s.e.Echo("Failing I-search: %s", s.pat)
 }
 
@@ -431,8 +448,8 @@ func isearchCmd(backward bool) Func {
 		}
 		// Where the search started is kept, as emacs keeps it, so C-u C-SPC
 		// returns there.
-		if p := e.Win().Pt; p != s.origin {
-			e.Buf().SetMark(s.origin)
+		if s.win.Buf == s.buf && s.win.Pt != s.origin {
+			s.buf.SetMark(s.origin)
 			e.Echo("Mark saved where search started")
 		}
 		return nil

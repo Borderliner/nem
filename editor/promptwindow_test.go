@@ -30,3 +30,26 @@ func TestSwitchingBufferAtAPromptShowsItInTheTextWindow(t *testing.T) {
 		t.Errorf("point %v; want goto-line 1 to have run in other", e.active.Pt)
 	}
 }
+
+// A search abandoned with C-g puts point back where it started - in the
+// buffer it started in. A search that had the window switched to another
+// buffer under it put that position into the other buffer instead, past its
+// end if it was shorter, where the next edit crashed.
+func TestAbandonedSearchLeavesAnotherBufferAlone(t *testing.T) {
+	e, scr := newTestEditor(t, "one", "two", "three three")
+	e.active.Pt = text.Pos{Line: 2, Col: 8}
+	short := e.NewBuffer("short")
+	if err := short.Insert(text.Pos{}, []rune("a\nb\nc c c c c c c c")); err != nil {
+		t.Fatal(err)
+	}
+	feed(t, scr, txt("t"), key(t, "C-x", "b"), txt("short"), key(t, "RET", "C-g"))
+	press(t, e, "C-s")
+
+	if e.active.Buf != short {
+		t.Fatalf("the window shows %q, want short", e.BufferName(e.active.Buf))
+	}
+	if e.active.Pt != (text.Pos{}) {
+		t.Errorf("point in short = %v; the search's start in the other buffer was put there", e.active.Pt)
+	}
+	press(t, e, "\"") // typed where point is, which must be in the buffer
+}
