@@ -245,3 +245,48 @@ func TestContains(t *testing.T) {
 		}
 	}
 }
+
+// A case-blind search for text finds it in any case, anchored on whichever
+// of its letters is rarest, and at the very start and end of a file.
+func TestIndexFold(t *testing.T) {
+	for _, tc := range []struct {
+		data, needle string
+		want         int
+	}{
+		{"xx NeEdLe yy", "needle", 3},
+		{"needle", "needle", 0},
+		{"a needl", "needle", -1},
+		{"nnnnnnneedle", "needle", 6},
+		{"zz", "Z", 0},
+		{"one QUICK fox", "quick", 4},
+		{"", "a", -1},
+	} {
+		if got := indexFold([]byte(tc.data), []byte(tc.needle)); got != tc.want {
+			t.Errorf("indexFold(%q, %q) = %d, want %d", tc.data, tc.needle, got, tc.want)
+		}
+	}
+}
+
+// What the prefilter passes over must hold no match; what it keeps is
+// searched line by line.
+func TestPrefilterNeverHidesAMatch(t *testing.T) {
+	for _, tc := range []struct {
+		pattern, text string
+		want          bool
+	}{
+		{"needle", "a needle here", true},
+		{"(?i)needle", "a NEEDLE here", true},
+		{"(?i)need\\w+ :=", "x NEEDthis := 1", true},
+		{"(?i)need\\w+ :=", "no such thing", false},
+		{"^start", "first\nstart of line two", true},
+		{"end$", "the end\nnext", true},
+		{"a|b", "only b", true},
+		{"سلام", "متن سلام", true},
+		{"(?i)سلام", "hello", false},
+	} {
+		pre := newPrefilter(regexp.MustCompile(tc.pattern))
+		if got := pre.mayMatch([]byte(tc.text)); got != tc.want {
+			t.Errorf("prefilter %q on %q = %v, want %v", tc.pattern, tc.text, got, tc.want)
+		}
+	}
+}

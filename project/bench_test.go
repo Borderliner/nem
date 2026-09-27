@@ -24,7 +24,11 @@ func benchTree(b *testing.B, n int) (string, []string) {
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			b.Fatal(err)
 		}
-		if err := os.WriteFile(p, []byte(body.String()), 0o644); err != nil {
+		text := body.String()
+		if i%100 == 0 {
+			text += "\tneedle := haystack() // in one file of a hundred\n"
+		}
+		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
 			b.Fatal(err)
 		}
 		files = append(files, rel)
@@ -32,10 +36,11 @@ func benchTree(b *testing.B, n int) (string, []string) {
 	return root, files
 }
 
-// C-x p g over 2000 files, 600,000 lines, for a word that is rare.
+// C-x p g over 2000 files, 600,000 lines, for a word in one file of a
+// hundred - what a search is usually for.
 func BenchmarkSearch(b *testing.B) {
 	root, files := benchTree(b, 2000)
-	re := regexp.MustCompile("value17 ")
+	re := regexp.MustCompile("needle")
 	none := func(string) ([]string, bool) { return nil, false }
 	b.ReportAllocs()
 	for b.Loop() {
@@ -46,6 +51,29 @@ func BenchmarkSearch(b *testing.B) {
 // The same, for a pattern that ignores case, as C-x p g makes one typed in
 // lower case.
 func BenchmarkSearchFolded(b *testing.B) {
+	root, files := benchTree(b, 2000)
+	re := regexp.MustCompile("(?i)needle")
+	none := func(string) ([]string, bool) { return nil, false }
+	b.ReportAllocs()
+	for b.Loop() {
+		Search(root, files, re, none)
+	}
+}
+
+// A regexp, rare.
+func BenchmarkSearchRegexp(b *testing.B) {
+	root, files := benchTree(b, 2000)
+	re := regexp.MustCompile(`(?i)need\w+ :=`)
+	none := func(string) ([]string, bool) { return nil, false }
+	b.ReportAllocs()
+	for b.Loop() {
+		Search(root, files, re, none)
+	}
+}
+
+// A word in every file, on one line of each: the worst case, where nothing
+// can be passed over.
+func BenchmarkSearchEverywhere(b *testing.B) {
 	root, files := benchTree(b, 2000)
 	re := regexp.MustCompile("(?i)value17 ")
 	none := func(string) ([]string, bool) { return nil, false }

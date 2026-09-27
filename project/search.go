@@ -2,14 +2,17 @@ package project
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+	"regexp/syntax"
 	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"unicode/utf8"
+	"unsafe"
 )
 
 // MaxMatches is where a search stops: past it the list is too long to read,
@@ -51,17 +54,19 @@ type Lines func(rel string) ([]string, bool)
 // Files are searched in parallel, and a file that is not text - one with a
 // NUL byte near its start - or is larger than any source file is passed over.
 func Search(root string, files []string, re *regexp.Regexp, open Lines) (matches []Match, more bool) {
+	pre := newPrefilter(re)
 	found := make([][]Match, len(files))
 	var next, total atomic.Int64
 	var wg sync.WaitGroup
 	for range runtime.GOMAXPROCS(0) {
 		wg.Go(func() {
+			var buf []byte // each worker reads every file into the one buffer
 			for {
 				i := int(next.Add(1) - 1)
 				if i >= len(files) || total.Load() >= MaxMatches {
 					return
 				}
-				found[i] = searchFile(root, files[i], re, open)
+				found[i] = searchFile(root, files[i], re, pre, open, &buf)
 				total.Add(int64(len(found[i])))
 			}
 		})
@@ -80,19 +85,38 @@ func Search(root string, files []string, re *regexp.Regexp, open Lines) (matches
 }
 
 // searchFile is Search's work on one file.
-func searchFile(root, rel string, re *regexp.Regexp, open Lines) []Match {
+//
+// A file is looked at whole before it is split into lines, and passed over
+// if the pattern cannot match anywhere in it: most files of a project do not
+// hold what is searched for, and splitting every one into lines to search
+// each was nearly all of a search's time and memory.
+func searchFile(root, rel string, re *regexp.Regexp, pre prefilter, open Lines, buf *[]byte) []Match {
 	lines, ok := open(rel)
 	if !ok {
-		lines = readLines(filepath.Join(root, filepath.FromSlash(rel)))
+		data := readText(filepath.Join(root, filepath.FromSlash(rel)), buf)
+		if data == nil || !pre.mayMatch(data) {
+			return nil
+		}
+		lines = splitLines(data)
 	}
-	return MatchLines(rel, lines, re)
+	return matchLines(rel, lines, re, pre)
 }
 
 // MatchLines finds the lines re matches among lines, which file names: one
 // file's part of a search, or a single buffer's, for occur.
 func MatchLines(file string, lines []string, re *regexp.Regexp) []Match {
+	return matchLines(file, lines, re, newPrefilter(re))
+}
+
+// matchLines is MatchLines with the pattern's prefilter already made. A line
+// without the text every match needs is passed over before the pattern is
+// tried on it, as a file is.
+func matchLines(file string, lines []string, re *regexp.Regexp, pre prefilter) []Match {
 	var out []Match
 	for i, line := range lines {
+		if !pre.lineMayMatch(line) {
+			continue
+		}
 		locs := re.FindAllStringIndex(line, -1)
 		if len(locs) == 0 {
 			continue
@@ -104,27 +128,199 @@ func MatchLines(file string, lines []string, re *regexp.Regexp) []Match {
 	return out
 }
 
-// readLines reads a text file as lines, or nil for one that is not text, too
-// large, or unreadable.
-func readLines(p string) []string {
-	fi, err := os.Stat(p)
+// readText reads a text file into buf, growing it as need be, or gives nil
+// for one that is not text, too large, or unreadable. What it returns is buf
+// and is good until the next read into it.
+func readText(p string, buf *[]byte) []byte {
+	f, err := os.Open(p)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	fi, err := f.Stat()
 	if err != nil || !fi.Mode().IsRegular() || fi.Size() > maxFileSize {
 		return nil
 	}
-	data, err := os.ReadFile(p)
-	if err != nil {
+	n := int(fi.Size())
+	if cap(*buf) < n {
+		*buf = make([]byte, n)
+	}
+	data := (*buf)[:n]
+	if _, err := io.ReadFull(f, data); err != nil {
 		return nil
 	}
 	if bytes.IndexByte(data[:min(len(data), 8000)], 0) >= 0 {
 		return nil
 	}
-	s := string(data)
-	s = strings.TrimSuffix(s, "\n")
+	return data
+}
+
+// splitLines is a file's text as lines, without their line endings.
+func splitLines(data []byte) []string {
+	s := strings.TrimSuffix(string(data), "\n")
 	lines := strings.Split(s, "\n")
 	for i, l := range lines {
 		lines[i] = strings.TrimSuffix(l, "\r")
 	}
 	return lines
+}
+
+// prefilter answers whether a file can hold a match at all, faster than
+// searching it a line at a time.
+//
+// Anything the pattern matches within a line it also matches in the whole
+// text read with ^ and $ at every line - the pattern is compiled that way
+// for this - so a file it finds nothing in has no matching line. The
+// converse need not hold, since a match in the whole text may run across
+// lines; a file that passes is searched line by line all the same.
+//
+// A pattern that is only text is looked for as text, which is much faster:
+// with the bytes it is, or, ignoring case - which is how a search typed in
+// lower case is made - with a scan for its first letter in either case.
+//
+// A pattern that is more than text usually still needs some: need\w+ := has
+// "need" in every match. The longest such piece is looked for first, and a
+// file without it is passed over without the pattern being tried at all.
+type prefilter struct {
+	re      *regexp.Regexp
+	literal []byte
+	fold    bool
+	// only reports that the pattern is the literal and nothing else, so
+	// finding the literal is finding a match.
+	only bool
+}
+
+func newPrefilter(re *regexp.Regexp) prefilter {
+	p := prefilter{re: regexp.MustCompile("(?m)" + re.String())}
+	parsed, err := syntax.Parse(re.String(), syntax.Perl)
+	if err != nil {
+		return p
+	}
+	parsed = parsed.Simplify()
+	lit := parsed
+	switch parsed.Op {
+	case syntax.OpLiteral:
+		p.only = true
+	case syntax.OpConcat:
+		// Every operand of a concatenation is needed, so its longest
+		// literal operand is.
+		lit = nil
+		for _, sub := range parsed.Sub {
+			if sub.Op == syntax.OpLiteral && (lit == nil || len(sub.Rune) > len(lit.Rune)) {
+				lit = sub
+			}
+		}
+		if lit == nil {
+			return p
+		}
+	default:
+		return p
+	}
+	fold := lit.Flags&syntax.FoldCase != 0
+	for _, r := range lit.Rune {
+		if r >= utf8.RuneSelf && fold {
+			p.only = false
+			return p // folding beyond ASCII is left to the pattern
+		}
+	}
+	p.literal, p.fold = []byte(string(lit.Rune)), fold
+	return p
+}
+
+// mayMatch reports whether data can hold a match.
+func (p prefilter) mayMatch(data []byte) bool {
+	if p.literal != nil {
+		has := bytes.Contains(data, p.literal)
+		if p.fold {
+			has = indexFold(data, p.literal) >= 0
+		}
+		if !has || p.only {
+			return has
+		}
+	}
+	return p.re.Match(data)
+}
+
+// commonness ranks bytes by how often they turn up in code and prose, most
+// often first; a byte not in it is rarer than all of them.
+const commonness = " etaoinsrlcdhupmfgbywvkxjqz_.,;:()[]{}=\"'0123456789"
+
+// rarest is the index of needle's least common byte, which a search anchors
+// on: scanning for the n of "needle" stops at every n in the file, and for
+// the d hardly at all.
+func rarest(needle []byte) int {
+	best, rank := 0, -1
+	for i, c := range needle {
+		r := strings.IndexByte(commonness, lower(c))
+		if r < 0 {
+			return i
+		}
+		if r > rank {
+			best, rank = i, r
+		}
+	}
+	return best
+}
+
+// lineMayMatch is mayMatch for a line: only the cheap check of the text
+// every match needs, since the pattern is tried on the line next anyway.
+func (p prefilter) lineMayMatch(line string) bool {
+	switch {
+	case p.literal == nil:
+		return true
+	case p.fold:
+		// The line is only read, so it is looked at as bytes in place rather
+		// than copied: this runs on every line of every file that passed.
+		return indexFold(unsafe.Slice(unsafe.StringData(line), len(line)), p.literal) >= 0
+	}
+	return strings.Contains(line, string(p.literal))
+}
+
+// indexFold is the first place in data that needle, which is ASCII, occurs
+// ignoring case, or -1.
+func indexFold(data, needle []byte) int {
+	if len(needle) == 0 {
+		return 0
+	}
+	a := rarest(needle)
+	lo, up := lower(needle[a]), upper(needle[a])
+	for i := a; i+len(needle)-a <= len(data); {
+		// The next of either case: the other one is looked for only as far
+		// as the first, so neither scan runs past what is needed.
+		j := bytes.IndexByte(data[i:], lo)
+		if lo != up {
+			end := len(data)
+			if j >= 0 {
+				end = i + j
+			}
+			if k := bytes.IndexByte(data[i:end], up); k >= 0 {
+				j = k
+			}
+		}
+		if j < 0 {
+			return -1
+		}
+		i += j
+		if start := i - a; start >= 0 && start+len(needle) <= len(data) && bytes.EqualFold(data[start:start+len(needle)], needle) {
+			return start
+		}
+		i++
+	}
+	return -1
+}
+
+func lower(c byte) byte {
+	if 'A' <= c && c <= 'Z' {
+		return c + 'a' - 'A'
+	}
+	return c
+}
+
+func upper(c byte) byte {
+	if 'a' <= c && c <= 'z' {
+		return c - 'a' + 'A'
+	}
+	return c
 }
 
 // shown builds a line's Match from the byte ranges that matched in it.
