@@ -209,6 +209,28 @@ func (c *completion) move(delta int) {
 	c.scrollToSelection()
 }
 
+// page moves the selection d screenfuls down the list, up for a negative d,
+// and the list with it, so the selection keeps its row as point keeps its
+// line when C-v scrolls a window. Unlike move it stops at the ends: a page
+// past the last candidate lands on the last.
+func (c *completion) page(d int) {
+	n, rows := len(c.ranked), c.visibleRows()
+	if n == 0 || rows <= 0 {
+		return
+	}
+	c.sel = min(max(c.sel+d*rows, 0), n-1)
+	c.top += d * rows
+	c.scrollToSelection()
+}
+
+// goTo selects candidate i, the first or the last.
+func (c *completion) goTo(i int) {
+	if n := len(c.ranked); n > 0 {
+		c.sel = min(max(i, 0), n-1)
+		c.scrollToSelection()
+	}
+}
+
 // scrollToSelection keeps sel inside the visible window.
 func (c *completion) scrollToSelection() {
 	rows := c.visibleRows()

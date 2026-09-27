@@ -266,6 +266,35 @@ func (ms *miniState) control(e *Editor, name string) {
 	}
 }
 
+// moveList runs a command that, in a prompt with a candidate list, moves
+// through the list instead, reporting whether name was one. As Vertico has
+// it, the prompt's one line has no screenful to scroll and no buffer to go
+// to either end of, so C-v and M-v page through the candidates and M-< and
+// M-> go to the first and the last. The commands are taken over rather than
+// the keys, so <pgdn> and <pgup>, and whatever keys they are bound to in an
+// init.lua, move the list too.
+func (ms *miniState) moveList(e *Editor, name string) bool {
+	c := ms.comp
+	if c == nil {
+		return false
+	}
+	n, _ := e.arg.value()
+	switch name {
+	case "scroll-up-command":
+		c.page(n)
+	case "scroll-down-command":
+		c.page(-n)
+	case "beginning-of-buffer":
+		c.goTo(0)
+	case "end-of-buffer":
+		c.goTo(c.count() - 1)
+	default:
+		return false
+	}
+	e.arg.reset()
+	return true
+}
+
 // accept resolves what RET means for this prompt.
 //
 // The rule is Vertico's: the highlighted candidate is the answer. The popup

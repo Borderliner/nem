@@ -351,6 +351,9 @@ func (e *Editor) runKeyCommand(name string, k keymap.Key, from *keymap.Map) {
 		e.mini.control(e, name)
 		return
 	}
+	if e.mini != nil && e.mini.moveList(e, name) {
+		return
+	}
 	e.seq.LastRune = k.Rune
 	e.dispatchReporting(name)
 	e.afterMiniEdit()

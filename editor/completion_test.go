@@ -198,6 +198,61 @@ func TestCompletionScrollsToKeepTheSelectionVisible(t *testing.T) {
 	}
 }
 
+// A page moves the selection a screenful and the list with it, and stops at
+// the ends rather than wrapping as a single step does.
+func TestCompletionPages(t *testing.T) {
+	names := make([]string, 23)
+	for i := range names {
+		names[i] = fmt.Sprintf("cmd-%02d", i)
+	}
+	c := newCompletion(command.CompleteFrom(names), "")
+	c.rows = 5
+	for _, st := range []struct{ d, sel, top int }{
+		{1, 5, 5}, {1, 10, 10}, {3, 22, 18}, {1, 22, 18}, {-1, 17, 13}, {-9, 0, 0},
+	} {
+		c.page(st.d)
+		if c.sel != st.sel || c.top != st.top {
+			t.Fatalf("page(%d): selection %d, top %d; want %d, %d", st.d, c.sel, c.top, st.sel, st.top)
+		}
+	}
+	c.goTo(22)
+	if c.sel != 22 || c.top != 18 {
+		t.Errorf("to the last: selection %d, top %d; want 22, 18", c.sel, c.top)
+	}
+	c.goTo(0)
+	if c.sel != 0 || c.top != 0 {
+		t.Errorf("to the first: selection %d, top %d; want 0, 0", c.sel, c.top)
+	}
+}
+
+// In a prompt, C-v and M-v page through the candidates and M-< and M-> go to
+// the first and the last, as in Vertico - and <pgdn>, on the same command as
+// C-v, pages too.
+func TestPageKeysMoveThroughTheCandidates(t *testing.T) {
+	names := make([]string, 40)
+	for i := range names {
+		names[i] = fmt.Sprintf("cmd-%02d", i)
+	}
+	opts := command.ReadOpts{Prompt: "Pick: ", Complete: command.CompleteFrom(names)}
+	for _, tc := range []struct {
+		keys []string
+		want string
+	}{
+		{[]string{"C-v", "C-v", "M-v"}, fmt.Sprintf("cmd-%02d", completionRows)},
+		{[]string{"M->"}, "cmd-39"},
+		{[]string{"M->", "M-<"}, "cmd-00"},
+		{[]string{"<pgdn>"}, fmt.Sprintf("cmd-%02d", completionRows)},
+		{[]string{"C-u", "3", "C-v"}, fmt.Sprintf("cmd-%02d", 3*completionRows)},
+	} {
+		e, scr := newTestEditor(t)
+		feed(t, scr, key(t, append(tc.keys, "RET")...))
+		got, err := e.ReadString(opts)
+		if err != nil || got != tc.want {
+			t.Errorf("%v RET: %q, %v; want %q", tc.keys, got, err, tc.want)
+		}
+	}
+}
+
 // --- the panel -----------------------------------------------------------
 
 // promptOn builds an editor with a live prompt, without entering the nested
