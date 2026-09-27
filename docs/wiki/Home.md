@@ -1,5 +1,7 @@
 # nem
 
+![nem editing a Go file beside a directory listing, with M-x completing commands at the foot of the screen](https://raw.githubusercontent.com/Borderliner/nem/main/docs/images/hero.png)
+
 nem is a terminal text editor with nano's shape and emacs's keys: one window
 of text, a mode line and an echo line, driven by `C-x C-f`, `C-s` and `M-x`.
 It is configured in Lua, in `init.lua`.
