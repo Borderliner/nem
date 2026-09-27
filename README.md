@@ -144,6 +144,8 @@ by name, time or size.
 | Key | Does |
 |---|---|
 | `RET` `^` | open the file or directory at point (`..` goes up) · go up a level |
+| `M-<down>` `M-<up>` | the same: open what is at point · go up a level |
+| `M-p` `M-n` | back and forward through the directories listed, as a browser does |
 | `n` `p` | next and previous file |
 | `m` `u` `t` `U` | mark · unmark · invert the marks · unmark all |
 | `d` `x` | flag for deletion · delete the flagged files |
