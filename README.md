@@ -255,7 +255,9 @@ prompt at the bottom of the screen, as Vertico does, and filter them as you
 type, fuzzily: `fwc` finds `forward-char`. Matched characters are highlighted
 so you can see why something matched, and the windows shrink to make room
 rather than being covered. `nem.set("completion-style", "popup")` shows the
-same list in a centred panel instead.
+same list in a centred panel instead. `C-n` and `C-p` step through the list,
+`C-v` and `M-v` (or `PgDn` and `PgUp`) page through it, and `M-<` and `M->`
+jump to its first and last entries.
 
 `RET` takes the highlighted entry, and on a directory it walks into it and
 lists what is inside. The directory itself comes first, as `./` before you have
