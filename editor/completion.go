@@ -3,6 +3,7 @@ package editor
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"unicode/utf8"
 
@@ -188,8 +189,16 @@ func (c *completion) refresh(input string) {
 // what follows it, a directory just entered keeps its listing order, as a
 // prompt does before the first keystroke. Which candidates match is unchanged:
 // the prefix is literally identical, so it always matches in place.
+//
+// A query written in fzf's syntax - several words, 'exact, ^prefix, suffix$,
+// !not, a | b - is ranked whole: cutting a prefix off it could cut a word in
+// two, and a$ with every candidate starting with a would be left as $, which
+// matches everything.
 func rankPastSharedPrefix(input string, cands []string) []fuzzy.Ranked {
-	n := sharedPrefixLen(input, cands)
+	n := 0
+	if !strings.ContainsAny(input, " '^$!|\\") {
+		n = sharedPrefixLen(input, cands)
+	}
 	if n == 0 {
 		return fuzzy.Rank(input, cands)
 	}

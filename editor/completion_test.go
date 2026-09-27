@@ -754,3 +754,13 @@ func TestKeepOrderAndPreview(t *testing.T) {
 		t.Errorf("previewed %q, want xmxa then ma", seen)
 	}
 }
+
+// A query in fzf's syntax is not cut short by the prefix every candidate
+// shares: a$ over candidates all starting with a is a$, not $.
+func TestSyntaxIsNotCutByASharedPrefix(t *testing.T) {
+	c := newCompletion(command.CompleteFrom([]string{"ab", "aa", "abc"}), "")
+	c.refresh("a$")
+	if got := candidates(c); len(got) != 1 || got[0] != "aa" {
+		t.Errorf("a$ lists %q, want aa alone", got)
+	}
+}
