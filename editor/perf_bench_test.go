@@ -9,6 +9,7 @@ import (
 
 	"github.com/Borderliner/nem/command"
 	"github.com/Borderliner/nem/keymap"
+	"github.com/Borderliner/nem/syntax"
 	"github.com/Borderliner/nem/text"
 	"github.com/gdamore/tcell/v2"
 )
@@ -349,5 +350,71 @@ func BenchmarkStartup(b *testing.B) {
 		_ = e.LoadConfig(cfg)
 		e.Redraw()
 		e.CloseConfig()
+	}
+}
+
+// A frame of prose in Persian and English, every line laid out right to
+// left by the bidi algorithm.
+func BenchmarkRedrawPersian(b *testing.B) {
+	e := benchScreen(b, 80, 24)
+	const para = "این یک متن فارسی است با چند کلمهٔ English در میان، و عدد ۱۲۳ و (پرانتز)."
+	var lines []string
+	for range 2000 {
+		lines = append(lines, para)
+	}
+	path := filepath.Join(b.TempDir(), "fa.txt")
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+		b.Fatal(err)
+	}
+	buf, err := e.OpenFile(path)
+	if err != nil {
+		b.Fatal(err)
+	}
+	e.active.Visit(buf)
+	e.th.Bidi = true
+	e.Redraw()
+	b.ReportAllocs()
+	for b.Loop() {
+		e.Redraw()
+	}
+}
+
+// A 32KB piece of a test run's output taken into *compilation*: split into
+// lines, cleaned, searched for file locations, appended.
+func BenchmarkCompileOutput(b *testing.B) {
+	e := benchScreen(b, 120, 40)
+	dir := b.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		b.Fatal(err)
+	}
+	var chunk strings.Builder
+	for i := 0; chunk.Len() < 32<<10; i++ {
+		switch i % 8 {
+		case 0:
+			fmt.Fprintf(&chunk, "main.go:%d:3: undefined: thing%d\n", i%100+1, i)
+		case 1:
+			chunk.WriteString("\x1b[32m=== RUN   TestSomething/case\x1b[0m\n")
+		default:
+			fmt.Fprintf(&chunk, "    ok  \tgithub.com/x/y/pkg%d\t0.0%ds\n", i, i%10)
+		}
+	}
+	out := []byte(chunk.String())
+	fresh := func() (*text.Buffer, *compileState) {
+		buf := e.NewBuffer(e.uniqueName("*bench*"))
+		st := &compileState{dir: dir, cur: -1, locAt: map[int]int{}, spans: map[int][]syntax.Span{},
+			resolved: map[string]string{}, choices: map[string][]string{}}
+		buf.Regenerate([]rune("header\n\n"))
+		e.compile[buf] = st
+		return buf, st
+	}
+	buf, st := fresh()
+	b.SetBytes(int64(len(out)))
+	b.ReportAllocs()
+	i := 0
+	for b.Loop() {
+		if i++; i%200 == 0 {
+			buf, st = fresh() // a run of 6MB, then a new one
+		}
+		e.compileOutput(buf, st, out)
 	}
 }
