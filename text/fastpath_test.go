@@ -10,9 +10,10 @@ import (
 )
 
 // referenceSegments is the layout the way it was computed before the ASCII
-// shortcut: every rune through the grapheme segmenter.
+// shortcut: every rune through the grapheme segmenter, each cluster laid out
+// by the same rule for joining runs the line uses.
 func referenceSegments(rs []rune, tw ColIdx) ([]segment, ColIdx) {
-	var segs []segment
+	var ref Line
 	rest := string(rs)
 	state := -1
 	col, idx := ColIdx(0), RuneIdx(0)
@@ -25,11 +26,11 @@ func referenceSegments(rs []rune, tw ColIdx) ([]segment, ColIdx) {
 		if cl == "\t" {
 			cw = tw - (col % tw)
 		}
-		segs = append(segs, segment{start: idx, n: n, col: col, w: cw})
+		ref.add(idx, n, col, cw)
 		col += cw
 		idx += RuneIdx(n)
 	}
-	return segs, col
+	return ref.segs, col
 }
 
 // The shortcut is an optimisation, so it must agree with the segmenter on

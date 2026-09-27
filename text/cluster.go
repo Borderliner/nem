@@ -40,14 +40,25 @@ type Cluster struct {
 func (l *Line) Clusters() iter.Seq[Cluster] {
 	return func(yield func(Cluster) bool) {
 		l.build()
-		for _, s := range l.segs {
+		l.clusters(0, 0, yield)
+	}
+}
+
+// clusters yields the clusters of the segments from segs[k], starting at
+// rune from within the first of them.
+func (l *Line) clusters(k int, from RuneIdx, yield func(Cluster) bool) {
+	for ; k < len(l.segs); k++ {
+		s := l.segs[k]
+		if s.one {
 			lo := int(s.start)
-			if !yield(Cluster{
-				Runes: l.runes[lo : lo+s.n],
-				Start: s.start,
-				Col:   s.col,
-				Width: s.w,
-			}) {
+			if !yield(Cluster{Runes: l.runes[lo : lo+int(s.n)], Start: RuneIdx(s.start), Col: ColIdx(s.col), Width: ColIdx(s.w)}) {
+				return
+			}
+			continue
+		}
+		// A run: a cluster for each of its runes.
+		for i := max(RuneIdx(s.start), from); i < s.end(); i++ {
+			if !yield(Cluster{Runes: l.runes[i : i+1], Start: i, Col: s.colOf(i), Width: ColIdx(s.w)}) {
 				return
 			}
 		}
@@ -64,18 +75,15 @@ func (l *Line) Clusters() iter.Seq[Cluster] {
 func (l *Line) ClustersFrom(col ColIdx) iter.Seq[Cluster] {
 	return func(yield func(Cluster) bool) {
 		l.build()
-		// The last segment starting at or before col is the one covering it.
-		k := sort.Search(len(l.segs), func(k int) bool { return l.segs[k].col > col }) - 1
-		for _, s := range l.segs[max(k, 0):] {
-			lo := int(s.start)
-			if !yield(Cluster{
-				Runes: l.runes[lo : lo+s.n],
-				Start: s.start,
-				Col:   s.col,
-				Width: s.w,
-			}) {
-				return
+		// The last segment starting at or before col is the one covering it,
+		// and in a run, the cluster the column falls in.
+		k := max(sort.Search(len(l.segs), func(k int) bool { return ColIdx(l.segs[k].col) > col })-1, 0)
+		from := RuneIdx(0)
+		if k < len(l.segs) {
+			if s := l.segs[k]; !s.one && col > ColIdx(s.col) {
+				from = RuneIdx(s.start) + RuneIdx(min(int32(col-ColIdx(s.col))/s.w, s.n-1))
 			}
 		}
+		l.clusters(k, from, yield)
 	}
 }

@@ -1,7 +1,9 @@
 package text
 
 import (
+	"slices"
 	"sort"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/rivo/uniseg"
@@ -18,12 +20,59 @@ func effectiveTabWidth() ColIdx {
 	return TabWidth
 }
 
-// segment is one grapheme cluster's placement within a line.
+// segment is a stretch of a line's layout: one grapheme cluster, or a run of
+// clusters that are each a single rune the same number of columns wide.
+//
+// Runs are what keep the layout small. Nearly every cluster of nearly every
+// line is one rune one column wide - ASCII, most letters of most scripts, and
+// the replacement character a byte that is not UTF-8 becomes - and with a
+// segment each, a line's layout took eight times the memory of its text,
+// kept for every line ever drawn: scrolling through an 8MB file left 280MB of
+// it behind. A run of them is one segment however long it is.
 type segment struct {
-	start RuneIdx // rune index where the cluster begins
-	n     int     // runes in the cluster
-	col   ColIdx  // display column where the cluster begins
-	w     ColIdx  // display width of the cluster
+	start int32 // rune index where the segment begins
+	n     int32 // runes in it
+	col   int32 // display column where it begins
+	w     int32 // display width of each of its clusters
+	// one marks a single cluster of n runes, rather than n clusters of one
+	// rune each.
+	one bool
+}
+
+// end is the rune index just past the segment.
+func (s segment) end() RuneIdx { return RuneIdx(s.start + s.n) }
+
+// width is how many columns the whole segment takes.
+func (s segment) width() ColIdx {
+	if s.one {
+		return ColIdx(s.w)
+	}
+	return ColIdx(s.n * s.w)
+}
+
+// colOf is the display column of the cluster holding rune i, which is in s.
+func (s segment) colOf(i RuneIdx) ColIdx {
+	if s.one {
+		return ColIdx(s.col)
+	}
+	return ColIdx(s.col) + ColIdx(int32(i)-s.start)*ColIdx(s.w)
+}
+
+// add lays out the cluster of n runes at start, w columns wide at col: onto
+// the end of the run before it when it is a rune of the same width that run
+// can take, or as a segment of its own.
+func (l *Line) add(start RuneIdx, n int, col, w ColIdx) {
+	if n == 1 && w > 0 {
+		if k := len(l.segs) - 1; k >= 0 {
+			if s := &l.segs[k]; !s.one && s.w == int32(w) && s.end() == start {
+				s.n++
+				return
+			}
+		}
+		l.segs = append(l.segs, segment{start: int32(start), n: 1, col: int32(col), w: int32(w)})
+		return
+	}
+	l.segs = append(l.segs, segment{start: int32(start), n: int32(n), col: int32(col), w: int32(w), one: true})
 }
 
 // Line is a single line of text plus a cached grapheme/column layout.
@@ -81,14 +130,18 @@ func (l *Line) build() {
 	rs := l.runes
 	n := len(rs)
 	i, col := 0, ColIdx(0)
+	var scratch *[]segment
 	if k := l.reusable(tw); k > 0 {
 		last := l.segs[k-1]
 		l.segs = l.segs[:k]
-		i, col = int(last.start)+last.n, last.col+last.w
-	} else if cap(l.segs) >= n {
-		l.segs = l.segs[:0]
+		i, col = int(last.end()), ColIdx(last.col)+last.width()
 	} else {
-		l.segs = make([]segment, 0, n)
+		// Measured from the start, into a scratch slice that grows as it
+		// must, and kept as a copy of just the size it came to: a line
+		// scrolled back into view is measured again, and growing its own
+		// slice by doubling made twice the garbage it kept.
+		scratch = segScratch.Get().(*[]segment)
+		l.segs = (*scratch)[:0]
 	}
 	if l.plain >= i {
 		l.plain = i
@@ -101,7 +154,7 @@ func (l *Line) build() {
 		r := rs[i]
 		switch {
 		case r >= 0x20 && r < 0x7f && (i+1 == n || rs[i+1] < 0x80):
-			l.segs = append(l.segs, segment{start: RuneIdx(i), n: 1, col: col, w: 1})
+			l.add(RuneIdx(i), 1, col, 1)
 			col++
 			i++
 			continue
@@ -109,7 +162,7 @@ func (l *Line) build() {
 			// A control is always a cluster of its own, and tab stops are
 			// ours to apply: uniseg reports a tab as zero-width.
 			w := tw - (col % tw)
-			l.segs = append(l.segs, segment{start: RuneIdx(i), n: 1, col: col, w: w})
+			l.add(RuneIdx(i), 1, col, w)
 			col += w
 			i++
 			continue
@@ -122,11 +175,23 @@ func (l *Line) build() {
 		col = l.segmentRun(i, j, col, tw)
 		i = j
 	}
+	if scratch != nil {
+		built := l.segs
+		l.segs = slices.Clone(built)
+		*scratch = built[:0]
+		segScratch.Put(scratch)
+	}
 	l.width = col
 	l.valid = true
 	l.tabW = tw
 	l.keep = 0
 }
+
+// segScratch holds the slices lines are measured into.
+var segScratch = sync.Pool{New: func() any {
+	s := make([]segment, 0, 64)
+	return &s
+}}
 
 // reusable is how many of the cache's segments an edit left good: those
 // wholly before l.keep, less any at the end that the text after them could
@@ -138,17 +203,24 @@ func (l *Line) reusable(tw ColIdx) int {
 		return 0
 	}
 	rs := l.runes
-	k := sort.Search(len(l.segs), func(j int) bool {
-		return int(l.segs[j].start)+l.segs[j].n > int(l.keep)
-	})
-	for ; k > 0; k-- {
-		p := int(l.segs[k-1].start) + l.segs[k-1].n
-		if p > len(rs) {
-			continue
-		}
-		if p == len(rs) || (rs[p-1] < 0x80 && rs[p] < 0x80) {
+	// The segments wholly before keep, and the part before it of a run that
+	// straddles it.
+	k := sort.Search(len(l.segs), func(j int) bool { return l.segs[j].end() > l.keep })
+	if k < len(l.segs) && !l.segs[k].one && RuneIdx(l.segs[k].start) < l.keep {
+		l.segs[k].n = int32(l.keep) - l.segs[k].start
+		k++
+	}
+	for k > 0 {
+		s := &l.segs[k-1]
+		p := int(s.end())
+		if p <= len(rs) && (p == len(rs) || (rs[p-1] < 0x80 && rs[p] < 0x80)) {
 			break
 		}
+		if !s.one && s.n > 1 {
+			s.n-- // back a rune out of the run, and look again there
+			continue
+		}
+		k--
 	}
 	return k
 }
@@ -168,7 +240,7 @@ func (l *Line) segmentRun(from, to int, col, tw ColIdx) ColIdx {
 		if cl == "\t" {
 			cw = tw - (col % tw)
 		}
-		l.segs = append(l.segs, segment{start: idx, n: n, col: col, w: cw})
+		l.add(idx, n, col, cw)
 		col += cw
 		idx += RuneIdx(n)
 	}
@@ -242,11 +314,11 @@ func (l *Line) DisplayCol(i RuneIdx) ColIdx {
 	if i >= l.Len() {
 		return l.width
 	}
-	k := sort.Search(len(l.segs), func(k int) bool { return l.segs[k].start > i }) - 1
+	k := sort.Search(len(l.segs), func(k int) bool { return RuneIdx(l.segs[k].start) > i }) - 1
 	if k < 0 {
 		return 0
 	}
-	return l.segs[k].col
+	return l.segs[k].colOf(i)
 }
 
 // RuneAt returns the rune index of the grapheme occupying display column c.
@@ -260,11 +332,17 @@ func (l *Line) RuneAt(c ColIdx) RuneIdx {
 	if c >= l.width {
 		return l.Len()
 	}
-	k := sort.Search(len(l.segs), func(k int) bool { return l.segs[k].col > c }) - 1
+	k := sort.Search(len(l.segs), func(k int) bool { return ColIdx(l.segs[k].col) > c }) - 1
 	if k < 0 {
 		return 0
 	}
-	return l.segs[k].start
+	s := l.segs[k]
+	if s.one {
+		return RuneIdx(s.start)
+	}
+	// In a run, the cluster the column falls in - its first column, for a
+	// glyph two wide.
+	return RuneIdx(s.start) + RuneIdx(min(int32(c-ColIdx(s.col))/s.w, s.n-1))
 }
 
 // NextGrapheme returns the next grapheme boundary strictly after i, clamped to
@@ -277,11 +355,14 @@ func (l *Line) NextGrapheme(i RuneIdx) RuneIdx {
 	if i >= l.Len() {
 		return l.Len()
 	}
-	k := sort.Search(len(l.segs), func(k int) bool { return l.segs[k].start > i })
-	if k >= len(l.segs) {
-		return l.Len()
+	k := sort.Search(len(l.segs), func(k int) bool { return RuneIdx(l.segs[k].start) > i }) - 1
+	if k < 0 {
+		return 0
 	}
-	return l.segs[k].start
+	if s := l.segs[k]; !s.one && i+1 < s.end() {
+		return i + 1
+	}
+	return min(l.segs[k].end(), l.Len())
 }
 
 // PrevGrapheme returns the previous grapheme boundary strictly before i,
@@ -294,9 +375,12 @@ func (l *Line) PrevGrapheme(i RuneIdx) RuneIdx {
 	if i > l.Len() {
 		i = l.Len()
 	}
-	k := sort.Search(len(l.segs), func(k int) bool { return l.segs[k].start >= i }) - 1
+	k := sort.Search(len(l.segs), func(k int) bool { return RuneIdx(l.segs[k].start) >= i }) - 1
 	if k < 0 {
 		return 0
 	}
-	return l.segs[k].start
+	if s := l.segs[k]; !s.one {
+		return min(i-1, s.end()-1)
+	}
+	return RuneIdx(l.segs[k].start)
 }
