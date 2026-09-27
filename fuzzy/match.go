@@ -256,6 +256,9 @@ func bestAlignment(q, c []rune, ignoreCase bool) (int, []int) {
 		// Unreachable, as below: the caller has established that q fits in c.
 		return 0, nil
 	}
+	if n == 1 {
+		return bestPlace(q[0], head, c, lo, hi, ignoreCase)
+	}
 	w := c[lo : hi+1]
 	m := len(w)
 	s := scratchPool.Get().(*scratch)
@@ -341,6 +344,32 @@ func bestAlignment(q, c []rune, ignoreCase bool) (int, []int) {
 		j = par[i*m+j]
 	}
 	return bestScore, idx
+}
+
+// bestPlace is bestAlignment for a query of the one rune r, which is want
+// once folded, first found in c at lo and last at hi. With nothing to align
+// it with, the table is one row, each place scored alone; this is that row,
+// read as the table's is, the first of the best, without filling it. It is
+// the first keystroke's work, over every candidate there is.
+func bestPlace(r, want rune, c []rune, lo, hi int, ignoreCase bool) (int, []int) {
+	best, at := negInf, lo
+	for j := lo; j <= hi; j++ {
+		cr := c[j]
+		if ignoreCase {
+			cr = fold(cr)
+		}
+		if cr != want {
+			continue
+		}
+		v := scoreMatch + boundaryBonus(c, j) - leadingPenalty(j)
+		if ignoreCase && r == c[j] {
+			v += bonusCaseMatch
+		}
+		if v > best {
+			best, at = v, j
+		}
+	}
+	return best, []int{at}
 }
 
 // scoreRun scores t matched as one contiguous run at c[s:], by the rules
