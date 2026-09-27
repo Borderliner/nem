@@ -341,10 +341,25 @@ func (ms *miniState) take(e *Editor, cand string) {
 		ms.done = true
 		return
 	}
-	ms.replace(e, cand)
-	if ms.opts.Descend == nil || !ms.opts.Descend(cand) {
-		ms.done = true
+	if ms.opts.Descend != nil && ms.opts.Descend(cand) {
+		ms.replace(e, cand)
+		return
 	}
+	// The answer goes in the prompt for ReadString to return, but without
+	// the hooks an edit fires: a search as you type would search again for
+	// the answer itself, and OnChange would hear of text nobody typed.
+	ms.quietly(cand)
+	ms.done = true
+}
+
+// quietly puts s in the prompt without telling anything of the change.
+func (ms *miniState) quietly(s string) {
+	if err := ms.buf.Delete(text.Pos{}, ms.buf.End()); err != nil {
+		return
+	}
+	_ = ms.buf.Insert(text.Pos{}, []rune(s))
+	ms.win.Pt = ms.buf.End()
+	ms.last = s
 }
 
 // acceptLiteral ends the prompt with exactly what was typed, ignoring the
