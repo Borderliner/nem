@@ -60,9 +60,11 @@ C-x|TAB C-x|( C-x|) C-x|e C-h|k C-h|b C-x|n C-x|x|g C-x|C-s RET RET C-g C-g y n 
 
 // stressText is typed between the keys: brackets and quotes for automatic
 // pairs, and text from every corner of the layout code - right to left,
-// wide, combining, joined emoji, a zero-width non-joiner.
+// wide, combining, joined emoji, a zero-width non-joiner. Never a path
+// separator: typed at a prompt for a file to save in, one could name a file
+// outside the test's directory - at the root, for a test run as root.
 var stressText = []string{"a", "b", "x", " ", " ", "(", ")", "\"", "{", "}", ";", "س", "ل", "ا", "م",
-	"日", "é", "́", "👍", "👩‍💻", "‌", "1", "۱", "-", "/", "*", "#"}
+	"日", "é", "́", "👍", "👩‍💻", "‌", "1", "۱", "-", "*", "#"}
 
 // stressFile is what is being edited: a Go file, so it is coloured, with a
 // little of everything.
