@@ -68,6 +68,7 @@ var defaultBindings = []struct{ Spec, Command string }{
 	{"C-x TAB", "indent-rigidly"},
 	{"C-x C-u", "upcase-region"},
 	{"C-x C-l", "downcase-region"},
+	{"C-M-%", "query-replace-regexp"},
 
 	// Keyboard macros.
 	{"<f3>", "kmacro-start-macro-or-insert-counter"},
