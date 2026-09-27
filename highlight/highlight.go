@@ -126,7 +126,7 @@ func (c *Cache) Spans(b *text.Buffer, line int) []syntax.Span {
 	if s, ok := c.spans[line]; ok {
 		return s
 	}
-	s, _ := c.lex.Lex(b.Line(line).Runes(), c.stateAt(line))
+	s, _ := c.lex.Lex(b.Line(line).View(), c.stateAt(line))
 	c.store(line, s)
 	return s
 }
@@ -249,7 +249,7 @@ func (c *Cache) extend(b *text.Buffer, line int) {
 		if i >= n {
 			return
 		}
-		spans, out := c.lex.Lex(b.Line(i).Runes(), c.states[i])
+		spans, out := c.lex.Lex(b.Line(i).View(), c.states[i])
 		c.store(i, spans)
 
 		next := i + 1

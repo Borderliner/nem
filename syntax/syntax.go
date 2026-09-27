@@ -120,6 +120,10 @@ func (s State) param() uint16 { return uint16((s >> 8) & 0xFFFF) }
 type Lexer interface {
 	// Lex classifies one line. Spans are ascending, non-overlapping, non-empty
 	// and within the line. Regions covered by no span are Plain.
+	//
+	// line is lent, not given: it is the buffer's own storage, and a lexer
+	// must neither change it nor keep it past the call. Copying it for every
+	// line lexed cost a copy of a 200KB line on every keystroke typed in it.
 	Lex(line []rune, in State) (spans []Span, out State)
 	// Name identifies the language, for the modeline and for tests.
 	Name() string
