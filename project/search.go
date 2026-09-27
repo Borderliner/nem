@@ -85,6 +85,12 @@ func searchFile(root, rel string, re *regexp.Regexp, open Lines) []Match {
 	if !ok {
 		lines = readLines(filepath.Join(root, filepath.FromSlash(rel)))
 	}
+	return MatchLines(rel, lines, re)
+}
+
+// MatchLines finds the lines re matches among lines, which file names: one
+// file's part of a search, or a single buffer's, for occur.
+func MatchLines(file string, lines []string, re *regexp.Regexp) []Match {
 	var out []Match
 	for i, line := range lines {
 		locs := re.FindAllStringIndex(line, -1)
@@ -93,7 +99,7 @@ func searchFile(root, rel string, re *regexp.Regexp, open Lines) []Match {
 		}
 		// An empty match - a pattern like "x*" - says nothing about where to
 		// look; a line matched only by those is still a match, at its start.
-		out = append(out, shown(rel, i, line, locs))
+		out = append(out, shown(file, i, line, locs))
 	}
 	return out
 }

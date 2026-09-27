@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/Borderliner/nem/command"
@@ -142,9 +143,18 @@ func (e *Editor) visitLocation(b *text.Buffer, ll locations, i int, sel bool) er
 		c.choose(i, ans)
 		path, line, col = ll.target(i)
 	}
-	fb, err := e.OpenFile(path)
-	if err != nil {
-		return err
+	// An occur's matches lead to its buffer, which need not have a file.
+	var fb *text.Buffer
+	if tb, ok := ll.(interface{ targetBuffer() *text.Buffer }); ok && tb.targetBuffer() != nil {
+		fb = tb.targetBuffer()
+		if !slices.Contains(e.buffers, fb) {
+			return errOccurGone
+		}
+	} else {
+		var err error
+		if fb, err = e.OpenFile(path); err != nil {
+			return err
+		}
 	}
 	ll.setCurrent(i)
 	for _, w := range e.tree.Windows() {

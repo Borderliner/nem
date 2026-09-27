@@ -321,3 +321,24 @@ nem.bind("C-c p f", "project-find-file")
 		t.Errorf("TAB in the results runs %q", got)
 	}
 }
+
+// M-s o lists the lines of the buffer that match, and they lead back to it -
+// a buffer with no file as much as one with.
+func TestOccur(t *testing.T) {
+	e, scr := newTestEditor(t, "alpha", "beta alpha", "gamma", "ALPHA")
+	src := e.active.Buf
+	feed(t, scr, txt("alpha"), key(t, "RET"))
+	press(t, e, "M-s", "o")
+	st := e.grepOf(e.active.Buf)
+	if st == nil {
+		t.Fatalf("no listing; echo %q", e.Message())
+	}
+	if len(st.matches) != 3 || e.BufferName(e.active.Buf) != occurName {
+		t.Fatalf("occur found %+v in %s", st.matches, e.BufferName(e.active.Buf))
+	}
+	press(t, e, "n", "n", "RET")
+	if e.active.Buf != src {
+		t.Fatal("RET did not go back to the buffer searched")
+	}
+	wantPt(t, e, 1, 5)
+}

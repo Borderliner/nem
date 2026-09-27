@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -22,14 +23,23 @@ import (
 // RET goes to a match in the other window, n and p step through them showing
 // each there, and M-g n and M-g p step through them from any buffer, as
 // emacs's next-error does.
+//
+// Occur, M-s o, is the same listing for the lines of one buffer.
 
-// grepName is the results buffer's name. One is kept and reused, as emacs
-// keeps one *grep*: a search replaces the last one's results.
-const grepName = "*grep*"
+// grepName and occurName are the results buffers' names. One of each is kept
+// and reused, as emacs keeps one *grep* and one *Occur*: a search replaces
+// the last one's results.
+const (
+	grepName  = "*grep*"
+	occurName = "*Occur*"
+)
 
 // grepState is what makes a buffer a search's results.
 type grepState struct {
-	root    string
+	root string
+	// buf is the buffer an occur searched, which its matches lead to; nil
+	// for a search of a project's files.
+	buf     *text.Buffer
 	pattern string
 	re      *regexp.Regexp
 	matches []project.Match
@@ -50,6 +60,7 @@ type grepState struct {
 
 var (
 	errNotGrep       = errors.New("not a search's results")
+	errOccurGone     = errors.New("the buffer these lines were found in has been killed")
 	errNoMoreMatches = errors.New("no more matches")
 )
 
@@ -93,18 +104,29 @@ func (e *Editor) grepOf(b *text.Buffer) *grepState {
 // in the other window, selecting it. Nothing found shows nothing: an empty
 // list would only have to be closed again.
 func (e *Editor) grepSearch(root, pattern string, re *regexp.Regexp) error {
-	st := &grepState{root: root, pattern: pattern, re: re, cur: -1}
+	return e.showResults(grepName, &grepState{root: root, pattern: pattern, re: re, cur: -1})
+}
+
+// occur lists the lines of b that re matches, as grepSearch lists a
+// project's.
+func (e *Editor) occur(b *text.Buffer, pattern string, re *regexp.Regexp) error {
+	return e.showResults(occurName, &grepState{buf: b, root: e.bufferDir(b), pattern: pattern, re: re, cur: -1})
+}
+
+// showResults runs st's search and shows its results in the buffer called
+// name.
+func (e *Editor) showResults(name string, st *grepState) error {
 	if err := e.grepRun(st); err != nil {
 		return err
 	}
 	if len(st.matches) == 0 {
-		e.Echo("No matches for %s in %s", pattern, project.Name(root))
+		e.Echo("No matches for %s in %s", st.pattern, st.where())
 		return nil
 	}
 
-	b, ok := e.byName[grepName]
+	b, ok := e.byName[name]
 	if !ok || e.grepOf(b) == nil {
-		b = e.NewBuffer(e.uniqueName(grepName))
+		b = e.NewBuffer(e.uniqueName(name))
 		b.SetReadOnly(true)
 	}
 	e.grep[b] = st
@@ -135,6 +157,20 @@ func (e *Editor) grepSearch(root, pattern string, re *regexp.Regexp) error {
 // are, unsaved edits and all, so the lines found are the lines a match takes
 // you to.
 func (e *Editor) grepRun(st *grepState) error {
+	if st.buf != nil {
+		if !slices.Contains(e.buffers, st.buf) {
+			return errOccurGone
+		}
+		lines := make([]string, st.buf.NumLines())
+		for i := range lines {
+			lines[i] = st.buf.Line(i).String()
+		}
+		st.matches = project.MatchLines(e.BufferName(st.buf), lines, st.re)
+		if st.more = len(st.matches) > project.MaxMatches; st.more {
+			st.matches = st.matches[:project.MaxMatches]
+		}
+		return nil
+	}
 	files, err := project.Files(st.root)
 	if err != nil && !errors.Is(err, project.ErrTooManyFiles) {
 		return err
@@ -256,10 +292,21 @@ func (st *grepState) header(home string) (string, []syntax.Span) {
 	if st.root == home {
 		dir = "~" + string(filepath.Separator)
 	}
+	if st.buf != nil {
+		dir = st.where()
+	}
 	at(dir, syntax.Function, &line)
 	line += "  "
 	at(st.summary(), syntax.Comment, &line)
 	return line, spans
+}
+
+// where names what was searched, for messages: the project, or the buffer.
+func (st *grepState) where() string {
+	if st.buf != nil {
+		return "this buffer"
+	}
+	return project.Name(st.root)
 }
 
 // lineSpans is the results' colouring for line.
@@ -276,8 +323,15 @@ func (st *grepState) count() int { return len(st.matches) }
 
 func (st *grepState) target(i int) (string, int, int) {
 	m := st.matches[i]
+	if st.buf != nil {
+		return st.buf.Path(), m.Line, m.Col
+	}
 	return fromRel(st.root, m.File), m.Line, m.Col
 }
+
+// targetBuffer is the buffer an occur's matches lead to, which need not have
+// a file: *scratch* can be searched too.
+func (st *grepState) targetBuffer() *text.Buffer { return st.buf }
 
 func (st *grepState) lineOf(i int) int { return st.lineOfMatch(i) }
 func (st *grepState) current() int     { return st.cur }
@@ -413,7 +467,27 @@ func registerGrepCommands(e *Editor, reg *command.Registry) error {
 			Fn: moveTo(1, isHeading, false)},
 		{Name: "grep-previous-file", Doc: "Move to the previous file's matches, ARG files back.",
 			Fn: moveTo(-1, isHeading, false)},
-		{Name: "grep-revert", Doc: "Search again, for the same thing in the same project.",
+		{Name: "occur", Doc: "List the lines of this buffer that match a regexp, each leading to its line.",
+			Fn: func(command.Env) error {
+				b := e.active.Buf
+				def := e.searchDefault()
+				prompt := "List lines matching: "
+				if def != "" {
+					prompt = fmt.Sprintf("List lines matching (default %s): ", def)
+				}
+				ans, err := e.ReadString(command.ReadOpts{Prompt: prompt, History: "search"})
+				if err != nil {
+					return err
+				}
+				if ans == "" {
+					ans = def
+				}
+				if ans == "" {
+					return nil
+				}
+				return e.occur(b, ans, searchRegexp(ans))
+			}},
+		{Name: "grep-revert", Doc: "Search again, for the same thing in the same project or buffer.",
 			Fn: inGrep(func(b *text.Buffer, st *grepState) error {
 				line := e.active.Pt.Line
 				if err := e.grepRun(st); err != nil {

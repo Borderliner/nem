@@ -199,7 +199,9 @@ directory; `C-g` stops one you are waiting for.
 
 **Search** — `C-s` is genuinely incremental: it moves as you type, backspace
 walks point back, and `C-g` returns you to where you started. `M-%` is
-query-replace with `y`/`n`/`!`/`q`.
+query-replace with `y`/`n`/`!`/`q`. `M-s o` is emacs's occur: every line of
+the buffer matching a regexp, listed like a project search's results, each
+leading back to its line.
 
 **Prefix keys, `M-x`, and `C-u`** — `C-x` is a real prefix keymap, `M-x` completes
 over every command by name, with the keys that run each one shown beside it,

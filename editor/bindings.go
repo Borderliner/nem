@@ -93,6 +93,7 @@ var defaultBindings = []struct{ Spec, Command string }{
 	{"C-s", "isearch-forward"},
 	{"C-r", "isearch-backward"},
 	{"M-%", "query-replace"},
+	{"M-s o", "occur"},
 
 	// Files.
 	{"C-x C-f", "find-file"},
