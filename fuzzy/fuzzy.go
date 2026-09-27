@@ -90,7 +90,6 @@ const parallelMin = 4096
 // a stable sort over a slice built in input order - an explicit position map
 // would cost an allocation per candidate on every keystroke for nothing.
 func Rank(query string, candidates []string) []Ranked {
-	out := make([]Ranked, 0, len(candidates))
 	// An empty query is a prompt before the first keystroke: everything matches
 	// equally, so input order is the answer. Sorting would apply the
 	// shorter-wins tie-break and reorder the menu before the user typed
@@ -98,12 +97,14 @@ func Rank(query string, candidates []string) []Ranked {
 	// later, the ' or ^ typed before a word, and shows the same list.
 	p := parse(query)
 	if len(p.groups) == 0 {
+		out := make([]Ranked, 0, len(candidates))
 		for _, cand := range candidates {
 			out = append(out, Ranked{Candidate: cand})
 		}
 		return out
 	}
 
+	var out []Ranked
 	if workers := runtime.GOMAXPROCS(0); len(candidates) >= parallelMin && workers > 1 {
 		// Each worker scores a run of the candidates, and the runs are joined
 		// in input order, so the result is exactly the one-core result.
@@ -115,11 +116,19 @@ func Rank(query string, candidates []string) []Ranked {
 			wg.Go(func() { parts[w] = score(&p, candidates[lo:hi], nil) })
 		}
 		wg.Wait()
+		// Sized by what matched, not by what was offered: room for every
+		// file in a large project was megabytes a keystroke, nearly all
+		// of it for candidates the query had already turned away.
+		n := 0
+		for _, part := range parts {
+			n += len(part)
+		}
+		out = make([]Ranked, 0, n)
 		for _, part := range parts {
 			out = append(out, part...)
 		}
 	} else {
-		out = score(&p, candidates, out)
+		out = score(&p, candidates, make([]Ranked, 0, len(candidates)))
 	}
 	slices.SortStableFunc(out, func(x, y Ranked) int {
 		if x.Match.Score != y.Match.Score {
