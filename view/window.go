@@ -28,6 +28,17 @@ type Window struct {
 	Top     int         // first visible buffer line
 	LeftCol text.ColIdx // leftmost visible display column
 	GoalCol text.ColIdx // GoalColUnset when not established
+
+	// Drawn is what the last frame drew here: the buffer, and the lines of
+	// it on screen. The renderer uses it to let go of the layout of lines
+	// that have since scrolled away.
+	Drawn Span
+}
+
+// Span is a run of a buffer's lines.
+type Span struct {
+	Buf        *text.Buffer
+	Top, Lines int
 }
 
 // NewWindow returns a window showing b from its first line, with point at the

@@ -132,3 +132,17 @@ func TestRunsAnswerAsClustersWould(t *testing.T) {
 		}
 	}
 }
+
+// A forgotten layout is measured again when it is next asked for, and
+// answers as it did.
+func TestForgetMeasuresAgain(t *testing.T) {
+	l := NewLine([]rune("a\tb日本é"))
+	w, col := l.Width(), l.DisplayCol(4)
+	l.Forget()
+	if l.segs != nil {
+		t.Fatal("Forget kept the layout")
+	}
+	if l.Width() != w || l.DisplayCol(4) != col {
+		t.Errorf("after Forget: width %d col %d, want %d %d", l.Width(), l.DisplayCol(4), w, col)
+	}
+}

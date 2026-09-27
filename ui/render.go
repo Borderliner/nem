@@ -168,6 +168,25 @@ func Render(scr tcell.Screen, f Frame, th Theme) {
 	placeCursor(scr, w, h, echoY, rects, f, th)
 }
 
+// forgetScrolledAway lets go of the layout of the lines the window showed
+// last frame and does not show now, and notes what it shows now. A line's
+// layout is kept once measured, and without this a file scrolled through
+// from end to end kept all of it: 280MB for an 8MB file opened as text. Only
+// lines leaving the view are let go of, not every line off screen on every
+// frame, so two windows onto one buffer cannot take turns undoing each
+// other's work; a line that comes back is measured again as it is drawn.
+func forgetScrolledAway(win *view.Window, rows int) {
+	if d := win.Drawn; d.Buf != nil {
+		n := d.Buf.NumLines()
+		for ln := d.Top; ln < d.Top+d.Lines && ln < n; ln++ {
+			if d.Buf != win.Buf || ln < win.Top || ln >= win.Top+rows {
+				d.Buf.Line(ln).Forget()
+			}
+		}
+	}
+	win.Drawn = view.Span{Buf: win.Buf, Top: win.Top, Lines: rows}
+}
+
 // rowStyle is the background a window's line ln is drawn on: a listing's bar
 // under the selected row, the fainter band under the line point is on, or
 // nothing. Only the active window has either, as only it shows a region.
@@ -206,6 +225,7 @@ func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active, list
 		win.ScrollToPointHorizontally(textW)
 
 		drawGutter(scr, rect, win, textH, active, listing, th)
+		forgetScrolledAway(win, textH)
 
 		// Bracket matching is computed here, from point, at draw time. A command
 		// could not do it: Env cannot reach the screen by design, so it has

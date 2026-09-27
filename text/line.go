@@ -265,6 +265,14 @@ func (l *Line) edited(rs []rune, at RuneIdx) {
 	l.valid = false
 }
 
+// Forget drops the line's layout, to be measured again when it is next
+// needed. A renderer does this for lines that scroll out of view, so that a
+// file scrolled through from end to end keeps only what is on screen
+// measured, rather than every line it ever showed.
+func (l *Line) Forget() {
+	l.segs, l.valid, l.keep = nil, false, 0
+}
+
 // ASCII reports whether every rune of the line is ASCII: nothing to lay out
 // right to left, nothing wide. It is learnt while the line is measured, so
 // asking costs nothing for a line on screen.
