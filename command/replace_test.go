@@ -169,3 +169,110 @@ func TestQueryReplaceRegexpSkipsWhatCannotBeEdited(t *testing.T) {
 		t.Errorf("echo %q", got)
 	}
 }
+
+// --- replace-string and replace-regexp -------------------------------------
+
+// unasked runs name - replace-string or replace-regexp - on f, replacing pat
+// with to, and fails the test if it asks anything else.
+func unasked(t *testing.T, f *commandtest.Fake, name, pat, to string) {
+	t.Helper()
+	f.Replies = []string{pat, to}
+	if err := tryRun(t, f, name); err != nil {
+		t.Fatalf("%s %q with %q: %v", name, pat, to, err)
+	}
+	if len(f.CharPrompts) > 0 {
+		t.Errorf("%s asked %q", name, f.CharPrompts)
+	}
+}
+
+// From point to the end, without asking, as one undo, saying how many.
+func TestReplaceStringFromPoint(t *testing.T) {
+	f := commandtest.New("cat cat", "Cat cat")
+	f.SetPoint(text.Pos{Col: 1})
+	unasked(t, f, "replace-string", "cat", "dog")
+	textIs(t, f, "cat dog\ndog dog")
+	pointIs(t, f, text.Pos{Line: 1, Col: 7})
+	if got := lastEcho(t, f.Echoes); got != "Replaced 3 occurrences" {
+		t.Errorf("echo %q", got)
+	}
+	if got := f.Prompts; len(got) != 2 || got[0] != "Replace string: " || got[1] != "Replace string cat with: " {
+		t.Errorf("prompts %q", got)
+	}
+
+	f.Buf().BreakUndo()
+	f.Buf().Undo()
+	textIs(t, f, "cat cat\nCat cat")
+}
+
+// With a region, only within it - wherever point is in it, and however the
+// replacements before its end change the length of the line.
+func TestReplaceStringInTheRegion(t *testing.T) {
+	f := commandtest.New("a a a a")
+	activate(f, text.Pos{Col: 5}, text.Pos{Col: 2})
+	unasked(t, f, "replace-string", "a", "xyz")
+	textIs(t, f, "a xyz xyz a")
+
+	f = commandtest.New("a", "a", "a")
+	activate(f, text.Pos{}, text.Pos{Line: 1, Col: 1})
+	unasked(t, f, "replace-string", "a", "b")
+	textIs(t, f, "b\nb\na")
+}
+
+func TestReplaceRegexp(t *testing.T) {
+	f := commandtest.New("key=value", "k2=v2")
+	unasked(t, f, "replace-regexp", `(\w+)=(\w+)`, `\2: \1 ($)`)
+	textIs(t, f, "value: key ($)\nv2: k2 ($)")
+	if got := f.Prompts; len(got) != 2 || got[0] != "Replace regexp: " || got[1] != `Replace regexp (\w+)=(\w+) with: ` {
+		t.Errorf("prompts %q", got)
+	}
+}
+
+// An empty match at the very end of the region is outside it: ^ over whole
+// lines prefixes those lines, not the one the region ends at the start of.
+func TestReplaceRegexpOfEmptyMatchesInTheRegion(t *testing.T) {
+	f := commandtest.New("a", "b", "c")
+	activate(f, text.Pos{}, text.Pos{Line: 2})
+	unasked(t, f, "replace-regexp", `^`, "// ")
+	textIs(t, f, "// a\n// b\nc")
+	if got := lastEcho(t, f.Echoes); got != "Replaced 2 occurrences" {
+		t.Errorf("echo %q", got)
+	}
+}
+
+func TestReplaceWithNothingFound(t *testing.T) {
+	f := commandtest.New("abc")
+	unasked(t, f, "replace-string", "z", "y")
+	textIs(t, f, "abc")
+	if got := lastEcho(t, f.Echoes); got != "Replaced 0 occurrences" {
+		t.Errorf("echo %q", got)
+	}
+	if f.Buf().Modified() {
+		t.Error("nothing replaced, yet the buffer is modified")
+	}
+}
+
+func TestReplaceRefusals(t *testing.T) {
+	for _, name := range []string{"replace-string", "replace-regexp"} {
+		f := commandtest.New("abc")
+		f.Buf().SetReadOnly(true)
+		if err := tryRun(t, f, name); !errors.Is(err, text.ErrReadOnly) {
+			t.Errorf("%s in a read-only buffer: err = %v", name, err)
+		}
+
+		f = commandtest.New("abc")
+		f.Replies = []string{""}
+		if err := tryRun(t, f, name); err != nil {
+			t.Fatal(err)
+		}
+		if got := lastEcho(t, f.Echoes); got != "Nothing to replace" {
+			t.Errorf("%s of nothing: echo %q", name, got)
+		}
+	}
+
+	f := commandtest.New("abc")
+	f.Replies = []string{"b", `\q`}
+	if err := tryRun(t, f, "replace-regexp"); err == nil {
+		t.Error("replace-regexp took a replacement with \\q in it")
+	}
+	textIs(t, f, "abc")
+}

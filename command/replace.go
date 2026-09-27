@@ -20,6 +20,8 @@ import (
 func RegisterReplace(r *Registry) error {
 	cmds := []Command{
 		{Name: "query-replace-regexp", Doc: "Replace matches of a regexp, asking about each one.", Fn: queryReplaceRegexp},
+		{Name: "replace-string", Doc: "Replace a string everywhere after point, or in the region, without asking.", Fn: replaceString},
+		{Name: "replace-regexp", Doc: "Replace a regexp's matches everywhere after point, or in the region, without asking.", Fn: replaceRegexp},
 	}
 	for _, c := range cmds {
 		c.Interactive = true
@@ -65,6 +67,70 @@ func queryReplaceRegexp(e Env) error {
 		ask:  fmt.Sprintf("Query replacing regexp %s with %s (y/n/!/q): ", pat, to),
 		from: e.Win().Pt,
 	})
+}
+
+// replaceString is M-x replace-string: every occurrence of a string replaced,
+// with no questions, from point to the end of the buffer - or, with a region,
+// within it.
+func replaceString(e Env) error {
+	if e.Buf().ReadOnly() {
+		return text.ErrReadOnly
+	}
+	from, err := e.ReadString(ReadOpts{Prompt: "Replace string: ", History: "replace"})
+	if err != nil {
+		return err
+	}
+	if from == "" {
+		e.Echo("Nothing to replace")
+		return nil
+	}
+	to, err := e.ReadString(ReadOpts{Prompt: fmt.Sprintf("Replace string %s with: ", from), History: "replace"})
+	if err != nil {
+		return err
+	}
+	r := unaskedRun(e)
+	r.find = literalMatches(from, to)
+	return replaceMatches(e, r)
+}
+
+// replaceRegexp is M-x replace-regexp: replace-string for a regexp, with
+// query-replace-regexp's replacement syntax.
+func replaceRegexp(e Env) error {
+	if e.Buf().ReadOnly() {
+		return text.ErrReadOnly
+	}
+	pat, err := e.ReadString(ReadOpts{Prompt: "Replace regexp: ", History: "replace"})
+	if err != nil {
+		return err
+	}
+	if pat == "" {
+		e.Echo("Nothing to replace")
+		return nil
+	}
+	f, err := newRegexpFinder(pat)
+	if err != nil {
+		return err
+	}
+	to, err := e.ReadString(ReadOpts{Prompt: fmt.Sprintf("Replace regexp %s with: ", pat), History: "replace"})
+	if err != nil {
+		return err
+	}
+	r := unaskedRun(e)
+	if r.find, err = f.replacingWith(to); err != nil {
+		return err
+	}
+	return replaceMatches(e, r)
+}
+
+// unaskedRun is where a replace that asks nothing works: the region when
+// there is one, as in emacs, and from point on when there is not.
+func unaskedRun(e Env) replaceRun {
+	b, p := e.Buf(), e.Win().Pt
+	if b.MarkActive() && b.Mark() != p {
+		lo, hi := region(e)
+		return replaceRun{from: lo, end: hi, bounded: true}
+	}
+	return replaceRun{from: p}
 }
 
 // regexpFinder finds a regular expression's matches in a buffer, a line at a
@@ -258,6 +324,12 @@ func replaceMatches(e Env, r replaceRun) error {
 	b := e.Buf()
 	at, end := r.from, r.end
 	all := r.ask == ""
+	if all {
+		// Replacements nobody was asked about were one decision, so they
+		// are one undo. Those answered one by one undo one by one.
+		b.BeginUndoGroup()
+		defer b.EndUndoGroup()
+	}
 	n, skipped := 0, 0
 	var last text.Pos // where the last match ended, when haveLast is set
 	haveLast := false
