@@ -100,6 +100,7 @@ var defaultBindings = []struct{ Spec, Command string }{
 	{"C-x C-s", "save-buffer"},
 	{"C-x C-w", "write-file"},
 	{"C-x s", "save-some-buffers"},
+	{"C-x x g", "revert-buffer"},
 
 	// Buffers.
 	{"C-x b", "switch-to-buffer"},

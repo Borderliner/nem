@@ -114,6 +114,10 @@ type Editor struct {
 	grepKeys *keymap.Map
 	lastGrep *text.Buffer
 
+	// autoRevert reads files changed on disk into buffers without edits.
+	// See revert.go.
+	autoRevert bool
+
 	// startup shows the welcome panel. It is set by the caller when nem was
 	// started with no file to open, and cleared by the first keystroke - see
 	// dismissStartup. Nothing sets it again, which is what makes the panel a
@@ -237,6 +241,7 @@ func New(scr tcell.Screen) (*Editor, error) {
 		wdiredKeys: wk,
 		grep:       map[*text.Buffer]*grepState{},
 		grepKeys:   gk,
+		autoRevert: true,
 		before:     map[string][]func(){},
 		after:      map[string][]func(){},
 		clip:       clipboard{read: defaultClipboardReader},
@@ -273,6 +278,9 @@ func New(scr tcell.Screen) (*Editor, error) {
 		return nil, fmt.Errorf("registering dired commands: %w", err)
 	}
 	if err := registerProjectCommands(e, reg); err != nil {
+		return nil, fmt.Errorf("registering dired commands: %w", err)
+	}
+	if err := registerRevertCommands(e, reg); err != nil {
 		return nil, fmt.Errorf("registering dired commands: %w", err)
 	}
 	if err := registerExternalCommands(e, reg); err != nil {

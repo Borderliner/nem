@@ -138,6 +138,7 @@ func (e *Editor) applySettings(s lua.Settings) {
 	e.SetWhichKeyDelay(time.Duration(s.WhichKeyDelay) * time.Millisecond)
 	e.SetAutosaveIdle(time.Duration(s.AutosaveIdle) * time.Second)
 	e.SetBackupEnabled(s.Backup)
+	e.autoRevert = s.AutoRevert
 	if s.Clipboard == "off" {
 		e.SetClipboardMode(ClipboardOff)
 	} else {

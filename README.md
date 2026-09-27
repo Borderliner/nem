@@ -238,6 +238,13 @@ autosave every 30 seconds while modified, and a refusal to overwrite a file that
 changed on disk underneath you. Nothing is written beside your file; it all goes
 under `~/.local/state/nem`.
 
+**Files changed elsewhere** — a buffer with no edits of its own follows its
+file: after a `git checkout`, a formatter, a build that generates code, it is
+read again by itself, as emacs's `global-auto-revert-mode` has it. A buffer
+you have edited is never touched behind your back. `C-x x g` reads any file
+again on request, asking first if that throws edits away; `nem.set("auto-revert",
+false)` leaves it to that.
+
 > `C-h` is bound to help too, but only works on terminals that negotiate the
 > extended keyboard protocol. On older terminals the terminal itself cannot tell
 > `C-h` from Backspace before nem sees it. Use `<f1>`.

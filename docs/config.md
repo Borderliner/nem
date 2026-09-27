@@ -81,6 +81,8 @@ nem.set("which-key-delay", 1000) -- ms a prefix waits before listing what follow
 -- Safety
 nem.set("autosave-idle", 30)     -- seconds of idleness before autosaving; 0 disables
 nem.set("backup", true)          -- keep the previous contents on first save; default true
+nem.set("auto-revert", true)     -- read a file again when it changes on disk, if the
+                                 -- buffer has no edits of its own; default true
 
 -- System
 nem.set("clipboard", "osc52")    -- "osc52" or "off"; default "osc52"

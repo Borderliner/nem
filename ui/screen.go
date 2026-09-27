@@ -25,6 +25,9 @@ func NewScreen() (*Screen, error) {
 	// the keymap a character at a time: auto-indent re-indents every pasted
 	// line, and every character costs a redraw. Fini turns it off again.
 	scr.EnablePaste()
+	// Coming back to the terminal is when files changed elsewhere are looked
+	// at again, where the terminal says so.
+	scr.EnableFocus()
 	return Wrap(scr), nil
 }
 

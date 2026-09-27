@@ -80,6 +80,10 @@ type Settings struct {
 	// its symbols, and "auto" turns them on only where that looks likely. A
 	// script sets it with true, false or "auto".
 	Icons string
+
+	// AutoRevert reads a buffer without edits again when its file changes on
+	// disk.
+	AutoRevert bool
 }
 
 // DefaultSettings returns the built-in defaults, which are what the editor uses
@@ -93,6 +97,7 @@ func DefaultSettings() Settings {
 		DeleteSelection: true,
 		Syntax:          true, Theme: "auto",
 		OpenBinary: "ask", Icons: "auto", FillColumn: 70, AutoPair: true,
+		AutoRevert: true,
 	}
 }
 
@@ -112,7 +117,7 @@ const (
 // outcome here: the user reads their config, sees the line, and cannot work out
 // why it has no effect.
 var knownSettings = []string{
-	"auto-pair", "autosave-idle", "backup", "clipboard", "completion-rows", "completion-style",
+	"auto-pair", "auto-revert", "autosave-idle", "backup", "clipboard", "completion-rows", "completion-style",
 	"delete-selection", "fill-column", "icons", "line-numbers", "open-binary", "scroll-margin", "syntax", "tab-width",
 	"theme", "undo-style", "which-key-delay",
 }
@@ -240,6 +245,12 @@ func (s *Settings) set(key string, v glua.LValue) error {
 			return err
 		}
 		s.Clipboard = str
+	case "auto-revert":
+		b, ok := v.(glua.LBool)
+		if !ok {
+			return fmt.Errorf("auto-revert must be true or false, got %s", v.Type())
+		}
+		s.AutoRevert = bool(b)
 	default:
 		return fmt.Errorf("unknown setting %q; known settings are %v", key, knownSettings)
 	}

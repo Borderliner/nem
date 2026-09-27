@@ -55,6 +55,11 @@ func (e *Editor) Loop() error {
 		tick = t.C
 	}
 
+	// Files are looked at for changes every few seconds, for buffers to
+	// follow them. See revert.go.
+	revert := time.NewTicker(revertEvery)
+	defer revert.Stop()
+
 	// A paste whose end marker never arrives is landed once it has been quiet
 	// for pasteStall, even if no further key comes along to trigger that. One
 	// timer re-armed per event rather than a new one each time: a paste is
@@ -93,6 +98,8 @@ func (e *Editor) Loop() error {
 			if e.pasteStalled(now) {
 				e.endPaste()
 			}
+		case <-revert.C:
+			e.revertChanged()
 		case now := <-tick:
 			// Reported through the echo area by RunAutosave itself; a failure
 			// must not stop the loop.
@@ -178,6 +185,11 @@ func (e *Editor) handleEvent(ev tcell.Event) {
 		// waited on it. See launch.
 		if f, ok := ev.Data().(openFailure); ok {
 			e.Echo("%v", f.err)
+		}
+	case *tcell.EventFocus:
+		// Back from another window, where files may have changed.
+		if ev.Focused {
+			e.revertChanged()
 		}
 	case *tcell.EventResize:
 		// Nothing to recompute: layout is derived from the screen size on every
