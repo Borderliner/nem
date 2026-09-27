@@ -158,6 +158,9 @@ type Theme struct {
 	// order it is read, and joins Arabic-script letters. It is off where the
 	// terminal does that itself; see TerminalDoesBidi and bidi.go.
 	Bidi bool
+	// Wrap folds a line wider than its window into rows, rather than cutting
+	// it off at the edge and scrolling sideways to it. See wrap.go.
+	Wrap bool
 	// MiniNote styles the candidate count beside a prompt at the bottom of the
 	// screen: quiet, since it is secondary to what is being typed.
 	MiniNote tcell.Style

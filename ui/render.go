@@ -169,7 +169,8 @@ func Render(scr tcell.Screen, f Frame, th Theme) {
 }
 
 // forgetScrolledAway lets go of the layout of the lines the window showed
-// last frame and does not show now, and notes what it shows now. A line's
+// last frame and does not show now, and notes what it shows now: rows
+// lines, from its top. A line's
 // layout is kept once measured, and without this a file scrolled through
 // from end to end kept all of it: 280MB for an 8MB file opened as text. Only
 // lines leaving the view are let go of, not every line off screen on every
@@ -221,11 +222,20 @@ func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active, list
 		// placement below relies on. Horizontal scrolling is given the narrowed
 		// width - given the pane's full width it would believe point was visible
 		// while it sat off the right edge by the width of the gutter.
-		win.ScrollToPoint(textH, th.ScrollMargin)
-		win.ScrollToPointHorizontally(textW)
+		//
+		// Wrapped, nothing is off to the side, and the window scrolls by the
+		// rows the lines fold into.
+		if th.Wrap {
+			win.LeftCol = 0
+			win.ScrollToPointWrapped(textH, th.ScrollMargin, textW)
+		} else {
+			win.ScrollToPoint(textH, th.ScrollMargin)
+			win.ScrollToPointHorizontally(textW)
+		}
+		rows := screenRows(win, textH, textW, th.Wrap)
 
-		drawGutter(scr, rect, win, textH, active, listing, th)
-		forgetScrolledAway(win, textH)
+		drawGutter(scr, rect, win, rows, active, listing, th)
+		forgetScrolledAway(win, linesShown(rows))
 
 		// Bracket matching is computed here, from point, at draw time. A command
 		// could not do it: Env cannot reach the screen by design, so it has
@@ -240,25 +250,34 @@ func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active, list
 		// when the window is inactive or the buffer has no mark.
 		region := regionFor(win.Buf, win.Pt, active, th)
 
-		for i := 0; i < textH; i++ {
-			ln := win.Top + i
-			if ln >= win.Buf.NumLines() {
-				break // rows past the end of the buffer stay blank, as in emacs
-			}
+		// Rows past the end of the buffer stay blank, as in emacs. A wrapped
+		// line's rows share what is worked out for the line: its colours, and
+		// its right-to-left layout.
+		var spans []syntax.Span
+		var bidiRows []bidiLayout
+		spansLine, bidiLine := -1, -1
+		for i, r := range rows {
+			ln := r.line
 			l := win.Buf.Line(ln)
-			var spans []syntax.Span
-			if spansOf != nil {
-				spans = spansOf(win.Buf, ln)
+			if spansOf != nil && spansLine != ln {
+				spans, spansLine = spansOf(win.Buf, ln), ln
 			}
 			reg := region.onLine(ln, l)
 			row := rowStyle(win, ln, active, bar, th)
-			if th.lineUsesBidi(l) {
-				drawLineBidi(scr, textX, rect.Y+i, textW,
-					l, win.LeftCol, th, paren.onLine(ln), reg, spans, row, auto)
-				continue
+			y := rect.Y + i
+			switch {
+			case !th.Wrap && th.lineUsesBidi(l):
+				drawLineBidi(scr, textX, y, textW, l, win.LeftCol, th, paren.onLine(ln), reg, spans, row, auto)
+			case !th.Wrap:
+				drawLine(scr, textX, y, textW, l, win.LeftCol, th, paren.onLine(ln), reg, spans, row)
+			case th.lineUsesBidi(l):
+				if bidiLine != ln {
+					bidiRows, bidiLine = layoutBidiRows(l, l.WrapRows(text.ColIdx(textW)), auto), ln
+				}
+				drawRowBidi(scr, textX, y, textW, bidiRows[r.index], r, th, paren.onLine(ln), reg, spans, row)
+			default:
+				drawRow(scr, textX, y, textW, l, r, th, paren.onLine(ln), reg, spans, row)
 			}
-			drawLine(scr, textX, rect.Y+i, textW,
-				l, win.LeftCol, th, paren.onLine(ln), reg, spans, row)
 		}
 	}
 
@@ -473,12 +492,28 @@ func placeCursor(scr tcell.Screen, w, h, echoY int, rects map[*view.Window]view.
 
 	pt := f.Active.Buf.ClampPos(f.Active.Pt)
 	l := f.Active.Buf.Line(pt.Line)
+	bidiOn := th.lineUsesBidi(l) && (f.RawOf == nil || !f.RawOf(f.Active.Buf))
+	auto := f.DirectionOf != nil && f.DirectionOf(f.Active.Buf)
 	sx := int(l.DisplayCol(pt.Col) - f.Active.LeftCol)
-	if th.lineUsesBidi(l) && (f.RawOf == nil || !f.RawOf(f.Active.Buf)) {
-		auto := f.DirectionOf != nil && f.DirectionOf(f.Active.Buf)
+	if bidiOn {
 		sx = bidiCursorCol(l, pt.Col, text.ColIdx(textW), f.Active.LeftCol, auto)
 	}
 	sy := pt.Line - f.Active.Top
+	if th.Wrap {
+		// On the row that holds point: the rows drawWindow drew, from the
+		// same function, so the two agree.
+		for i, r := range screenRows(f.Active, textH, textW, true) {
+			if r.line != pt.Line || pt.Col < r.from || pt.Col >= r.to && !r.last {
+				continue
+			}
+			sy, sx = i, int(l.DisplayCol(pt.Col)-r.col)
+			if bidiOn {
+				lay := layoutBidiRows(l, l.WrapRows(text.ColIdx(textW)), auto)[r.index]
+				sx = int(lay.origin(text.ColIdx(textW), 0) + lay.cursorAt(pt.Col))
+			}
+			break
+		}
+	}
 	if sx < 0 {
 		sx = 0
 	}

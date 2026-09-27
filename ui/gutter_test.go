@@ -316,7 +316,7 @@ func TestGutterSurvivesDegenerateRects(t *testing.T) {
 	} {
 		gutterFor(r, w, false, th) // must not panic
 		scr := sim(t, 30, 8)
-		drawGutter(scr, r, w, view.TextHeight(r), true, false, th) // must not panic
+		drawGutter(scr, r, w, screenRows(w, view.TextHeight(r), r.W, false), true, false, th) // must not panic
 	}
 }
 

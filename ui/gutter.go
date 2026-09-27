@@ -56,15 +56,24 @@ func gutterFor(rect view.Rect, win *view.Window, listing bool, th Theme) int {
 	return gw
 }
 
+// TextWidth is how many columns of rect the text of win gets: the pane less
+// its gutter, the width its lines wrap at.
+func TextWidth(rect view.Rect, win *view.Window, listing bool, th Theme) int {
+	return rect.W - gutterFor(rect, win, listing, th)
+}
+
 // drawGutter writes the visible line numbers down the left of rect.
 //
 // Numbers are right-aligned so their digits line up as the count grows, and the
 // separating column is left blank so the gutter reads as a margin rather than a
 // border. Rows past the end of the buffer get no number, matching the blank text
 // rows beside them.
-func drawGutter(scr tcell.Screen, rect view.Rect, win *view.Window, textH int, active, listing bool, th Theme) {
+//
+// A wrapped line's number goes beside its first row alone, and the band under
+// the current line runs beside all of its rows.
+func drawGutter(scr tcell.Screen, rect view.Rect, win *view.Window, rows []screenRow, active, listing bool, th Theme) {
 	gw := gutterFor(rect, win, listing, th)
-	if gw == 0 || textH <= 0 || rect.H <= 0 {
+	if gw == 0 || len(rows) == 0 || rect.H <= 0 {
 		return
 	}
 
@@ -78,11 +87,8 @@ func drawGutter(scr tcell.Screen, rect view.Rect, win *view.Window, textH int, a
 	}
 
 	digits := gw - 1 // the last column is the separator
-	for i := 0; i < textH; i++ {
-		ln := win.Top + i
-		if ln >= win.Buf.NumLines() {
-			break
-		}
+	for i, r := range rows {
+		ln := r.line
 
 		style := th.LineNumber
 		if ln == cur {
@@ -95,6 +101,9 @@ func drawGutter(scr tcell.Screen, rect view.Rect, win *view.Window, textH int, a
 					scr.SetContent(rect.X+k, rect.Y+i, ' ', nil, style)
 				}
 			}
+		}
+		if !r.first {
+			continue
 		}
 
 		s := strconv.Itoa(ln + 1)
