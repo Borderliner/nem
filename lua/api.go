@@ -149,6 +149,12 @@ func (h *Host) apiCommand(L *glua.LState) int {
 		Doc:         doc,
 		Interactive: true,
 		Fn: func(e command.Env) error {
+			// However many edits it makes, a command is one change to
+			// undo, as a built-in one is: C-/ takes back a whole
+			// number-lines, not the last line of it.
+			b := e.Buf()
+			b.BeginUndoGroup()
+			defer b.EndUndoGroup()
 			var rerr error
 			h.withEnv(e, func() { rerr = h.call(fn) })
 			return rerr

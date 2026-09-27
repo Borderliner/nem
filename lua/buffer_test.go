@@ -389,15 +389,30 @@ func TestPureDeletionIsASingleUndoStep(t *testing.T) {
 	}
 }
 
-// A replacement is two steps — one delete, one insert — because the undo log
-// records one entry per Insert/Delete call and has no way to group them. This
-// pins the honest number rather than the number we would prefer.
-func TestReplacementIsTwoUndoSteps(t *testing.T) {
+// A replacement is a delete and an insert, and a command is one undo step
+// however many it makes: the command groups its edits, as a built-in one does.
+func TestReplacementIsOneUndoStep(t *testing.T) {
 	_, f := hostOver(t, `nem.buf.set_text("x\ny\nz\nw")`, "a", "b", "c")
 	before := f.Text()
 	runT(t, f)
-	if n := undoStepsToRestore(t, f.Buf(), before); n != 2 {
-		t.Errorf("restoring took %d undo steps, want 2 (one delete, one insert)", n)
+	if n := undoStepsToRestore(t, f.Buf(), before); n != 1 {
+		t.Errorf("restoring took %d undo steps, want 1", n)
+	}
+}
+
+// A command that rewrites every line is one step too, not one a line: the
+// example config's number-lines promises one C-/ takes it all back.
+func TestACommandOfManyEditsIsOneUndoStep(t *testing.T) {
+	_, f := hostOver(t, `for i = 1, nem.buf.line_count() do
+  nem.buf.set_line(i, i .. "  " .. nem.buf.get_line(i))
+end`, "a", "b", "c")
+	before := f.Text()
+	runT(t, f)
+	if got := f.Text(); got != "1  a\n2  b\n3  c" {
+		t.Fatalf("buffer = %q", got)
+	}
+	if n := undoStepsToRestore(t, f.Buf(), before); n != 1 {
+		t.Errorf("restoring took %d undo steps, want 1", n)
 	}
 }
 
@@ -493,10 +508,15 @@ func TestDocumentedStripTrailingWhitespaceHook(t *testing.T) {
 	if err := h.LoadConfig(); err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
+	before := f.Text()
 	if err := h.FireHook("before-save", f, f.Buf()); err != nil {
 		t.Fatalf("FireHook: %v", err)
 	}
 	if got, want := f.Text(), "keep\nclean\ntrailing"; got != want {
 		t.Errorf("buffer = %q, want %q", got, want)
+	}
+	// Two lines trimmed, and one C-/ puts both back.
+	if n := undoStepsToRestore(t, f.Buf(), before); n != 1 {
+		t.Errorf("restoring took %d undo steps, want 1", n)
 	}
 }

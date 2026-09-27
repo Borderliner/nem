@@ -245,6 +245,12 @@ func (h *Host) FireHook(name string, e command.Env, b *text.Buffer) error {
 		return nil
 	}
 	arg := h.bufferTable(e, b)
+	// The hooks' edits undo in one step, as a command's do: a before-save
+	// that trims every line is one change, not one a line.
+	if b != nil {
+		b.BeginUndoGroup()
+		defer b.EndUndoGroup()
+	}
 	var errs []error
 	h.withEnv(e, func() {
 		for i, fn := range fns {
