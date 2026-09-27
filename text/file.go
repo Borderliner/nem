@@ -150,12 +150,13 @@ func (b *Buffer) encode(sep string, final bool) []byte {
 }
 
 // Save writes the buffer back to its file, preserving the line ending style
-// and trailing-newline convention it was loaded with.
+// and trailing-newline convention it was loaded with. The file is replaced
+// whole or not at all; see writeFile.
 func (b *Buffer) Save() error {
 	if b.path == "" {
 		return ErrNoPath
 	}
-	if err := os.WriteFile(b.path, b.bytes(), 0o644); err != nil {
+	if err := writeFile(b.path, b.bytes()); err != nil {
 		return err
 	}
 	b.SetModified(false)
@@ -172,7 +173,7 @@ func (b *Buffer) SaveAs(path string) error {
 	// front and then delegating to Save leaves a failed write with the buffer
 	// claiming a file it was never written to, so a later C-x C-s would
 	// silently write somewhere the user never asked for.
-	if err := os.WriteFile(path, b.bytes(), 0o644); err != nil {
+	if err := writeFile(path, b.bytes()); err != nil {
 		return err
 	}
 	b.path = path
