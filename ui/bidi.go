@@ -43,8 +43,14 @@ type bidiLayout struct {
 	rtl   bool // the line's own direction is right to left
 }
 
-// usesBidi reports whether a line needs laying out as right-to-left text.
+// usesBidi reports whether text needs laying out as right-to-left text.
 func (th Theme) usesBidi(rs []rune) bool { return th.Bidi && bidi.HasRTL(rs) }
+
+// lineUsesBidi is usesBidi for a buffer's line, which knows without looking
+// at every rune when they are all ASCII - as a line of code nearly always is.
+func (th Theme) lineUsesBidi(l *text.Line) bool {
+	return th.Bidi && !l.ASCII() && bidi.HasRTL(l.View())
+}
 
 // layoutBidi lays l out in visual order: its direction its own when auto,
 // left to right otherwise.

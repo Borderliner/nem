@@ -224,7 +224,7 @@ func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active, list
 			}
 			reg := region.onLine(ln, l)
 			row := rowStyle(win, ln, active, bar, th)
-			if th.usesBidi(l.View()) {
+			if th.lineUsesBidi(l) {
 				drawLineBidi(scr, textX, rect.Y+i, textW,
 					l, win.LeftCol, th, paren.onLine(ln), reg, spans, row, auto)
 				continue
@@ -446,7 +446,7 @@ func placeCursor(scr tcell.Screen, w, h, echoY int, rects map[*view.Window]view.
 	pt := f.Active.Buf.ClampPos(f.Active.Pt)
 	l := f.Active.Buf.Line(pt.Line)
 	sx := int(l.DisplayCol(pt.Col) - f.Active.LeftCol)
-	if th.usesBidi(l.View()) {
+	if th.lineUsesBidi(l) {
 		auto := f.DirectionOf != nil && f.DirectionOf(f.Active.Buf)
 		sx = bidiCursorCol(l, pt.Col, text.ColIdx(textW), f.Active.LeftCol, auto)
 	}
