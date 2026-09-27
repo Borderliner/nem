@@ -64,3 +64,30 @@ func BenchmarkRankPaths100k(b *testing.B) {
 		_ = Rank("edwin", c)
 	}
 }
+
+// A query of several terms, which the anchored and exact ones should mostly
+// settle before any fuzzy work: the sources under editor, tests left out.
+func BenchmarkRankExtendedPaths100k(b *testing.B) {
+	c := manyPaths(100_000)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = Rank("edi 'go !test", c)
+	}
+}
+
+// Several terms over the one-core set, where the negation rejects about half
+// and the rest are scored twice over, by the fuzzy term and the exact one.
+func BenchmarkRankExtended2000(b *testing.B) {
+	c := manyCandidates(2000)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = Rank("hdlr 'go !_1", c)
+	}
+}
+
+// M-x with a group and a negation.
+func BenchmarkRankExtendedCommands(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_ = Rank("buf | win !kill", nemCommands)
+	}
+}
