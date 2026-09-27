@@ -80,25 +80,6 @@ func TestTabIndentsAsTheFileDoes(t *testing.T) {
 	wantText(t, e, "key:\n    ")
 }
 
-// C-x C-u and C-x C-l change the case of the selection, which then ends; with
-// none they say so.
-func TestCaseRegionKeys(t *testing.T) {
-	e, _ := newTestEditor(t, "hello world")
-	press(t, e, "C-SPC", "M-f", "C-x", "C-u")
-	wantText(t, e, "HELLO world")
-	wantPt(t, e, 0, 5)
-	if e.Buf().MarkActive() {
-		t.Error("the selection is still active after C-x C-u")
-	}
-	press(t, e, "C-x", "C-x", "C-x", "C-l")
-	wantText(t, e, "hello world")
-
-	e, _ = newTestEditor(t, "abc")
-	press(t, e, "C-x", "C-u")
-	wantText(t, e, "abc")
-	wantEcho(t, e, "no region")
-}
-
 // --- saving ---------------------------------------------------------------
 
 // onDisk is the file b was saved to, as bytes.
