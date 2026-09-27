@@ -1,0 +1,38 @@
+name: wiki
+
+# The wiki's pages are kept in docs/wiki, beside the code they describe, and
+# the tests keep them to it: the key and command references are generated from
+# the code, and every Lua example is run. This publishes them to the GitHub
+# wiki whenever they change on main, so the wiki is never edited by hand and
+# never falls behind.
+on:
+  push:
+    branches: [main]
+    paths: ['docs/wiki/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: publish docs/wiki to the wiki
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" wiki
+          find wiki -maxdepth 1 -name '*.md' -delete
+          cp docs/wiki/*.md wiki/
+          cd wiki
+          git add -A
+          if git diff --cached --quiet; then
+            echo "The wiki is up to date."
+            exit 0
+          fi
+          git -c user.name="Mohammadreza Hajianpour" -c user.email="hajianpour.mr@gmail.com" \
+            commit -q -m "Publish docs/wiki as of ${GITHUB_SHA::7}"
+          git push -q
