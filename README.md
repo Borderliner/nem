@@ -224,7 +224,9 @@ background into its own buffer. Commands run with `sh`, from the buffer's
 directory; `C-g` stops one you are waiting for.
 
 **Search** — `C-s` is genuinely incremental: it moves as you type, backspace
-walks point back, and `C-g` returns you to where you started. `M-%` is
+walks point back, and `C-g` returns you to where you started. Past the last
+match `C-s` says it is failing, and pressing it again wraps round to the top;
+`C-r` does the same going back, and turns a forward search round. `M-%` is
 query-replace with `y`/`n`/`!`/`q`, and `C-M-%` does the same for a regexp,
 with `\&` for the match and `\1`…`\9` for its groups in the replacement (few
 terminals can send `C-M-%`; `M-x query-replace-regexp` always works). `M-x
@@ -262,6 +264,10 @@ you typed, for a new file or buffer whose name happens to match an existing
 one. Buffers are listed most recently visited first, so `C-x b RET` flips back
 to the previous one.
 
+In a file prompt `~/` is your home directory, and typing `~/` or `/` after the
+directory the prompt opened on starts the path over from there, as emacs's
+minibuffer does: `C-x C-f ~/notes/` needs nothing erased first.
+
 **Files that aren't text** — a PDF, a photo, a song or a zip is not dumped into
 a buffer as garbage. nem asks: `s` opens it with your system's app for that
 type, `t` opens it as text anyway, and `S` or `T` answers the same for every
@@ -275,6 +281,16 @@ never be selected or copied. `C-x n` toggles them. The line the cursor is on
 lies on a faint band, its number picked out on it; `nem.set("hl-line", false)`
 takes the band away. In dired and in search results the selected row is a
 slightly stronger band, under the row's own colours.
+
+**Right-to-left text** — Persian, Arabic and Hebrew are written and shown
+right to left, their letters joined, as emacs shows them: most terminals do
+neither, so nem lays the text out itself, by the Unicode bidirectional
+algorithm. In prose a line takes its direction from its first letter, and one
+in Persian sits against the right edge; in code every line stays left to
+right, with any Persian in it - a comment, a string - reading right to left
+where it is. The arrow keys go the way the line reads. Konsole, GNOME Terminal
+and mlterm lay the text out themselves, so there nem leaves it to them;
+`nem.set("bidi", true)` or `false` decides it.
 
 **Syntax highlighting** — Go, Lua, JSON and Markdown have hand-written lexers;
 C, Python, shell, Rust, JavaScript, TypeScript, YAML, TOML, HTML, CSS, SQL,
