@@ -18,6 +18,7 @@ func RegisterSpace(r *Registry) error {
 		{Name: "delete-indentation", Doc: "Join this line to the previous one, with one space between.", Fn: deleteIndentation},
 		{Name: "back-to-indentation", Doc: "Move to the first non-blank character on the line.", Fn: backToIndentation},
 		{Name: "zap-to-char", Doc: "Kill up to and including the next occurrence of a character, ARG times.", Fn: zapToChar},
+		{Name: "delete-trailing-whitespace", Doc: "Delete the spaces and tabs at the ends of the buffer's lines, or the region's.", Fn: deleteTrailingWhitespace},
 	}
 	for _, c := range cmds {
 		c.Interactive = true
@@ -104,6 +105,67 @@ func deleteIndentation(e Env) error {
 	}
 	edSetPoint(e, from)
 	return nil
+}
+
+// deleteTrailingWhitespace strips the spaces and tabs from the ends of every
+// line in the buffer, or of the lines the region touches when there is one,
+// and says how many lines that changed.
+func deleteTrailingWhitespace(e Env) error {
+	b := e.Buf()
+	first, last := 0, b.NumLines()-1
+	if b.MarkActive() {
+		first, last = lineBlock(e)
+	}
+	n, err := TrimTrailingWhitespace(b, first, last)
+	edSetPoint(e, e.Win().Pt) // point was in whitespace that is gone
+	if err != nil {
+		return err
+	}
+	switch n {
+	case 0:
+		e.Echo("No trailing whitespace")
+	case 1:
+		e.Echo("Deleted trailing whitespace on 1 line")
+	default:
+		e.Echo("Deleted trailing whitespace on %d lines", n)
+	}
+	return nil
+}
+
+// TrimTrailingWhitespace deletes the spaces and tabs at the ends of lines
+// first to last of b, as one undo step, and reports how many lines changed.
+// It is delete-trailing-whitespace's work, and the editor's when a file's
+// .editorconfig asks for it on saving.
+//
+// A read-only buffer refuses outright. One read-only only in parts - a
+// directory listing whose names are being edited - has the lines it keeps
+// fixed passed over, as query-replace passes over matches it may not change.
+func TrimTrailingWhitespace(b *text.Buffer, first, last int) (int, error) {
+	if b.ReadOnly() {
+		return 0, text.ErrReadOnly
+	}
+	b.BeginUndoGroup()
+	defer b.EndUndoGroup()
+	n := 0
+	for i := first; i <= last; i++ {
+		rs := b.Line(i).View()
+		end := len(rs)
+		for end > 0 && isBlank(rs[end-1]) {
+			end--
+		}
+		if end == len(rs) {
+			continue
+		}
+		from, to := text.Pos{Line: i, Col: text.RuneIdx(end)}, text.Pos{Line: i, Col: text.RuneIdx(len(rs))}
+		if b.Vet(from, to, nil) != nil {
+			continue
+		}
+		if err := b.Delete(from, to); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
 }
 
 func isOpenBracket(r rune) bool  { return r == '(' || r == '[' || r == '{' }
