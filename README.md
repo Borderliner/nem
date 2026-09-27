@@ -274,7 +274,9 @@ type, `t` opens it as text anyway, and `S` or `T` answers the same for every
 file of that type for the rest of the session. To answer without being asked,
 set `nem.set("open-binary", "system")` or `"text"`. `M-x open-externally` hands
 any file to the system app on purpose, and so does `E` in dired. With no desktop
-to open things on (over plain SSH, say) files open as text, as before.
+to open things on (over plain SSH, say) files open as text, as before. Opened as
+text, such a file is shown byte for byte as it is stored - uncoloured, never laid
+out right to left - and its mode line says `binary`.
 
 **Line numbers** — shown by default, and drawn outside the text so they can
 never be selected or copied. `C-x n` toggles them. The line the cursor is on
