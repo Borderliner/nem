@@ -586,7 +586,7 @@ func TestIconsLeadEachName(t *testing.T) {
 		{Name: "main.go", Mode: 0o644, Size: 10, ModTime: now},
 	}
 	for _, opts := range []Options{{Icons: true}, {Icons: true, HideDetails: true}} {
-		l := Format("/x/proj", entries, nil, opts, now, "")
+		l := Format(p("/x/proj"), entries, nil, opts, now, "")
 		col := NameColumn(opts)
 		plainCol := NameColumn(Options{HideDetails: opts.HideDetails})
 		if col != plainCol+2 {
@@ -604,7 +604,7 @@ func TestIconsLeadEachName(t *testing.T) {
 			}
 		}
 		checkSpans(t, l)
-		if !strings.HasPrefix(l.Lines[0], "  /x/proj/") {
+		if !strings.HasPrefix(l.Lines[0], "  "+p("/x/proj/")) {
 			t.Errorf("header = %q, want an open folder before the path", l.Lines[0])
 		}
 	}
