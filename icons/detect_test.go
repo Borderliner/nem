@@ -2,6 +2,7 @@ package icons
 
 import (
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -60,7 +61,15 @@ func TestDetect(t *testing.T) {
 
 // The fontconfig query itself, where fontconfig exists: a letter every font
 // has is covered, and a codepoint no font has is not.
+//
+// Only where detect asks it, though. On macOS and Windows detect looks in the
+// fonts folders instead, so what a fontconfig installed there by a package
+// manager answers is nothing nem acts on - and on macOS it answers that some
+// font covers even the codepoint below.
 func TestFontconfigCovers(t *testing.T) {
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		t.Skip("detect does not consult fontconfig here")
+	}
 	if _, err := exec.LookPath("fc-list"); err != nil {
 		t.Skip("no fontconfig here")
 	}
