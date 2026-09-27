@@ -372,12 +372,13 @@ func TestAutosaveFailureIsReportedNotSwallowed(t *testing.T) {
 	b := visit(t, e, file)
 	edit(t, b, "work")
 
-	// A root that cannot be written to at all.
+	// A root that cannot be written to at all: a file standing where the
+	// directory should be. A directory's mode would do on Unix, but Windows
+	// ignores it, and a file is in the way everywhere.
 	locked := filepath.Join(t.TempDir(), "locked")
-	if err := os.MkdirAll(locked, 0o500); err != nil {
+	if err := os.WriteFile(locked, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
 	e.SetBackupRoot(locked)
 
 	if err := e.RunAutosave(time.Now()); err == nil {
@@ -395,11 +396,11 @@ func TestBackupFailureDoesNotBlockTheSave(t *testing.T) {
 	b := visit(t, e, file)
 	edit(t, b, "important")
 
+	// A file where the store's directory should be, as above.
 	locked := filepath.Join(t.TempDir(), "locked")
-	if err := os.MkdirAll(locked, 0o500); err != nil {
+	if err := os.WriteFile(locked, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
 	e.SetBackupRoot(locked)
 
 	if err := e.SaveBuffer(b, ""); err != nil {
