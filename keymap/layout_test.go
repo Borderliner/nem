@@ -35,16 +35,16 @@ func TestLatinKey(t *testing.T) {
 		want   rune
 		ok     bool
 	}{
-		{'ط', LayoutAuto, 'x', true},   // C-x on a Persian keyboard
-		{'ب', LayoutAuto, 'f', true},   // C-f
-		{'ل', LayoutAuto, 'g', true},   // C-g
-		{'ی', LayoutAuto, 'd', true},   // Persian yeh
-		{'ي', LayoutAuto, 'd', true},   // Arabic yeh
-		{'ژ', LayoutAuto, 'C', true},   // Shift+C
+		{'ط', LayoutAuto, 'x', true},    // C-x on a Persian keyboard
+		{'ب', LayoutAuto, 'f', true},    // C-f
+		{'ل', LayoutAuto, 'g', true},    // C-g
+		{'ی', LayoutAuto, 'd', true},    // Persian yeh
+		{'ي', LayoutAuto, 'd', true},    // Arabic yeh
+		{'ژ', LayoutAuto, 'C', true},    // Shift+C
 		{'ط', LayoutArabic, '\'', true}, // where Arabic puts it
-		{'ء', LayoutAuto, 'x', true},   // C-x on an Arabic keyboard
-		{'ס', LayoutAuto, 'x', true},   // Hebrew
-		{'ч', LayoutAuto, 'x', true},   // Russian
+		{'ء', LayoutAuto, 'x', true},    // C-x on an Arabic keyboard
+		{'ס', LayoutAuto, 'x', true},    // Hebrew
+		{'ч', LayoutAuto, 'x', true},    // Russian
 		{'Ч', LayoutAuto, 'X', true},
 		{'і', LayoutAuto, 's', true}, // Ukrainian
 		{'χ', LayoutAuto, 'x', true}, // Greek
