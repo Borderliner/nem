@@ -4,14 +4,15 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // MaxFiles is where listing a project stops. A tree that large is a home
@@ -153,39 +154,73 @@ func inRepository(dir string) bool {
 	}
 }
 
-// errStop ends a walk that has listed MaxFiles.
-var errStop = errors.New("stop")
-
-// walkFiles lists the files under root by walking the tree.
+// walkFiles lists the files under root by walking the tree, sorted.
+//
+// Directories are read in parallel, a goroutine each, as many reading at
+// once as there are processors to spare: a large tree is mostly waiting on
+// the disk, one directory after another, and a home directory's 200,000
+// files took a second read in turn. A tree past MaxFiles is cut short where
+// the walk had got to, which, walked in parallel, is not always the same
+// place.
 func walkFiles(root string, noIgnore bool) ([]string, error) {
-	var files []string
-	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+	var (
+		mu    sync.Mutex
+		files []string
+		count atomic.Int64
+		wg    sync.WaitGroup
+		// rootErr is the error reading root itself: an unreadable corner
+		// below it is left out, not the whole list.
+		rootErr error
+	)
+	reading := make(chan struct{}, 2*runtime.GOMAXPROCS(0))
+	var walk func(dir, rel string)
+	walk = func(dir, rel string) {
+		defer wg.Done()
+		if count.Load() >= MaxFiles {
+			return
+		}
+		reading <- struct{}{}
+		ents, err := os.ReadDir(dir)
+		<-reading
 		if err != nil {
-			if p == root {
-				return err
+			if rel == "" {
+				rootErr = err
 			}
-			return nil // an unreadable corner is left out, not the whole list
+			return
 		}
-		if d.IsDir() {
-			if p != root && skipDirs[d.Name()] && (!noIgnore || vcsDirs[d.Name()]) {
-				return fs.SkipDir
+		var here []string
+		for _, d := range ents {
+			name := d.Name()
+			p := name
+			if rel != "" {
+				p = rel + "/" + name
 			}
-			return nil
+			if d.IsDir() {
+				if skipDirs[name] && (!noIgnore || vcsDirs[name]) {
+					continue
+				}
+				wg.Add(1)
+				go walk(filepath.Join(dir, name), p)
+				continue
+			}
+			here = append(here, p)
 		}
-		rel, err := filepath.Rel(root, p)
-		if err != nil {
-			return nil
-		}
-		files = append(files, filepath.ToSlash(rel))
-		if len(files) >= MaxFiles {
-			return errStop
-		}
-		return nil
-	})
-	if errors.Is(err, errStop) {
-		err = ErrTooManyFiles
+		count.Add(int64(len(here)))
+		mu.Lock()
+		files = append(files, here...)
+		mu.Unlock()
 	}
-	return files, err
+	wg.Add(1)
+	walk(root, "")
+	wg.Wait()
+	if rootErr != nil {
+		return nil, rootErr
+	}
+	slices.Sort(files)
+	if len(files) >= MaxFiles {
+		return files[:MaxFiles], ErrTooManyFiles
+	}
+	return files, nil
 }
 
 // rules are a Marker file's patterns.
