@@ -51,6 +51,10 @@ func scoreRunes(q, c []rune, ignoreCase bool) (Match, bool) {
 	if !isSubsequence(q, c, ignoreCase) {
 		return Match{}, false
 	}
+	if len(q)*len(c) > maxCells {
+		score, idx := firstAlignment(q, c, ignoreCase)
+		return Match{Score: score, Indices: idx}, true
+	}
 	score, idx := bestAlignment(q, c, ignoreCase)
 	return Match{Score: score, Indices: idx}, true
 }

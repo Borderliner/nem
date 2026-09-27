@@ -233,6 +233,42 @@ func bestAlignment(q, c []rune, ignoreCase bool) (int, []int) {
 	return bestScore, idx
 }
 
+// maxCells is the largest table bestAlignment fills: a query and candidate
+// of lengths n and m take n*m cells. Typed queries against names and paths
+// are thousands; a kill yanked into a prompt, against a buffer named after
+// another, was billions - minutes of work and more memory than the machine
+// has. Past it, firstAlignment scores the match in one pass.
+const maxCells = 1 << 18
+
+// firstAlignment matches each rune of q to the first rune of c it can take,
+// scored by the same rules as bestAlignment. It is not the best alignment,
+// but found in one pass and no memory beyond the indices, for a query and
+// candidate too long to search every alignment of.
+func firstAlignment(q, c []rune, ignoreCase bool) (int, []int) {
+	idx := make([]int, 0, len(q))
+	score := 0
+	for j := 0; j < len(c) && len(idx) < len(q); j++ {
+		r := q[len(idx)]
+		if !runesEqual(r, c[j], ignoreCase) {
+			continue
+		}
+		score += scoreMatch + boundaryBonus(c, j)
+		if ignoreCase && r == c[j] {
+			score += bonusCaseMatch
+		}
+		switch prev := len(idx) - 1; {
+		case prev < 0:
+			score -= leadingPenalty(j)
+		case idx[prev] == j-1:
+			score += bonusConsecutive
+		default:
+			score -= penaltyGapStart + penaltyGapExtend*(j-idx[prev]-2)
+		}
+		idx = append(idx, j)
+	}
+	return score, idx
+}
+
 // decodeInto decodes s into dst's storage, growing it only when necessary, so a
 // ranking pass over many candidates does not allocate once per candidate.
 func decodeInto(dst []rune, s string) []rune {
