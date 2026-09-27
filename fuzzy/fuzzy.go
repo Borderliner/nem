@@ -65,26 +65,10 @@ func Score(query, candidate string) (Match, bool) {
 	if len(p.groups) == 0 {
 		return Match{}, true
 	}
+	if !p.admits(candidate) {
+		return Match{}, false
+	}
 	return p.match([]rune(candidate))
-}
-
-// scoreRunes is the shared core, taking pre-decoded runes so Rank can decode the
-// query once and reuse one candidate buffer across the whole pass. Decoding per
-// candidate inside Score cost one allocation per candidate on every keystroke,
-// which dominated ranking a large directory.
-func scoreRunes(q, c []rune, ignoreCase bool) (Match, bool) {
-	if len(q) > len(c) {
-		return Match{}, false
-	}
-	if !isSubsequence(q, c, ignoreCase) {
-		return Match{}, false
-	}
-	if len(q)*len(c) > maxCells {
-		score, idx := firstAlignment(q, c, ignoreCase)
-		return Match{Score: score, Indices: idx}, true
-	}
-	score, idx := bestAlignment(q, c, ignoreCase)
-	return Match{Score: score, Indices: idx}, true
 }
 
 // Ranked is one candidate and how it matched.
@@ -146,11 +130,18 @@ func Rank(query string, candidates []string) []Ranked {
 	return out
 }
 
-// score appends to out the candidates p matches, in input order. The query
-// was parsed once for the whole pass, and each worker shares it read-only.
+// score appends to out the candidates p matches, in input order.
+//
+// The query was parsed once for the whole pass, and each worker shares it
+// read-only. Candidates are decoded into one buffer reused across the pass:
+// decoding each into its own cost an allocation per candidate on every
+// keystroke, which dominated ranking a large directory.
 func score(p *pattern, candidates []string, out []Ranked) []Ranked {
 	var cbuf []rune
 	for _, cand := range candidates {
+		if !p.admits(cand) {
+			continue
+		}
 		cbuf = decodeInto(cbuf, cand)
 		if m, ok := p.match(cbuf); ok {
 			out = append(out, Ranked{Candidate: cand, Match: m})

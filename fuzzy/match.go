@@ -182,6 +182,35 @@ func isSubsequence(q, c []rune, ignoreCase bool) bool {
 	return false
 }
 
+// isSubsequenceIn is isSubsequence over a candidate not yet decoded. Ranging
+// over a string decodes it exactly as converting it to runes does, invalid
+// bytes and all, so the answer is the same; but a candidate it rejects - most
+// of them - is never decoded into a buffer at all.
+func isSubsequenceIn(q []rune, s string, ignoreCase bool) bool {
+	if len(q) == 0 {
+		return true
+	}
+	qi, want := 0, q[0]
+	if ignoreCase {
+		want = fold(want)
+	}
+	for _, r := range s {
+		if ignoreCase {
+			r = fold(r)
+		}
+		if r != want {
+			continue
+		}
+		if qi++; qi == len(q) {
+			return true
+		}
+		if want = q[qi]; ignoreCase {
+			want = fold(want)
+		}
+	}
+	return false
+}
+
 // leadingPenalty charges for runes skipped before the first match.
 func leadingPenalty(j int) int {
 	if p := j * penaltyLeading; p < maxPenaltyLeading {

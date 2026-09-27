@@ -44,6 +44,9 @@ type pattern struct {
 	// what nearly every query still is. It is matched exactly as queries were
 	// before the syntax existed, with none of the work of combining terms.
 	plain bool
+	// lone is where the groups of a single fuzzy term begin. They sort last,
+	// and admits looks for them in a candidate before it is decoded.
+	lone int
 }
 
 // parse reads query as fzf reads its extended search syntax.
@@ -89,14 +92,13 @@ func parse(query string) pattern {
 		}
 		or = false
 	}
-	p.plain = len(p.groups) == 1 && len(p.groups[0]) == 1 &&
-		p.groups[0][0].kind == termFuzzy && !p.groups[0][0].not
+	p.plain = len(p.groups) == 1 && p.groups[0].loneFuzzy()
 	// Groups are tested cheapest first. The score is a sum and the indices a
-	// sorted union, so the order changes nothing but the time: an anchored or
-	// exact term is a scan at most and rejects far more candidates than a
-	// fuzzy one, so most of what "edi 'go !test" rejects is rejected before
-	// any subsequence is looked for.
+	// sorted union, so the order changes nothing but the time.
 	slices.SortStableFunc(p.groups, func(a, b group) int { return a.cost() - b.cost() })
+	if p.lone = slices.IndexFunc(p.groups, group.loneFuzzy); p.lone < 0 {
+		p.lone = len(p.groups)
+	}
 	return p
 }
 
@@ -164,7 +166,14 @@ func parseTerm(w []rune) (term, bool) {
 // cost ranks a group by how cheaply it is tested: anchored terms compare a
 // few runes at a fixed place, exact ones scan, and fuzzy ones scan and match
 // most of what they scan.
+//
+// A lone fuzzy term ranks apart, and last in the order. It is tested first
+// all the same, by admits, in the candidate's string before it is decoded:
+// most candidates it turns away for less than decoding them would cost.
 func (g group) cost() int {
+	if g.loneFuzzy() {
+		return 3
+	}
 	c := 0
 	for _, t := range g {
 		switch t.kind {
@@ -271,14 +280,34 @@ func (g group) score(c []rune) (int, []int) {
 	return best, bestIdx
 }
 
-// match scores c against p. Every group is tested before any is scored, so a
-// candidate that the last group rejects costs no alignment for the first.
+// loneFuzzy reports whether g is a single fuzzy term, which admits tests.
+func (g group) loneFuzzy() bool {
+	return len(g) == 1 && g[0].kind == termFuzzy && !g[0].not
+}
+
+// admits reports whether s may match p, looking for p's lone fuzzy terms in
+// the string itself. A candidate it turns away does not match; one it lets
+// through is decoded and matched on the rest.
+func (p *pattern) admits(s string) bool {
+	for _, g := range p.groups[p.lone:] {
+		t := &g[0]
+		if len(t.text) > len(s) || !isSubsequenceIn(t.text, s, t.ignoreCase) {
+			return false
+		}
+	}
+	return true
+}
+
+// match scores c against p, where c is a candidate admits has let through,
+// decoded. The lone fuzzy terms admits looked for are known to hold, and
+// every other group is tested before any is scored, so a candidate that the
+// last group rejects costs no alignment for the first.
 func (p *pattern) match(c []rune) (Match, bool) {
 	if p.plain {
-		t := &p.groups[0][0]
-		return scoreRunes(t.text, c, t.ignoreCase)
+		s, idx := p.groups[0][0].score(c)
+		return Match{Score: s, Indices: idx}, true
 	}
-	for _, g := range p.groups {
+	for _, g := range p.groups[:p.lone] {
 		if !g.holds(c) {
 			return Match{}, false
 		}
