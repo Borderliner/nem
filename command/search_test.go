@@ -166,25 +166,75 @@ func TestIsearchAdvanceStepsToTheNextMatch(t *testing.T) {
 	}
 }
 
-func TestIsearchAdvanceStaysPutPastTheLastMatch(t *testing.T) {
-	f := commandtest.New("foo bar foo")
+// Past the last match a step fails and says so, point staying on the last
+// match; the next step wraps round to the first, as emacs's does.
+func TestIsearchWrapsAfterFailingAtTheEnd(t *testing.T) {
+	f := commandtest.New("foo bar foo", "tail")
+	f.SetPoint(at(0, 4))
 	s := command.NewIsearch(f, false)
 
 	s.Update("foo")
-	s.Advance() // now at the second and final match
-	before := f.Point()
+	if got := f.Point(); !got.Equal(at(0, 11)) {
+		t.Fatalf("first match: point %v, want %v", got, at(0, 11))
+	}
 	f.Echoes = nil
-
-	s.Advance()
-
-	if got := f.Point(); !got.Equal(before) {
-		t.Errorf("point %v, want it unmoved at %v", got, before)
+	s.Step(false)
+	if got := f.Point(); !got.Equal(at(0, 11)) || !echoContains(f, "Failing I-search: foo") {
+		t.Errorf("past the last match: point %v, echoes %q; want to stay, failing", got, f.Echoes)
 	}
-	if echoContains(f, "Failing I-search") {
-		t.Error("overshooting the last match must not echo a search failure")
+	if got := s.Prompt(); got != "Failing I-search: " {
+		t.Errorf("prompt while failing = %q", got)
 	}
-	if !echoContains(f, "No further match") {
-		t.Errorf("echoes = %q, want %q", f.Echoes, "No further match")
+	s.Step(false)
+	if got := f.Point(); !got.Equal(at(0, 3)) || s.Prompt() != "Wrapped I-search: " {
+		t.Errorf("after wrapping: point %v, prompt %q; want the first match, wrapped", got, s.Prompt())
+	}
+	s.Step(false)
+	if got := f.Point(); !got.Equal(at(0, 11)) {
+		t.Errorf("stepping on after wrapping: point %v, want the second match again", got)
+	}
+}
+
+// Backward, the same at the top: fail, then wrap to the bottom.
+func TestIsearchBackwardWrapsAtTheTop(t *testing.T) {
+	f := commandtest.New("foo bar foo")
+	f.SetPoint(at(0, 5))
+	s := command.NewIsearch(f, true)
+	s.Update("foo")
+	if got := f.Point(); !got.Equal(at(0, 0)) {
+		t.Fatalf("first match: point %v", got)
+	}
+	s.Step(true)
+	s.Step(true)
+	if got := f.Point(); !got.Equal(at(0, 8)) {
+		t.Errorf("after wrapping backward: point %v, want the last match %v", got, at(0, 8))
+	}
+}
+
+// C-r in a forward search turns round, from the current match.
+func TestIsearchTurnsRound(t *testing.T) {
+	f := commandtest.New("x foo foo foo")
+	s := command.NewIsearch(f, false)
+	s.Update("foo")
+	s.Step(false)
+	s.Step(false) // on the third
+	s.Step(true)
+	if got := f.Point(); !got.Equal(at(0, 6)) {
+		t.Errorf("C-r from the third match: point %v, want before the second %v", got, at(0, 6))
+	}
+}
+
+// Typing more of the pattern grows the current match rather than going back
+// to the first.
+func TestIsearchExtendsTheCurrentMatch(t *testing.T) {
+	f := commandtest.New("fo foo fox")
+	s := command.NewIsearch(f, false)
+	s.Update("fo")
+	s.Step(false)
+	s.Step(false) // on "fo" of fox
+	s.Update("fox")
+	if got := f.Point(); !got.Equal(at(0, 10)) {
+		t.Errorf("point %v, want the end of fox %v", got, at(0, 10))
 	}
 }
 

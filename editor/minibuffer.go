@@ -117,13 +117,23 @@ func newMiniState(opts command.ReadOpts, buf *text.Buffer, win *view.Window) *mi
 }
 
 // line renders the prompt and its contents for the echo row.
-func (ms *miniState) line() string { return ms.prompt + ms.buf.String() }
+func (ms *miniState) line() string { return ms.promptText() + ms.buf.String() }
+
+// promptText is the prompt as it stands: a search's says how the search is
+// going - failing, wrapped, backward - as emacs's does, since a message in
+// the echo area would be hidden under it.
+func (ms *miniState) promptText() string {
+	if ms.opts.Session != nil {
+		return ms.opts.Session.Prompt()
+	}
+	return ms.prompt
+}
 
 // cursorCol is the display column of point within the echo row, counted from
 // the screen's left edge, so the prompt's own width is included.
 func (ms *miniState) cursorCol() text.ColIdx {
 	pt := ms.buf.ClampPos(ms.win.Pt)
-	return text.ColIdx(len([]rune(ms.prompt))) + ms.buf.Line(pt.Line).DisplayCol(pt.Col)
+	return text.ColIdx(len([]rune(ms.promptText()))) + ms.buf.Line(pt.Line).DisplayCol(pt.Col)
 }
 
 // contents returns what the user has typed.
@@ -250,7 +260,8 @@ func (ms *miniState) control(e *Editor, name string) {
 		ms.complete(e)
 	case miniSearchFwd, miniSearchBack:
 		if ms.opts.Session != nil {
-			e.withTextWindow(func() { ms.opts.Session.Advance() })
+			backward := name == miniSearchBack
+			e.withTextWindow(func() { ms.opts.Session.Step(backward) })
 		}
 	}
 }

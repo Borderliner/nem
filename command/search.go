@@ -184,13 +184,18 @@ func foldRune(r rune) rune {
 //
 // It exists as an exported type because the session outlives any single call:
 // the minibuffer keymap in the editor binds C-s and C-r while the prompt is
-// open, and advancing to the next match is a property of the session, not of
-// the pattern. Update is the ReadOpts.OnChange hook; Advance is what a
-// repeated C-s calls; Abandon is the C-g path.
+// open, and stepping to the next match is a property of the session, not of
+// the pattern. Update is the ReadOpts.OnChange hook; Step is what C-s and C-r
+// call; Abandon is the C-g path.
 //
-// Every search runs from the position point held when the session opened, so
-// shortening the pattern walks point back toward that origin rather than
-// leaving it stranded at a match the shorter pattern no longer justifies.
+// It behaves as emacs's does. A step goes on from the current match, in the
+// direction of the key - so C-r in a forward search turns round. At the last
+// match a step fails, and says so; the next one wraps round the end of the
+// buffer and carries on from the other end. Typing more of the pattern
+// extends the current match where it can; any other edit searches again from
+// where the session opened, so shortening the pattern walks point back toward
+// that origin rather than leaving it stranded at a match the shorter pattern
+// no longer justifies.
 type Isearch struct {
 	e        Env
 	backward bool
@@ -203,12 +208,18 @@ type Isearch struct {
 
 	pat string
 
-	// skip is how many matches to step past, incremented by Advance. A
-	// pattern edit resets it, because the match numbering has changed.
-	skip int
+	// at is where the current match starts, which steps go on from; matched
+	// reports there is one.
+	at      text.Pos
+	matched bool
 
-	// failing reports that the pattern, as it stands, is not found.
+	// failing reports that the pattern, as it stands, is not found - or that
+	// a step found nothing further. edge is the second of those: the next
+	// step wraps. wrapped reports that the search has gone round the end of
+	// the buffer, so a search from the origin may too.
 	failing bool
+	edge    bool
+	wrapped bool
 }
 
 // NewIsearch opens a session searching forward, or backward when backward is
@@ -221,28 +232,71 @@ func NewIsearch(e Env, backward bool) *Isearch {
 // Update re-runs the search for a changed pattern and moves point to the
 // match. It is ReadOpts.OnChange.
 func (s *Isearch) Update(pat string) {
-	s.pat = pat
-	s.skip = 0
-	s.run()
+	extends := s.matched && s.pat != "" && strings.HasPrefix(pat, s.pat)
+	s.pat, s.edge = pat, false
+	if pat == "" {
+		s.e.Win().Pt, s.lastGood = s.origin, s.origin
+		s.matched, s.failing = false, false
+		return
+	}
+	// More typed: the match grows where it is, if it can. Anything else: the
+	// search starts again from the origin.
+	from := s.origin
+	if extends {
+		from = s.at
+		if s.backward {
+			from = text.Pos{Line: s.at.Line, Col: s.at.Col + 1}
+		}
+	}
+	start, end, ok := s.search(from, s.backward)
+	if !ok && s.wrapped {
+		start, end, ok = s.search(s.bufferEdge(s.backward), s.backward)
+	}
+	if !ok {
+		s.fail()
+		return
+	}
+	s.land(start, end)
 }
 
-// Advance steps to the next match in the search direction, as a repeated C-s
-// does inside the prompt. It stays put when there is no further match.
-func (s *Isearch) Advance() {
+// Step goes to the next match forward, or backward, from the current one:
+// C-s and C-r inside the prompt. Where there is none it fails, and the step
+// after that wraps round the end of the buffer.
+func (s *Isearch) Step(backward bool) {
 	if s.pat == "" {
 		return
 	}
-	s.skip++
-	if p, ok := s.find(); ok {
-		s.e.Win().Pt = p
-		s.lastGood = p
+	if backward != s.backward {
+		// Turning round starts from the current match, and forgets that the
+		// other direction had run out.
+		s.backward, s.edge = backward, false
+	}
+	from := s.e.Win().Pt
+	if s.matched {
+		from = s.at
+		if !backward {
+			from.Col++ // past this match's start, so the next may overlap it
+		}
+	}
+	start, end, ok := s.search(from, backward)
+	if !ok && s.edge {
+		start, end, ok = s.search(s.bufferEdge(backward), backward)
+		if ok {
+			s.wrapped = true
+		}
+	}
+	if !ok {
+		s.edge = true
+		s.fail()
 		return
 	}
-	// Probing with find rather than run means overshooting the last match
-	// reports itself plainly instead of echoing a spurious search failure.
-	s.skip--
-	s.e.Echo("No further match")
+	s.edge = false
+	s.land(start, end)
 }
+
+// Advance steps on in the direction the search was opened in, as a repeated
+// C-s does in a forward search.
+func (s *Isearch) Advance() { s.Step(s.backward) }
 
 // Abandon restores point to where the session opened. This is C-g, and it is
 // the behaviour users rely on most.
@@ -253,61 +307,61 @@ func (s *Isearch) Abandon() {
 // Pattern returns the pattern currently being searched for.
 func (s *Isearch) Pattern() string { return s.pat }
 
-// find locates where point should go for the current pattern and skip count,
-// without touching the editor. Keeping it free of side effects is what lets
-// Advance probe for a further match before committing to one.
-//
-// Every search restarts from the origin, which is why shortening the pattern
-// walks point back rather than leaving it stranded.
-func (s *Isearch) find() (text.Pos, bool) {
-	fold := FoldCase(s.pat)
-	b := s.e.Buf()
-	from := s.origin
-
-	var start, end text.Pos
-	for i := 0; i <= s.skip; i++ {
-		var ok bool
-		if s.backward {
-			start, end, ok = SearchBackward(b, s.pat, from, fold)
-			if !ok {
-				return text.Pos{}, false
-			}
-			from = start
-		} else {
-			start, end, ok = SearchForward(b, s.pat, from, fold)
-			if !ok {
-				return text.Pos{}, false
-			}
-			from = text.Pos{Line: start.Line, Col: start.Col + 1}
-		}
-	}
-
-	// Forward search leaves point after the match, backward search before it,
-	// so that continuing in either direction moves away from it. This is what
-	// emacs does.
+// Prompt is the search's prompt as it stands, in emacs's words: "I-search:",
+// with "Failing" or "Wrapped" in front when that is how it is going and
+// "backward" after when it is.
+func (s *Isearch) Prompt() string {
+	p := "I-search"
 	if s.backward {
-		return start, true
+		p += " backward"
 	}
-	return end, true
+	switch {
+	case s.failing && s.wrapped:
+		p = "Failing wrapped " + p
+	case s.failing:
+		p = "Failing " + p
+	case s.wrapped:
+		p = "Wrapped " + p
+	}
+	return p + ": "
 }
 
-// run performs the search and positions point, reporting whether it matched.
-func (s *Isearch) run() bool {
-	if s.pat == "" {
-		s.e.Win().Pt = s.origin
-		s.lastGood = s.origin
-		return true
+// search finds the first match from from in the direction given.
+func (s *Isearch) search(from text.Pos, backward bool) (start, end text.Pos, ok bool) {
+	fold := FoldCase(s.pat)
+	if backward {
+		return SearchBackward(s.e.Buf(), s.pat, from, fold)
 	}
-	p, ok := s.find()
-	s.failing = !ok
-	if !ok {
-		s.e.Win().Pt = s.lastGood
-		s.e.Echo("Failing I-search: %s", s.pat)
-		return false
+	return SearchForward(s.e.Buf(), s.pat, from, fold)
+}
+
+// bufferEdge is where a wrapped search starts: the top of the buffer going
+// forward, the bottom going back.
+func (s *Isearch) bufferEdge(backward bool) text.Pos {
+	if backward {
+		return s.e.Buf().End()
 	}
-	s.e.Win().Pt = p
-	s.lastGood = p
-	return true
+	return text.Pos{}
+}
+
+// land makes the match between start and end the current one. A forward
+// search leaves point after it and a backward one before it, so that going
+// on in either direction moves away from it, as emacs does.
+func (s *Isearch) land(start, end text.Pos) {
+	s.at, s.matched, s.failing = start, true, false
+	p := end
+	if s.backward {
+		p = start
+	}
+	s.e.Win().Pt, s.lastGood = p, p
+}
+
+// fail marks the search as having no match, leaving point at the last one it
+// had. The prompt says so while it is open, and the echo area after.
+func (s *Isearch) fail() {
+	s.failing = true
+	s.e.Win().Pt = s.lastGood
+	s.e.Echo("Failing I-search: %s", s.pat)
 }
 
 func isearchCmd(backward bool) Func {
