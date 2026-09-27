@@ -457,10 +457,15 @@ func (e *Editor) dispatch(name string) error {
 
 // keepsSelection names the commands that change the buffer yet must leave an
 // active region active. Moving lines is the case: the selection has to survive
-// the move so that holding the key keeps moving the same block.
+// the move so that holding the key keeps moving the same block. Shifting
+// lines' indentation is another, so TAB and S-TAB can be pressed until the
+// block sits where it should.
 var keepsSelection = map[string]bool{
-	"move-lines-up":   true,
-	"move-lines-down": true,
+	"move-lines-up":                   true,
+	"move-lines-down":                 true,
+	"indent-for-tab-command":          true,
+	"indent-rigidly-left-to-tab-stop": true,
+	"indent-rigidly":                  true,
 }
 
 // endsSelection deactivates the region after a command that changed the buffer,

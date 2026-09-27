@@ -40,7 +40,7 @@ func RegisterEdit(r *Registry) error {
 		{Name: "transpose-chars", Doc: "Transpose the characters around point.", Fn: transposeChars, Interactive: true},
 		{Name: "transpose-words", Doc: "Transpose the words around point.", Fn: transposeWords, Interactive: true},
 		{Name: "newline", Doc: "Insert a newline, copying the current line's indentation.", Fn: newline, Interactive: true},
-		{Name: "indent-for-tab-command", Doc: "Indent at point with the file's tabs or spaces.", Fn: indentForTab, Interactive: true},
+		{Name: "indent-for-tab-command", Doc: "Indent at point, or the region's lines, with the file's tabs or spaces.", Fn: indentForTab, Interactive: true},
 		{Name: "upcase-word", Doc: "Convert the following word to upper case.", Fn: upcaseWord, Interactive: true},
 		{Name: "downcase-word", Doc: "Convert the following word to lower case.", Fn: downcaseWord, Interactive: true},
 		{Name: "capitalize-word", Doc: "Capitalize the following word.", Fn: capitalizeWord, Interactive: true},

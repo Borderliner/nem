@@ -9,7 +9,8 @@ import (
 )
 
 // Indentation: TAB indents the way the file already does, with tabs or with
-// spaces.
+// spaces, and with a region it shifts the region's lines; S-TAB and C-x TAB
+// shift them back or by a chosen amount.
 //
 // This is not language-aware indentation, which would need to know what a
 // block is in each language. It is the half that needs no parser and that a
@@ -17,7 +18,8 @@ import (
 // error, and spaces in a Makefile's recipe are another.
 
 // Indent is how a buffer indents: with tabs, or with spaces, and how many
-// columns one level takes. For tabs that is how wide a tab is taken to be.
+// columns one level takes. For tabs that is how wide a tab is taken to be,
+// so a tab in the indentation is always exactly one level.
 type Indent struct {
 	Tabs  bool
 	Width int
@@ -196,9 +198,30 @@ func guessIndent(b *text.Buffer) (Indent, bool) {
 	return Indent{}, false
 }
 
-// indentForTab is TAB: a level inserted at point, as a tab, or as spaces up
-// to the next multiple of the width, as a tab stop would take it. C-u 3 TAB
-// is three levels.
+// RegisterIndent adds the commands that shift lines' indentation to r.
+// indent-for-tab-command is registered with the editing commands, where TAB
+// has always been.
+func RegisterIndent(r *Registry) error {
+	cmds := []Command{
+		{Name: "indent-rigidly", Doc: "Shift the region's lines right by ARG columns, or one level; left with a negative ARG.", Fn: indentRigidly},
+		{Name: "indent-rigidly-left-to-tab-stop", Doc: "Shift the region's lines, or the current line, one level left.", Fn: indentRigidlyLeft},
+	}
+	for _, c := range cmds {
+		c.Interactive = true
+		if err := r.Register(c); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// indentForTab is TAB. With a region, every line it touches is shifted
+// right a level, and the region stays, so TAB can be pressed again. Without
+// one, a level is inserted at point: a tab, or spaces up to the next multiple
+// of the width, as a tab stop would take it. C-u 3 TAB is three levels.
+//
+// An empty region is no region, as it is to delete-selection: C-SPC then TAB
+// indents at point.
 func indentForTab(e Env) error {
 	n, _ := e.Arg()
 	if n < 1 {
@@ -206,6 +229,10 @@ func indentForTab(e Env) error {
 	}
 	b, p := e.Buf(), e.Win().Pt
 	ind := IndentFor(b)
+	if b.MarkActive() && b.Mark() != p {
+		first, last := lineBlock(e)
+		return shiftLines(e, first, last, ind, func(w int) int { return w + n*ind.Width })
+	}
 
 	var ins []rune
 	if ind.Tabs {
@@ -218,5 +245,134 @@ func indentForTab(e Env) error {
 		return err
 	}
 	edSetPoint(e, edAdvance(p, ins))
+	// The empty region is over. The editor leaves a region active after TAB
+	// so it can be pressed again, and this one now spans what was inserted.
+	b.DeactivateMark()
 	return nil
+}
+
+// indentRigidlyLeft is S-TAB: the region's lines, or the current line, one
+// level left. A line with less than a level of indentation loses what it has.
+func indentRigidlyLeft(e Env) error {
+	b := e.Buf()
+	ind := IndentFor(b)
+	first, last := lineBlock(e)
+	return shiftLines(e, first, last, ind, func(w int) int { return w - ind.Width })
+}
+
+// indentRigidly is C-x TAB: the region's lines, or the current line, shifted
+// right by ARG columns, or left by a negative one; with no ARG, by one level.
+//
+// The region is the active one, as for M-<up>, rather than emacs's mark and
+// point whatever their state: an inactive mark is left anywhere by a yank or
+// a jump, and shifting every line between it and point would be a surprise.
+func indentRigidly(e Env) error {
+	b := e.Buf()
+	ind := IndentFor(b)
+	by := ind.Width
+	if n, explicit := e.Arg(); explicit {
+		by = n
+	}
+	if by == 0 {
+		return nil
+	}
+	first, last := lineBlock(e)
+	return shiftLines(e, first, last, ind, func(w int) int { return w + by })
+}
+
+// shiftLines gives each non-blank line from first to last the indentation
+// width target makes of its current one, written the buffer's way: tabs and
+// then spaces for what is left over, or spaces alone. Blank lines are left as
+// they are, so shifting never leaves whitespace at the end of one; and only
+// indentation ever changes, so shifting left stops at a line's first
+// character.
+//
+// Point and mark stay on the same text. The one exception is the start of a
+// line, which stays the start: a region of whole lines, from the start of one
+// line to the start of another, still covers the same whole lines afterwards,
+// and TAB can shift them again.
+func shiftLines(e Env, first, last int, ind Indent, target func(width int) int) error {
+	b := e.Buf()
+	type change struct {
+		line, old int // the line, and how many runes of indentation it has
+		ws        []rune
+	}
+	var changes []change
+	for i := first; i <= last; i++ {
+		rs := b.Line(i).View()
+		n := indentOf(rs)
+		if n == len(rs) {
+			continue
+		}
+		cur := indentWidth(rs[:n], ind.Width)
+		want := max(0, target(cur))
+		if want == cur {
+			continue
+		}
+		changes = append(changes, change{i, n, makeIndent(want, ind)})
+	}
+	if len(changes) == 0 {
+		return nil
+	}
+
+	// Asked before anything is changed, so a buffer that refuses one line's
+	// edit refuses the lot rather than being left half shifted.
+	for _, c := range changes {
+		at := text.Pos{Line: c.line}
+		if c.old > 0 {
+			if err := b.Vet(at, text.Pos{Line: c.line, Col: text.RuneIdx(c.old)}, nil); err != nil {
+				return err
+			}
+		}
+		if len(c.ws) > 0 {
+			if err := b.Vet(at, at, c.ws); err != nil {
+				return err
+			}
+		}
+	}
+
+	b.BeginUndoGroup()
+	defer b.EndUndoGroup()
+	pt := e.Win().Pt
+	for _, c := range changes {
+		// The new indentation goes in before the old comes out, so the
+		// buffer carries the mark across as point is carried below: a
+		// position at the start of the line stays there, one in the text
+		// moves with it.
+		at := text.Pos{Line: c.line}
+		if err := b.Insert(at, c.ws); err != nil {
+			return err
+		}
+		n := text.RuneIdx(len(c.ws))
+		if err := b.Delete(text.Pos{Line: c.line, Col: n}, text.Pos{Line: c.line, Col: n + text.RuneIdx(c.old)}); err != nil {
+			return err
+		}
+		if pt.Line == c.line && pt.Col > 0 {
+			pt.Col = max(n, pt.Col-text.RuneIdx(c.old)+n)
+		}
+	}
+	edSetPoint(e, pt)
+	return nil
+}
+
+// indentWidth is how many columns the indentation ws takes, with a tab
+// reaching the next multiple of tabW.
+func indentWidth(ws []rune, tabW int) int {
+	w := 0
+	for _, r := range ws {
+		if r == '\t' {
+			w = (w/tabW + 1) * tabW
+		} else {
+			w++
+		}
+	}
+	return w
+}
+
+// makeIndent is indentation width columns wide, written as ind says.
+func makeIndent(width int, ind Indent) []rune {
+	if !ind.Tabs {
+		return []rune(strings.Repeat(" ", width))
+	}
+	return []rune(strings.Repeat("\t", width/ind.Width) + strings.Repeat(" ", width%ind.Width))
 }

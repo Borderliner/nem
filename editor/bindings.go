@@ -62,6 +62,11 @@ var defaultBindings = []struct{ Spec, Command string }{
 	{"M-=", "count-words"},
 	{"C-x =", "what-cursor-position"},
 
+	// Indentation and regions. TAB itself is above: with a region it shifts
+	// the region's lines, and <backtab> - Shift-TAB - shifts them back.
+	{"<backtab>", "indent-rigidly-left-to-tab-stop"},
+	{"C-x TAB", "indent-rigidly"},
+
 	// Keyboard macros.
 	{"<f3>", "kmacro-start-macro-or-insert-counter"},
 	{"<f4>", "kmacro-end-or-call-macro"},
