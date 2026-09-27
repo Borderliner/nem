@@ -88,6 +88,9 @@ type Settings struct {
 	// AutoRevert reads a buffer without edits again when its file changes on
 	// disk.
 	AutoRevert bool
+
+	// HighlightLine lays a faint band under the line point is on.
+	HighlightLine bool
 }
 
 // DefaultSettings returns the built-in defaults, which are what the editor uses
@@ -101,7 +104,7 @@ func DefaultSettings() Settings {
 		DeleteSelection: true,
 		Syntax:          true, Theme: "auto",
 		OpenBinary: "ask", Icons: "auto", FillColumn: 70, AutoPair: true,
-		AutoRevert: true,
+		AutoRevert: true, HighlightLine: true,
 	}
 }
 
@@ -122,7 +125,7 @@ const (
 // why it has no effect.
 var knownSettings = []string{
 	"auto-pair", "auto-revert", "autosave-idle", "backup", "clipboard", "completion-rows", "completion-style",
-	"delete-selection", "fill-column", "icons", "line-numbers", "open-binary", "scroll-margin", "syntax", "tab-width",
+	"delete-selection", "fill-column", "hl-line", "icons", "line-numbers", "open-binary", "scroll-margin", "syntax", "tab-width",
 	"shell", "theme", "undo-style", "which-key-delay",
 }
 
@@ -255,6 +258,12 @@ func (s *Settings) set(key string, v glua.LValue) error {
 			return fmt.Errorf("shell must be a string, got %s", v.Type())
 		}
 		s.Shell = string(str)
+	case "hl-line":
+		b, ok := v.(glua.LBool)
+		if !ok {
+			return fmt.Errorf("hl-line must be true or false, got %s", v.Type())
+		}
+		s.HighlightLine = bool(b)
 	case "auto-revert":
 		b, ok := v.(glua.LBool)
 		if !ok {

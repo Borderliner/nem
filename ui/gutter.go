@@ -86,7 +86,15 @@ func drawGutter(scr tcell.Screen, rect view.Rect, win *view.Window, textH int, a
 
 		style := th.LineNumber
 		if ln == cur {
+			// The number is marked, and the band under the line runs on under
+			// it, so the two read as one.
 			style = th.LineNumberCurrent
+			if th.HighlightLine && !listing {
+				style = overlay(style, th.CurrentLine)
+				for k := 0; k < gw; k++ {
+					scr.SetContent(rect.X+k, rect.Y+i, ' ', nil, style)
+				}
+			}
 		}
 
 		s := strconv.Itoa(ln + 1)

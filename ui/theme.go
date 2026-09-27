@@ -143,10 +143,16 @@ type Theme struct {
 	PanelBorder   tcell.Style
 	PanelSelected tcell.Style
 	PanelMatch    tcell.Style
-	// ListCursor is the bar across the row point is on in a listing buffer. It
-	// is the panel's selected row in another place - the same act of picking
-	// one item from a list - so it is reverse for the same reason.
-	ListCursor tcell.Style
+	// ListCursor is the bar across the row point is on in a listing buffer,
+	// and CurrentLine the fainter band across the line point is on in text.
+	// Both are a tint of the background, not an inversion: the row keeps its
+	// own colours, and the band sits under them the way a highlighter pen
+	// would. The tint is the one guess about the terminal nem makes - dark or
+	// light, as the syntax palette is chosen - and HighlightLine turns the
+	// band in text off.
+	ListCursor    tcell.Style
+	CurrentLine   tcell.Style
+	HighlightLine bool
 	// MiniNote styles the candidate count beside a prompt at the bottom of the
 	// screen: quiet, since it is secondary to what is being typed.
 	MiniNote tcell.Style
@@ -193,7 +199,7 @@ func DefaultTheme() Theme {
 		mark  = lipgloss.Color(colourMark)
 	)
 
-	return Theme{
+	t := Theme{
 		Text:  tcell.StyleDefault,
 		Trunc: tcell.StyleDefault.Foreground(tcell.GetColor(colourQuiet)),
 
@@ -208,7 +214,7 @@ func DefaultTheme() Theme {
 		PanelBorder:   tcell.StyleDefault.Foreground(tcell.GetColor(colourRule)),
 		PanelSelected: tcell.StyleDefault.Reverse(true),
 		PanelMatch:    tcell.StyleDefault.Bold(true),
-		ListCursor:    tcell.StyleDefault.Reverse(true),
+		HighlightLine: true,
 		MiniNote:      tcell.StyleDefault.Foreground(tcell.GetColor(colourQuiet)),
 		PanelNote:     tcell.StyleDefault.Foreground(tcell.GetColor(colourQuiet)),
 
@@ -222,9 +228,10 @@ func DefaultTheme() Theme {
 		Echo:    lipgloss.NewStyle().Foreground(quiet),
 		Mini:    lipgloss.NewStyle(),
 
-		Syntax:      true,
-		SyntaxStyle: defaultSyntaxStyles(),
+		Syntax: true,
 
 		ScrollMargin: DefaultScrollMargin,
 	}
+	t.UseSyntaxPalette(TerminalIsLight())
+	return t
 }

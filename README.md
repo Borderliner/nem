@@ -271,7 +271,10 @@ any file to the system app on purpose, and so does `E` in dired. With no desktop
 to open things on (over plain SSH, say) files open as text, as before.
 
 **Line numbers** — shown by default, and drawn outside the text so they can
-never be selected or copied. `C-x n` toggles them.
+never be selected or copied. `C-x n` toggles them. The line the cursor is on
+lies on a faint band, its number picked out on it; `nem.set("hl-line", false)`
+takes the band away. In dired and in search results the selected row is a
+slightly stronger band, under the row's own colours.
 
 **Syntax highlighting** — Go, Lua, JSON and Markdown have hand-written lexers;
 C, Python, shell, Rust, JavaScript, TypeScript, YAML, TOML, HTML, CSS, SQL,

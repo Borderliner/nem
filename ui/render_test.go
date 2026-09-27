@@ -459,6 +459,7 @@ func TestTabRegionCarriesTheTextStyle(t *testing.T) {
 	// style, and wrong the moment the text area has a background colour.
 	th := DefaultTheme()
 	th.LineNumbers = false // measures text-area columns; see drawPlain
+	th.HighlightLine = false
 	th.Text = tcell.StyleDefault.Background(tcell.ColorDarkBlue)
 
 	scr := sim(t, 20, 6)
@@ -542,7 +543,7 @@ func TestDrawLineDoesNotWriteLeftOfItsRectangle(t *testing.T) {
 	// in a split is the divider column and in general is not this pane's cell.
 	l := text.NewLine([]rune(strings.Repeat("日", 3))) // 6 columns
 	scr := sim(t, 8, 1)
-	drawLine(scr, 1, 0, 4, &l, 1, DefaultTheme(), lineHL{}, regionHL{}, nil)
+	drawLine(scr, 1, 0, 4, &l, 1, DefaultTheme(), lineHL{}, regionHL{}, nil, tcell.StyleDefault)
 	scr.Show()
 
 	if got := cellAt(t, scr, 0, 0); len(got.Runes) != 0 && string(got.Runes) != " " {

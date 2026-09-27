@@ -13,9 +13,14 @@ import (
 // gutterTheme returns the default theme with the gutter forced on or off, so a
 // test states which layout it is asserting about rather than depending on what
 // the default happens to be.
+//
+// The current line's band is off: these tests are about what the gutter and
+// the text area each keep to themselves, and compare exact styles on the
+// current line. The band is tested on its own in TestCurrentLineBand.
 func gutterTheme(on bool) Theme {
 	th := DefaultTheme()
 	th.LineNumbers = on
+	th.HighlightLine = false
 	return th
 }
 
@@ -350,5 +355,43 @@ func TestLineNumbersAreOnByDefault(t *testing.T) {
 	scr := draw(t, 30, 6, f)
 	if got := rowText(t, scr, 0); !strings.HasPrefix(got, strconv.Itoa(1)+" alpha") {
 		t.Errorf("row 0 = %q, want a line number before the text by default", got)
+	}
+}
+
+// The line point is on lies on a faint band, from its number to the window's
+// edge, under its own colours - in the active window only, and not at all
+// with the band switched off.
+func TestCurrentLineBand(t *testing.T) {
+	th := DefaultTheme()
+	_, band, _ := th.CurrentLine.Decompose()
+	f, w := singleFrame(t, linesOf(5)...)
+	w.Pt = text.Pos{Line: 2}
+
+	scr := drawTh(t, 30, 8, f, th)
+	for x := 0; x < 30; x++ {
+		if _, bg, _ := cellAt(t, scr, x, 2).Style.Decompose(); bg != band {
+			t.Fatalf("cell (%d,2) of the current line is off the band", x)
+		}
+	}
+	if _, _, attr := cellAt(t, scr, 0, 2).Style.Decompose(); attr&tcell.AttrBold == 0 {
+		t.Error("the current line's number is not emphasised on the band")
+	}
+	for _, y := range []int{1, 3} {
+		if _, bg, _ := cellAt(t, scr, 5, y).Style.Decompose(); bg == band {
+			t.Errorf("line %d is on the band too", y)
+		}
+	}
+
+	f.Active = nil
+	scr = drawTh(t, 30, 8, f, th)
+	if _, bg, _ := cellAt(t, scr, 5, 2).Style.Decompose(); bg == band {
+		t.Error("an inactive window shows the band")
+	}
+
+	f.Active = w
+	th.HighlightLine = false
+	scr = drawTh(t, 30, 8, f, th)
+	if _, bg, _ := cellAt(t, scr, 5, 2).Style.Decompose(); bg == band {
+		t.Error("the band shows with hl-line off")
 	}
 }

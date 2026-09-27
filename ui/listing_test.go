@@ -45,25 +45,29 @@ func TestListingHasNoGutter(t *testing.T) {
 	}
 }
 
-// The row point is on is one flat bar to the window's edge; every other row is
-// drawn normally, colours included.
+// The row point is on is a tinted bar to the window's edge, under the row's
+// own colours; every other row is drawn as it is.
 func TestListingDrawsTheCurrentRowAsABar(t *testing.T) {
 	f, _ := listingFrame(t, 1, "alpha", "beta", "gamma")
 
 	scr := draw(t, 20, 6, f)
 
+	_, bar, _ := DefaultTheme().ListCursor.Decompose()
 	for x := 0; x < 20; x++ {
-		if c := cellAt(t, scr, x, 1); !reversed(c) {
-			t.Fatalf("cell (%d,1) is not in the bar; the bar must run to the edge", x)
+		if _, bg, _ := cellAt(t, scr, x, 1).Style.Decompose(); bg != bar {
+			t.Fatalf("cell (%d,1) is not on the bar; the bar must run to the edge", x)
 		}
 	}
-	if fg, _, _ := cellAt(t, scr, 0, 1).Style.Decompose(); fg != tcell.ColorDefault {
-		t.Errorf("bar keeps foreground %v; the row's own colours should be dropped", fg)
+	if c := cellAt(t, scr, 0, 1); reversed(c) {
+		t.Error("the bar inverts the row; it should only tint it")
+	}
+	if fg, _, _ := cellAt(t, scr, 0, 1).Style.Decompose(); fg == tcell.ColorDefault {
+		t.Error("the row on the bar lost its colour")
 	}
 	for _, y := range []int{0, 2} {
 		c := cellAt(t, scr, 0, y)
-		if reversed(c) {
-			t.Errorf("row %d is drawn as the bar too", y)
+		if _, bg, _ := c.Style.Decompose(); bg == bar {
+			t.Errorf("row %d is drawn on the bar too", y)
 		}
 		if fg, _, _ := c.Style.Decompose(); fg == tcell.ColorDefault {
 			t.Errorf("row %d lost its colour", y)

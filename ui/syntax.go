@@ -59,18 +59,21 @@ const (
 	lightNumber   = "#953800"
 	lightFunction = "#0550ae"
 	lightType     = "#7d4e00"
+
+	// Background tints: the band under the current line, and the stronger
+	// one under a listing's selected row. Faint enough on their grounds that
+	// every syntax colour above keeps its contrast across them.
+	darkCurrentLine  = "#2c313c"
+	darkListCursor   = "#3e4451"
+	lightCurrentLine = "#eff1f5"
+	lightListCursor  = "#dce2ea"
 )
 
-// defaultSyntaxStyles returns the built-in mapping from class to style.
+// syntaxStyles builds the class-to-style table for one palette.
 //
 // Constants share the number colour: true, false, nil and iota are literals, and
 // reading them as the same kind of thing as 42 is both conventional and one
 // fewer colour for a theme author to choose.
-func defaultSyntaxStyles() [numSyntaxClasses]tcell.Style {
-	return syntaxStyles(TerminalIsLight())
-}
-
-// syntaxStyles builds the class-to-style table for one palette.
 //
 // A single palette cannot serve both grounds. Colours with enough contrast on
 // black are washed out on white and vice versa, so nem carries two and picks
@@ -102,9 +105,16 @@ func syntaxStyles(light bool) [numSyntaxClasses]tcell.Style {
 	return s
 }
 
-// UseSyntaxPalette switches the syntax colours between the two palettes.
+// UseSyntaxPalette switches the syntax colours, and the background tints that
+// go with them, between the two palettes.
 func (t *Theme) UseSyntaxPalette(light bool) {
 	t.SyntaxStyle = syntaxStyles(light)
+	cur, list := darkCurrentLine, darkListCursor
+	if light {
+		cur, list = lightCurrentLine, lightListCursor
+	}
+	t.CurrentLine = tcell.StyleDefault.Background(tcell.GetColor(cur))
+	t.ListCursor = tcell.StyleDefault.Background(tcell.GetColor(list))
 }
 
 // TerminalIsLight guesses whether the terminal has a light background.

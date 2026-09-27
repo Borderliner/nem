@@ -153,6 +153,20 @@ func Render(scr tcell.Screen, f Frame, th Theme) {
 	placeCursor(scr, w, h, echoY, rects, f, th)
 }
 
+// rowStyle is the background a window's line ln is drawn on: a listing's bar
+// under the selected row, the fainter band under the line point is on, or
+// nothing. Only the active window has either, as only it shows a region.
+func rowStyle(win *view.Window, ln int, active, bar bool, th Theme) tcell.Style {
+	switch {
+	case !active || ln != win.Buf.ClampPos(win.Pt).Line:
+	case bar:
+		return th.ListCursor
+	case th.HighlightLine:
+		return th.CurrentLine
+	}
+	return tcell.StyleDefault
+}
+
 // drawWindow draws one pane: its visible buffer text, then its modeline.
 func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active, listing, bar bool, th Theme, info modelineInfo, spansOf SpansFunc) {
 	if rect.W <= 0 || rect.H <= 0 || win == nil || win.Buf == nil {
@@ -202,16 +216,8 @@ func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active, list
 				spans = spansOf(win.Buf, ln)
 			}
 			reg := region.onLine(ln, l)
-			if bar && active && ln == win.Pt.Line {
-				// One flat bar, drawn like a selection to the window's edge.
-				// The row's own colours are dropped rather than inverted:
-				// inverted, each coloured field becomes a block of a different
-				// colour and the bar reads as a patchwork.
-				spans = nil
-				reg = regionHL{on: true, to: l.Len(), toEOL: true, style: th.ListCursor}
-			}
 			drawLine(scr, textX, rect.Y+i, textW,
-				l, win.LeftCol, th, paren.onLine(ln), reg, spans)
+				l, win.LeftCol, th, paren.onLine(ln), reg, spans, rowStyle(win, ln, active, bar, th))
 		}
 	}
 
@@ -233,7 +239,11 @@ func drawWindow(scr tcell.Screen, rect view.Rect, win *view.Window, active, list
 // hl carries any bracket-match highlight falling on this line, reg any part of
 // the selection. Where both fall on a cell they compose: the region contributes
 // the inverted background and the bracket keeps its weight and underline.
-func drawLine(scr tcell.Screen, x, y, width int, l *text.Line, left text.ColIdx, th Theme, hl lineHL, reg regionHL, spans []syntax.Span) {
+//
+// row is the line's background - the current line's band, a listing's bar -
+// laid under every cell and on to the window's edge, beneath the syntax
+// colours and the region.
+func drawLine(scr tcell.Screen, x, y, width int, l *text.Line, left text.ColIdx, th Theme, hl lineHL, reg regionHL, spans []syntax.Span, row tcell.Style) {
 	lineW := l.Width()
 	truncated := lineW-left > text.ColIdx(width)
 
@@ -255,6 +265,7 @@ func drawLine(scr tcell.Screen, x, y, width int, l *text.Line, left text.ColIdx,
 			// whatever colour that is, and the region inverts the result.
 			style := syn.styleAt(c.Start, th.Text)
 			style = parenOver(hl, c.Start, style, th.Text)
+			style = overlay(style, row)
 			if reg.covers(c.Start, c.Start+text.RuneIdx(len(c.Runes))) {
 				style = overlay(style, reg.style)
 			}
@@ -290,9 +301,13 @@ func drawLine(scr tcell.Screen, x, y, width int, l *text.Line, left text.ColIdx,
 	// trailing cell of a wide glyph. The truncation marker is deliberately left
 	// out: it is chrome reporting that text continues off screen, not content,
 	// and drawing it selected would claim it is part of what C-w would kill.
-	if reg.on && reg.toEOL && avail > 0 {
+	fill := row
+	if reg.on && reg.toEOL {
+		fill = overlay(row, reg.style)
+	}
+	if fill != tcell.StyleDefault && avail > 0 {
 		for sx := max(l.Width()-left, 0); sx < avail; sx++ {
-			scr.SetContent(x+int(sx), y, ' ', nil, reg.style)
+			scr.SetContent(x+int(sx), y, ' ', nil, fill)
 		}
 	}
 

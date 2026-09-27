@@ -22,6 +22,10 @@ func drawSyntax(t *testing.T, w, h int, b *text.Buffer, spans SpansFunc) tcell.S
 	win := view.NewWindow(b)
 	th := DefaultTheme()
 	th.LineNumbers = false
+	// The current line's band is a background of its own, which the user can
+	// turn off; these tests are about what syntax colour paints, on line 0,
+	// where point is.
+	th.HighlightLine = false
 	scr := sim(t, w, h)
 	Render(scr, Frame{
 		Tree:    view.NewTree(win),
