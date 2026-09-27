@@ -56,11 +56,13 @@ type Frame struct {
 	// ListingOf reports which buffers are listings rather than text. Optional:
 	// a nil ListingOf treats every buffer as text. See ListingFunc.
 	ListingOf ListingFunc
-	// EditingOf reports which listings are being edited as text, as a
-	// directory's file names are to rename them. Such a listing keeps its
-	// layout - no line numbers push its columns along - but loses the bar:
-	// point is a cursor again, where the typing goes. Optional.
-	EditingOf ListingFunc
+	// CursorOf reports which listings show point as a cursor rather than as
+	// a bar across the row: one being edited as text, as a directory's file
+	// names are to rename them, or one read as text, as a compilation's
+	// output is. Such a listing keeps its layout - no line numbers push its
+	// columns along - but point is where the eye and the typing go, not a
+	// row to pick. Optional.
+	CursorOf ListingFunc
 
 	// MiniRows lays a prompt's candidates out the emacs way, as Vertico does:
 	// the prompt on its row and the candidates on the rows below it, down to
@@ -130,7 +132,7 @@ func Render(scr tcell.Screen, f Frame, th Theme) {
 		for win, rect := range rects {
 			info := modelineInfo{Name: f.NameOf, Type: f.TypeOf, Branch: f.BranchOf}
 			listing := f.isListing(win.Buf)
-			bar := listing && (f.EditingOf == nil || !f.EditingOf(win.Buf))
+			bar := listing && (f.CursorOf == nil || !f.CursorOf(win.Buf))
 			drawWindow(scr, rect, win, win == f.Active, listing, bar, th, info, f.SpansOf)
 		}
 		for _, d := range f.Tree.Dividers(w, treeH) {

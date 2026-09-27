@@ -132,10 +132,10 @@ func (e *Editor) diredOf(b *text.Buffer) *diredState {
 // results.
 func (e *Editor) isListing(b *text.Buffer) bool { return e.diredOf(b) != nil || e.grepOf(b) != nil }
 
-// isEditingListing is the renderer's EditingOf: a listing whose names are
-// being edited, drawn with a cursor where the typing goes rather than a bar
-// across the line.
-func (e *Editor) isEditingListing(b *text.Buffer) bool {
+// showsCursor is the renderer's CursorOf: a listing whose names are being
+// edited, drawn with a cursor where the typing goes rather than a bar across
+// the line.
+func (e *Editor) showsCursor(b *text.Buffer) bool {
 	st := e.diredOf(b)
 	return st != nil && st.wd != nil
 }

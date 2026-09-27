@@ -57,8 +57,8 @@ func TestWdiredRenamesByEditingNames(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, st := editing(t, e, dir, "a.txt")
-	if b.ReadOnly() || e.FileType(b) != "wdired" || !e.isEditingListing(b) {
-		t.Errorf("editing: read-only %v, type %q, drawn as edited %v", b.ReadOnly(), e.FileType(b), e.isEditingListing(b))
+	if b.ReadOnly() || e.FileType(b) != "wdired" || !e.showsCursor(b) {
+		t.Errorf("editing: read-only %v, type %q, drawn as edited %v", b.ReadOnly(), e.FileType(b), e.showsCursor(b))
 	}
 
 	press(t, e, "C-e")

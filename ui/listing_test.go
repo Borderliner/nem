@@ -108,7 +108,7 @@ func TestTextBufferIsNotDrawnAsAListing(t *testing.T) {
 func TestEditedListingHasNoBar(t *testing.T) {
 	f, w := listingFrame(t, 1, "alpha", "beta")
 	w.Pt.Col = 2
-	f.EditingOf = func(b *text.Buffer) bool { return b == w.Buf }
+	f.CursorOf = func(b *text.Buffer) bool { return b == w.Buf }
 
 	scr := draw(t, 20, 6, f)
 
