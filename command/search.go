@@ -343,8 +343,6 @@ func isearchCmd(backward bool) Func {
 
 // --- query-replace -------------------------------------------------------
 
-var queryReplaceAnswers = []rune{'y', 'n', '!', 'q'}
-
 func queryReplace(e Env) error {
 	if e.Buf().ReadOnly() {
 		return text.ErrReadOnly
@@ -362,68 +360,21 @@ func queryReplace(e Env) error {
 		return err
 	}
 
+	return replaceMatches(e, replaceRun{
+		find: literalMatches(from, to),
+		ask:  fmt.Sprintf("Query replacing %s with %s (y/n/!/q): ", from, to),
+		from: e.Win().Pt,
+	})
+}
+
+// literalMatches finds from, with emacs's smart case, to be replaced with
+// to as it stands.
+func literalMatches(from, to string) func(*text.Buffer, text.Pos) (match, bool) {
 	fold := FoldCase(from)
-	b := e.Buf()
-	at := e.Win().Pt
-	all, n, skipped := false, 0, 0
-	done := func() {
-		msg := fmt.Sprintf("Replaced %d occurrences", n)
-		if skipped > 0 {
-			msg += fmt.Sprintf(" (skipped %d that cannot be edited)", skipped)
-		}
-		e.Echo("%s", msg)
-	}
-
-	for {
+	return func(b *text.Buffer, at text.Pos) (match, bool) {
 		start, end, ok := SearchForward(b, from, at, fold)
-		if !ok {
-			break
-		}
-		// A match the buffer will not let be changed - in the part of a
-		// file listing that is not a name, say - is passed over rather than
-		// offered, as emacs does with query-replace-skip-read-only. Stopping
-		// there would leave every match after it unreplaced.
-		if !CanReplace(b, start, end, to) {
-			skipped++
-			at = end
-			continue
-		}
-		e.Win().Pt = start
-
-		replace := all
-		if !all {
-			c, err := e.ReadChar(
-				fmt.Sprintf("Query replacing %s with %s (y/n/!/q): ", from, to),
-				queryReplaceAnswers)
-			if err != nil {
-				return err
-			}
-			switch c {
-			case 'y':
-				replace = true
-			case 'n':
-				replace = false
-			case '!':
-				replace, all = true, true
-			case 'q':
-				done()
-				return nil
-			}
-		}
-
-		if replace {
-			if at, err = ReplaceMatch(b, start, end, to); err != nil {
-				return err
-			}
-			n++
-		} else {
-			at = end
-		}
-		e.Win().Pt = at
+		return match{start: start, end: end, to: to}, ok
 	}
-
-	done()
-	return nil
 }
 
 // CanReplace reports whether b would let the text between start and end be
