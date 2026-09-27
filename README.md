@@ -288,6 +288,11 @@ lies on a faint band, its number picked out on it; `nem.set("hl-line", false)`
 takes the band away. In dired and in search results the selected row is a
 slightly stronger band, under the row's own colours.
 
+**Long lines** — cut off at the window's edge with a `$`, the view scrolling
+sideways to follow the cursor. `nem.set("line-wrap", true)`, or `C-x x t` while
+nem runs, folds them into rows instead, broken after spaces so words stay whole;
+`C-n` and `C-p` then go a row at a time, as emacs's do.
+
 **Right-to-left text** — Persian, Arabic and Hebrew are written and shown
 right to left, their letters joined, as emacs shows them: most terminals do
 neither, so nem lays the text out itself, by the Unicode bidirectional
@@ -388,9 +393,8 @@ Every setting, every Lua call and every key is in the
 
 ## Not yet
 
-Mouse support · line wrapping (long lines truncate with `$` and scroll
-horizontally instead) · undo tree · multi-line search patterns · indentation
-that knows a language's syntax (TAB follows the file's style, not its braces)
+Mouse support · undo tree · multi-line search patterns · indentation that
+knows a language's syntax (TAB follows the file's style, not its braces)
 
 ## Design
 
