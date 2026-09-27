@@ -38,6 +38,22 @@ func Narrows(prev, next string) bool {
 	return true
 }
 
+// Same reports whether a and b are one query as Rank reads them, and so rank
+// any list alike: "abc" and "abc ", or "abc '", whose ' has no word after it
+// yet. A prompt need not rank again for such a keystroke, and while a query
+// is typed, every space before a word, and every marker, is one.
+func Same(a, b string) bool {
+	if a == b {
+		return true
+	}
+	p, q := parse(a), parse(b)
+	return slices.EqualFunc(p.groups, q.groups, func(g, h group) bool {
+		return slices.EqualFunc(g, h, func(t, u term) bool {
+			return t.kind == u.kind && t.not == u.not && t.ignoreCase == u.ignoreCase && slices.Equal(t.text, u.text)
+		})
+	})
+}
+
 // implies reports whether every candidate g holds for, h holds for too: when
 // each of g's terms implies one of h's.
 func (g group) implies(h group) bool {

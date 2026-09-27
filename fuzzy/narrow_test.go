@@ -2,6 +2,7 @@ package fuzzy
 
 import (
 	"math/rand/v2"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -153,5 +154,70 @@ func TestNarrowsNeverDropsAMatch(t *testing.T) {
 	}
 	if narrowed < 5000 {
 		t.Fatalf("only %d of 30000 pairs narrowed, too few for the test to mean much", narrowed)
+	}
+}
+
+// The keystrokes that leave a query as it was, as Rank reads it, and some
+// that look as if they might and do not.
+func TestSame(t *testing.T) {
+	for _, tc := range []struct {
+		a, b string
+		want bool
+	}{
+		{"ab", "ab", true},
+		{"ab", "ab ", true},
+		{"ab", "  ab  ", true},
+		{"ab", "ab '", true},
+		{"ab", "ab ^", true},
+		{"ab", "ab !", true},
+		{"ab", "ab !^", true},
+		{"ab", "ab |", true},
+		{"", "'", true},
+		{"a b", "a  b", true},
+
+		{"ab", "abc", false},
+		{"ab", "Ab", false},
+		{"ab", "'ab", false},
+		{"ab", "ab$", false},
+		{"a b", "b a", false}, // ranked alike, but not the one query
+		{`ab\`, `ab\ `, false},
+		{"a | b", "a b", false},
+	} {
+		if got := Same(tc.a, tc.b); got != tc.want {
+			t.Errorf("Same(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
+		}
+	}
+}
+
+// What Same promises: two queries it calls the same rank a list alike,
+// scores, indices, order and all.
+func TestSameRanksAlike(t *testing.T) {
+	r := rand.New(rand.NewPCG(7, 8))
+	queryRunes := []rune(`abAB  '^$!|\`)
+	pick := func(lo, hi int) string {
+		out := make([]rune, lo+r.IntN(hi-lo+1))
+		for i := range out {
+			out[i] = queryRunes[r.IntN(len(queryRunes))]
+		}
+		return string(out)
+	}
+	cands := manyPaths(500)
+	for i := range 200 {
+		cands = append(cands, strings.Repeat("ab", i%5)+pick(0, 6))
+	}
+	same := 0
+	for range 20000 {
+		a := pick(0, 6)
+		b := a + pick(1, 2)
+		if !Same(a, b) {
+			continue
+		}
+		same++
+		if got, want := Rank(b, cands), Rank(a, cands); !reflect.DeepEqual(got, want) {
+			t.Fatalf("Same(%q, %q), but they rank the list differently", a, b)
+		}
+	}
+	if same < 1000 {
+		t.Fatalf("only %d of 20000 pairs were the same, too few for the test to mean much", same)
 	}
 }
