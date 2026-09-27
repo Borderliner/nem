@@ -315,14 +315,15 @@ func BenchmarkLevels(b *testing.B) {
 	}
 }
 
-// BenchmarkLine is all a renderer does for one line: resolve it and order
-// it.
+// BenchmarkLine is all a renderer does for one line: resolve it, order it
+// and shape it.
 func BenchmarkLine(b *testing.B) {
 	rs := []rune(line)
 	b.ReportAllocs()
 	for b.Loop() {
 		dir := ParagraphDirection(rs)
 		Order(Levels(rs, dir))
+		Shape(rs)
 	}
 }
 

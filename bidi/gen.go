@@ -1,9 +1,10 @@
 //go:build ignore
 
 // Gen writes tables.go from the Unicode character database: the mirrored
-// glyphs and the paired brackets. The bidi classes themselves come from
-// golang.org/x/text, so the database is the version those tables were built
-// from, and the two cannot drift apart when the module is upgraded:
+// glyphs, the paired brackets, the joining types and the Arabic presentation
+// forms. The bidi classes themselves come from golang.org/x/text, so the
+// database is the version those tables were built from, and the two cannot
+// drift apart when the module is upgraded:
 //
 //	go run gen.go                  # fetch from unicode.org
 //	go run gen.go -ucd ~/ucd/15.0  # or read a local copy
@@ -46,6 +47,8 @@ const unicodeVersion = %q
 `, xbidi.UnicodeVersion)
 	mirrors(&b)
 	brackets(&b)
+	joining(&b)
+	forms(&b)
 
 	src, err := format.Source(b.Bytes())
 	if err != nil {
@@ -141,4 +144,97 @@ var brackets = [...]bracketEntry{
 		fmt.Fprintf(b, "\t{%#04x, %#04x, %v},\n", x.r, x.pair, x.open)
 	}
 	fmt.Fprintf(b, "}\n")
+}
+
+func joining(b *bytes.Buffer) {
+	names := map[string]string{"U": "joinU", "D": "joinD", "R": "joinR", "L": "joinL", "C": "joinC", "T": "joinT"}
+	type span struct {
+		lo, hi rune
+		t      string
+	}
+	var ss []span
+	fields("ArabicShaping.txt", func(fs []string) {
+		r, t := code(fs[0]), names[fs[2]]
+		if t == "" {
+			log.Fatalf("%U: unknown joining type %q", r, fs[2])
+		}
+		ss = append(ss, span{r, r, t})
+	})
+	sort.Slice(ss, func(i, j int) bool { return ss[i].lo < ss[j].lo })
+	var merged []span
+	for _, s := range ss {
+		if n := len(merged); n > 0 && merged[n-1].hi+1 == s.lo && merged[n-1].t == s.t {
+			merged[n-1].hi = s.hi
+			continue
+		}
+		merged = append(merged, s)
+	}
+	fmt.Fprintf(b, `
+// joiningTypes are the joining types ArabicShaping.txt lists, as ranges in
+// order. A character in none of them is transparent if it is a mark or a
+// format character and non-joining otherwise; see lookupJoining.
+var joiningTypes = [...]joiningRange{
+`)
+	for _, s := range merged {
+		fmt.Fprintf(b, "\t{%#04x, %#04x, %s},\n", s.lo, s.hi, s.t)
+	}
+	fmt.Fprintf(b, "}\n")
+}
+
+func forms(b *bytes.Buffer) {
+	slot := map[string]int{"<isolated>": 0, "<final>": 1, "<initial>": 2, "<medial>": 3}
+	table := map[rune]*[4]rune{}
+	lo, hi := rune(0x10FFFF), rune(0)
+	fields("UnicodeData.txt", func(fs []string) {
+		r := code(fs[0])
+		if !(0xFB50 <= r && r <= 0xFDFF || 0xFE70 <= r && r <= 0xFEFF) {
+			return
+		}
+		d := strings.Fields(fs[5])
+		// Only a form of one letter: the ligatures, lam-alef among them,
+		// decompose to two or more, and would take two runes' cells.
+		if len(d) != 2 {
+			return
+		}
+		i, ok := slot[d[0]]
+		if !ok {
+			return
+		}
+		base := code(d[1])
+		if table[base] == nil {
+			table[base] = new([4]rune)
+		}
+		if table[base][i] != 0 {
+			log.Fatalf("%U has two %s forms", base, d[0])
+		}
+		table[base][i] = r
+		lo, hi = min(lo, base), max(hi, base)
+	})
+	fmt.Fprintf(b, `
+// firstShaped and lastShaped bound the letters that have presentation forms.
+const (
+	firstShaped = %#04x
+	lastShaped  = %#04x
+)
+
+// forms holds the presentation forms of the letters from firstShaped to
+// lastShaped - isolated, final, initial and medial, 0 where there is none -
+// from Arabic Presentation Forms-A and -B (UnicodeData.txt).
+var forms = [lastShaped - firstShaped + 1][4]uint16{
+`, lo, hi)
+	for r := lo; r <= hi; r++ {
+		f := table[r]
+		if f == nil {
+			continue
+		}
+		fmt.Fprintf(b, "\t%#04x - firstShaped: {%s, %s, %s, %s},\n", r, hex(f[0]), hex(f[1]), hex(f[2]), hex(f[3]))
+	}
+	fmt.Fprintf(b, "}\n")
+}
+
+func hex(r rune) string {
+	if r == 0 {
+		return "0"
+	}
+	return fmt.Sprintf("%#04x", r)
 }

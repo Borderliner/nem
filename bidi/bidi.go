@@ -11,7 +11,8 @@
 // line's direction from ParagraphDirection, resolves an embedding level for
 // every rune with Levels, groups the runes into grapheme clusters each given
 // the level of its first rune, and draws the clusters in the order Order
-// gives, the Mirror of a bracket at an odd level in its place.
+// gives, the Mirror of a bracket at an odd level in its place, and the
+// letters as Shape joins them.
 //
 // It implements UAX #9 for one paragraph at a time - nem takes each line as
 // its own paragraph - through rule L2, and checks itself against Unicode's
