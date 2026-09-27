@@ -43,13 +43,13 @@ func stressSize(seeds, steps int) (first, n, length int) {
 }
 
 // stressKeys are keys that never open a prompt: motion, editing, the region,
-// the kill ring, undo, windows, macros and the prefix argument. "|" joins
-// the keys of one sequence.
+// the kill ring, undo, windows, macros, the prefix argument and wrapping
+// lines. "|" joins the keys of one sequence.
 var stressKeys = strings.Fields(`C-f C-b C-n C-p M-f M-b C-a C-e M-< M-> C-v M-v C-l C-d <delete>
 <backspace> M-d M-<backspace> C-k C-o C-t M-t RET TAB M-u M-l M-c M-; M-/ M-SPC M-^ M-m M-{ M-}
 M-q C-M-f C-M-b C-M-k <backtab> M-<up> M-<down> C-SPC C-SPC C-x|C-x C-x|h C-w M-w C-y C-y M-y
 C-/ C-/ M-_ C-g <left> <right> <up> <down> <home> <end> <pgup> <pgdn> C-x|2 C-x|3 C-x|o C-x|0
-C-x|1 C-x|C-u C-x|C-l <f3> <f4> C-u C-u|3 M-= C-x|=`)
+C-x|1 C-x|C-u C-x|C-l <f3> <f4> C-u C-u|3 M-= C-x|= C-x|x|t`)
 
 // stressPromptKeys open prompts and answer them: searches, query-replace,
 // goto-line, switching and killing buffers, occur, help, macros that replay
@@ -123,6 +123,9 @@ func stressDirect(t *testing.T, seed uint64, steps int) (msg string) {
 	e, scr := newTestEditor(t)
 	b := stressOpen(t, e, t.TempDir())
 	orig := b.String()
+	// Half the runs start with lines wrapped, so the rows are walked as
+	// much as the lines; C-x x t turns it over at random either way.
+	e.SetLineWrap(seed%2 == 1)
 	var keys []string
 	defer func() {
 		if r := recover(); r != nil {
@@ -189,6 +192,7 @@ func stressLoop(t *testing.T, seed uint64, steps int, dir string) {
 	rng := rand.New(rand.NewPCG(seed, 11))
 	e, scr := newTestEditor(t)
 	stressOpen(t, e, dir)
+	e.SetLineWrap(seed%2 == 1)
 	// The run ends as a closed terminal ends a session: from inside the
 	// loop, which finalizing the screen under it would not be.
 	sigs := make(chan os.Signal, 1)

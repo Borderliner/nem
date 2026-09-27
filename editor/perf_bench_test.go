@@ -176,6 +176,41 @@ func BenchmarkTypeOnALongLine(b *testing.B) {
 	}
 }
 
+// The same with lines wrapped: the 200KB line folds into some two thousand
+// rows, and each keystroke folds it again.
+func BenchmarkTypeOnALongLineWrapped(b *testing.B) {
+	e := benchScreen(b, 120, 40)
+	e.SetLineWrap(true)
+	long := strings.Repeat(`{"key":"value","n":12345},`, 8000)
+	if err := e.Buf().Insert(text.Pos{}, []rune(long)); err != nil {
+		b.Fatal(err)
+	}
+	e.active.Pt = e.Buf().End()
+	e.Redraw()
+	x, del := specKeysB(b, "x")[0], specKeysB(b, "DEL")[0]
+	b.ReportAllocs()
+	i := 0
+	for b.Loop() {
+		if i%2 == 0 {
+			e.HandleKey(x)
+		} else {
+			e.HandleKey(del)
+		}
+		i++
+		e.Redraw()
+	}
+}
+
+// A frame of ordinary code with lines wrapped, few of them long enough to be.
+func BenchmarkRedrawWrapped(b *testing.B) {
+	e := benchEditor(b, 80, 24, 20000)
+	e.SetLineWrap(true)
+	b.ReportAllocs()
+	for b.Loop() {
+		e.Redraw()
+	}
+}
+
 func BenchmarkNextLineAndRedraw(b *testing.B) {
 	e := benchEditor(b, 120, 40, 20000)
 	n, p := specKeysB(b, "C-n")[0], specKeysB(b, "C-p")[0]

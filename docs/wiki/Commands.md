@@ -161,6 +161,7 @@ A key in a mode - `dired: f` - works only in that mode's buffers; see [Keybindin
 | `split-window-right` | `C-x 3` | Split the current window, placing the new one beside it. |
 | `switch-to-buffer` | `C-x b` | Display another buffer, creating it if the name is new. |
 | `toggle-line-numbers` | `C-x n` | Show or hide the line-number gutter. |
+| `toggle-line-wrap` | `C-x x t` | Wrap lines wider than the window, or cut them off at its edge. |
 | `transpose-chars` | `C-t` | Transpose the characters around point. |
 | `transpose-words` | `M-t` | Transpose the words around point. |
 | `undo` | `C-_` `C-x u` | Undo the most recent change. |
@@ -178,4 +179,4 @@ A key in a mode - `dired: f` - works only in that mode's buffers; see [Keybindin
 | `yank-pop` | `M-y` | Replace the text just yanked with the next-older kill-ring entry. |
 | `zap-to-char` | `M-z` | Kill up to and including the next occurrence of a character, ARG times. |
 
-168 commands in all.
+169 commands in all.

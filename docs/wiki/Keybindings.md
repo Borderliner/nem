@@ -186,6 +186,7 @@ These work everywhere, unless a mode or a prompt below gives a key a meaning of 
 | Key | Command | Does |
 |---|---|---|
 | `C-x n` | `toggle-line-numbers` | Show or hide the line-number gutter. |
+| `C-x x t` | `toggle-line-wrap` | Wrap lines wider than the window, or cut them off at its edge. |
 
 ### Session
 

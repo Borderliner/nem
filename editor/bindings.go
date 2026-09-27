@@ -155,8 +155,10 @@ var defaultBindings = []struct{ Spec, Command string }{
 
 	// Display. C-x n is free in nem: emacs uses it for narrowing, which nem does
 	// not have. C-c is deliberately not used - that prefix belongs to the user,
-	// and examples/init.lua already hands it out.
+	// and examples/init.lua already hands it out. C-x x t is emacs's key for
+	// toggle-truncate-lines, which wraps lines as toggle-line-wrap does.
 	{"C-x n", "toggle-line-numbers"},
+	{"C-x x t", "toggle-line-wrap"},
 
 	// Session.
 	{"C-g", "keyboard-quit"},

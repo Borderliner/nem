@@ -113,6 +113,7 @@ func (e *Editor) applySettings(s lua.Settings) {
 
 	e.th.LineNumbers = s.LineNumbers
 	e.th.HighlightLine = s.HighlightLine
+	e.SetLineWrap(s.LineWrap)
 	switch s.KeyboardLayout {
 	case "arabic":
 		e.layout = keymap.LayoutArabic

@@ -27,6 +27,7 @@ error that says what is allowed; see
 | [`icons`](#icons) | `true`, `false`, `"auto"` | `"auto"` |
 | [`keyboard-layout`](#keyboard-layout) | `"auto"`, `"arabic"`, `false` | `"auto"` |
 | [`line-numbers`](#line-numbers) | `true`, `false` | `true` |
+| [`line-wrap`](#line-wrap) | `true`, `false` | `false` |
 | [`open-binary`](#open-binary) | `"ask"`, `"system"`, `"text"` | `"ask"` |
 | [`scroll-margin`](#scroll-margin) | 0 to 1000 | `2` |
 | [`shell`](#shell) | a program | `""`: `/bin/sh`, or `cmd.exe` on Windows |
@@ -44,6 +45,19 @@ A gutter of line numbers beside the text, the current line's picked out. It is
 drawn outside the text, so a number can never be selected, marked or copied. A
 window too narrow to spare the room drops it. `C-x n` turns it off and on while
 nem runs.
+
+### line-wrap
+
+Fold a line wider than its window into rows, rather than cutting it off at the
+edge with a `$` and scrolling sideways to follow the cursor. A row breaks after
+a space or a tab, so words stay whole; only a word longer than a whole row is
+broken inside it. The line's number goes beside its first row, and the band
+under the current line runs under all of its rows.
+
+Wrapped, `C-n` and `C-p` go a row on screen at a time, keeping the cursor's
+column in the row, as emacs's do; `C-v`, `M-v` and `C-l` count rows too. `C-a`,
+`C-e` and every command that works on lines still work on the whole line.
+`C-x x t` turns wrapping on and off while nem runs.
 
 ### hl-line
 

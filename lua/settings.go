@@ -92,6 +92,10 @@ type Settings struct {
 	// HighlightLine lays a faint band under the line point is on.
 	HighlightLine bool
 
+	// LineWrap folds a line wider than its window into rows, rather than
+	// cutting it off at the edge.
+	LineWrap bool
+
 	// Bidi is "on", "off" or "auto": whether nem lays out right-to-left
 	// text itself. "auto" does unless the terminal does it; a script sets it
 	// with true, false or "auto".
@@ -137,7 +141,7 @@ const (
 // why it has no effect.
 var knownSettings = []string{
 	"auto-pair", "auto-revert", "autosave-idle", "backup", "bidi", "clipboard", "completion-rows", "completion-style",
-	"delete-selection", "fill-column", "hl-line", "icons", "keyboard-layout", "line-numbers", "open-binary", "scroll-margin", "syntax", "tab-width",
+	"delete-selection", "fill-column", "hl-line", "icons", "keyboard-layout", "line-numbers", "line-wrap", "open-binary", "scroll-margin", "syntax", "tab-width",
 	"shell", "theme", "undo-style", "which-key-delay",
 }
 
@@ -306,6 +310,12 @@ func (s *Settings) set(key string, v glua.LValue) error {
 			return fmt.Errorf("hl-line must be true or false, got %s", v.Type())
 		}
 		s.HighlightLine = bool(b)
+	case "line-wrap":
+		b, ok := v.(glua.LBool)
+		if !ok {
+			return fmt.Errorf("line-wrap must be true or false, got %s", v.Type())
+		}
+		s.LineWrap = bool(b)
 	case "auto-revert":
 		b, ok := v.(glua.LBool)
 		if !ok {

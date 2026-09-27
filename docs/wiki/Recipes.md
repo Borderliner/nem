@@ -7,13 +7,14 @@ The calls they use are on [Lua API](Lua-API), the settings on
 
 ## Looks
 
-A light terminal, four-column tabs, no line numbers, candidates in a panel in
-the middle of the screen:
+A light terminal, four-column tabs, no line numbers, long lines wrapped,
+candidates in a panel in the middle of the screen:
 
 ```lua
 nem.set("theme", "light")
 nem.set("tab-width", 4)
 nem.set("line-numbers", false)
+nem.set("line-wrap", true)
 nem.set("completion-style", "popup")
 nem.set("completion-rows", 15)
 ```
