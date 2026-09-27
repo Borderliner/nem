@@ -281,3 +281,25 @@ func TestFindFileAfterDescending(t *testing.T) {
 		}
 	})
 }
+
+// ~/ in a file prompt is the home directory: its files are offered, and the
+// one chosen opens. Typed after the directory the prompt opened on, ~/ starts
+// the path over.
+func TestFindFileUnderHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeFiles(t, home, "notes/todo.txt")
+	e, scr := newTestEditor(t)
+	t.Chdir(t.TempDir())
+
+	feed(t, scr, txt("~/notes/to"), key(t, "RET"))
+	press(t, e, "C-x", "C-f")
+	wantVisiting(t, e, filepath.Join(home, "notes", "todo.txt"))
+
+	feed(t, scr, txt("somewhere/else/~/notes/todo.txt"), key(t, "M-RET"))
+	press(t, e, "C-x", "C-f")
+	wantVisiting(t, e, filepath.Join(home, "notes", "todo.txt"))
+	if got := e.mem.HistoryOf("file"); len(got) == 0 || got[0] != "~/notes/todo.txt" {
+		t.Errorf("the prompt read %q; want the path started over at ~/", got)
+	}
+}

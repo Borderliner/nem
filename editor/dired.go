@@ -580,6 +580,7 @@ func (e *Editor) diredPrompt() error {
 		Complete: command.DirectoryCompleter(),
 		Descend:  command.IsDirCandidate,
 		Icon:     icons.ForCandidate,
+		Rewrite:  command.RestartPath,
 	})
 	if err != nil {
 		return err
@@ -587,7 +588,7 @@ func (e *Editor) diredPrompt() error {
 	if ans == "" {
 		ans = "."
 	}
-	b, err := e.Dired(ans)
+	b, err := e.Dired(command.ExpandPath(ans))
 	if err != nil {
 		return err
 	}
@@ -646,8 +647,9 @@ func (e *Editor) bufferDir(b *text.Buffer) string {
 
 // promptDir is how a prompt shows dir: nothing for the working directory,
 // since a relative name already starts there; a relative path for a directory
-// beneath it; the full path otherwise. Always with a trailing separator, so
-// the prompt lists the directory's contents rather than its siblings.
+// beneath it; under ~ for one in the home directory; the full path otherwise.
+// Always with a trailing separator, so the prompt lists the directory's
+// contents rather than its siblings.
 func promptDir(dir string) string {
 	if dir == "" {
 		return ""
@@ -663,8 +665,12 @@ func promptDir(dir string) string {
 			}
 		}
 	}
-	if strings.HasSuffix(dir, sep) {
-		return dir
+	dir = strings.TrimSuffix(dir, sep)
+	if h := homeDir(); h != "" {
+		if dir == h {
+			return "~" + sep
+		}
+		dir = tildePath(dir, h)
 	}
 	return dir + sep
 }
@@ -887,6 +893,7 @@ func (e *Editor) diredTransfer(b *text.Buffer, st *diredState, copying bool) err
 		Complete: command.DirectoryCompleter(),
 		Descend:  command.IsDirCandidate,
 		Icon:     icons.ForCandidate,
+		Rewrite:  command.RestartPath,
 	})
 	if err != nil {
 		return err
@@ -894,7 +901,7 @@ func (e *Editor) diredTransfer(b *text.Buffer, st *diredState, copying bool) err
 	if strings.TrimSpace(ans) == "" {
 		return nil
 	}
-	dest, err := filepath.Abs(ans)
+	dest, err := filepath.Abs(command.ExpandPath(ans))
 	if err != nil {
 		return err
 	}
@@ -1044,7 +1051,7 @@ func (e *Editor) diredMkdir(b *text.Buffer, st *diredState) error {
 	if strings.TrimSpace(ans) == "" {
 		return nil
 	}
-	dir, err := filepath.Abs(ans)
+	dir, err := filepath.Abs(command.ExpandPath(ans))
 	if err != nil {
 		return err
 	}

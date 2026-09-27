@@ -184,6 +184,11 @@ type ReadOpts struct {
 	// like Icon.
 	Annotate func(candidate string) string
 
+	// Rewrite, when non-nil, rewrites what has been typed after every edit:
+	// a path prompt sets RestartPath, so ~/ or // typed after the directory
+	// the prompt opened on starts the path over, the old part gone from view.
+	Rewrite func(input string) string
+
 	// Icon, when non-nil, gives each candidate an icon to show beside it: a
 	// folder, the Go mark, a picture. Display only - the candidate is still
 	// the answer - and ignored when the icons setting is off.

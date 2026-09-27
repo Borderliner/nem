@@ -419,6 +419,14 @@ func (e *Editor) afterMiniEdit() {
 		return
 	}
 	cur := ms.contents()
+	if ms.opts.Rewrite != nil {
+		if r := ms.opts.Rewrite(cur); r != cur {
+			_ = ms.buf.Delete(text.Pos{}, ms.buf.End())
+			_ = ms.buf.Insert(text.Pos{}, []rune(r))
+			ms.win.Pt = ms.buf.End()
+			cur = r
+		}
+	}
 	if cur == ms.last {
 		return
 	}

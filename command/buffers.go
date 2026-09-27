@@ -62,6 +62,7 @@ func findFile(e Env) error {
 		Complete: cachedPaths(completeFilename),
 		Descend:  IsDirCandidate,
 		Icon:     icons.ForCandidate,
+		Rewrite:  RestartPath,
 	})
 	if err != nil {
 		return err
@@ -69,6 +70,7 @@ func findFile(e Env) error {
 	if path == "" {
 		return nil
 	}
+	path = ExpandPath(path)
 	// A path that does not exist yields an empty buffer carrying that path.
 	// That is how a new file is created, so it is deliberately not an error.
 	buf, err := e.OpenFile(path)
@@ -111,6 +113,7 @@ func writeFile(e Env) error {
 		Complete: cachedPaths(completeWritePath),
 		Descend:  IsDirCandidate,
 		Icon:     icons.ForCandidate,
+		Rewrite:  RestartPath,
 	})
 	if err != nil {
 		return err
@@ -118,6 +121,7 @@ func writeFile(e Env) error {
 	if path == "" {
 		return nil
 	}
+	path = ExpandPath(path)
 	if ok, err := confirmReplace(e, b, path); !ok || err != nil {
 		return err
 	}
@@ -507,7 +511,10 @@ func CompleteDirectory(prefix string) []string { return pathCandidates(prefix, t
 // directory itself and optionally directories only.
 func pathCandidates(prefix string, self, dirsOnly bool) []string {
 	dir, _ := filepath.Split(prefix)
-	lookIn := dir
+	// The directory is read where it really is - ~/ is the home directory -
+	// but the candidates keep it as typed, so they still begin with what the
+	// prompt holds.
+	lookIn := ExpandPath(dir)
 	if lookIn == "" {
 		lookIn = "."
 	}
