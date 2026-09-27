@@ -61,6 +61,30 @@ jobs:
       - name: build
         run: go build ./...
 
+  stress:
+    name: random keys
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The random-key tests make a few hundred keystrokes in every test run;
+      # here they make hundreds of thousands, which is how the bugs they were
+      # written for were found. Each run starts from new seeds, so CI keeps
+      # looking further rather than repeating itself; a failure names its
+      # seed, and NEM_STRESS_SEED runs it again.
+      - name: random keys, at length
+        env:
+          NEM_STRESS_SEEDS: 150
+          NEM_STRESS_STEPS: 1500
+        run: |
+          export NEM_STRESS_SEED=$(( GITHUB_RUN_NUMBER * 1000 ))
+          echo "seeds from $NEM_STRESS_SEED"
+          go test ./editor -run 'TestRandomKeys' -count=1 -timeout 30m
+
   cross:
     name: cross-compile
     runs-on: ubuntu-latest
