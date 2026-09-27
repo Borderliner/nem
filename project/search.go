@@ -2,6 +2,7 @@ package project
 
 import (
 	"bytes"
+	"encoding/binary"
 	"io"
 	"os"
 	"path/filepath"
@@ -47,6 +48,15 @@ type Match struct {
 // the file from disk.
 type Lines func(rel string) ([]string, bool)
 
+// Options bounds a search.
+type Options struct {
+	// Max is how many matches the search stops at: MaxMatches when 0.
+	Max int
+	// Stop abandons the search when it is set: one run as the pattern is
+	// typed has been overtaken by the next keystroke.
+	Stop *atomic.Bool
+}
+
 // Search finds the lines of files, relative to root, that re matches, in the
 // order of files and then of lines. More reports that it stopped at
 // MaxMatches.
@@ -54,19 +64,32 @@ type Lines func(rel string) ([]string, bool)
 // Files are searched in parallel, and a file that is not text - one with a
 // NUL byte near its start - or is larger than any source file is passed over.
 func Search(root string, files []string, re *regexp.Regexp, open Lines) (matches []Match, more bool) {
-	pre := newPrefilter(re)
+	return SearchWith(root, files, re, open, Options{})
+}
+
+// SearchWith is Search within opt's bounds. A search stopped by opt.Stop
+// returns what it had found.
+func SearchWith(root string, files []string, re *regexp.Regexp, open Lines, opt Options) (matches []Match, more bool) {
+	limit := opt.Max
+	if limit <= 0 {
+		limit = MaxMatches
+	}
+	stopped := func() bool { return opt.Stop != nil && opt.Stop.Load() }
+	s := newSearcher(re)
 	found := make([][]Match, len(files))
 	var next, total atomic.Int64
 	var wg sync.WaitGroup
 	for range runtime.GOMAXPROCS(0) {
 		wg.Go(func() {
-			var buf []byte // each worker reads every file into the one buffer
+			// Each worker reads every file into the one buffer, and lowers
+			// it, when the search ignores case, into the other.
+			var buf, low []byte
 			for {
 				i := int(next.Add(1) - 1)
-				if i >= len(files) || total.Load() >= MaxMatches {
+				if i >= len(files) || total.Load() >= int64(limit) || stopped() {
 					return
 				}
-				found[i] = searchFile(root, files[i], re, pre, open, &buf)
+				found[i] = s.file(root, files[i], open, &buf, &low)
 				total.Add(int64(len(found[i])))
 			}
 		})
@@ -75,57 +98,133 @@ func Search(root string, files []string, re *regexp.Regexp, open Lines) (matches
 
 	for _, ms := range found {
 		for _, m := range ms {
-			if len(matches) == MaxMatches {
+			if len(matches) == limit {
 				return matches, true
 			}
 			matches = append(matches, m)
 		}
 	}
-	return matches, total.Load() > MaxMatches
+	return matches, total.Load() > int64(limit)
 }
 
-// searchFile is Search's work on one file.
-//
-// A file is looked at whole before it is split into lines, and passed over
-// if the pattern cannot match anywhere in it: most files of a project do not
-// hold what is searched for, and splitting every one into lines to search
-// each was nearly all of a search's time and memory.
-func searchFile(root, rel string, re *regexp.Regexp, pre prefilter, open Lines, buf *[]byte) []Match {
-	lines, ok := open(rel)
-	if !ok {
-		data := readText(filepath.Join(root, filepath.FromSlash(rel)), buf)
-		if data == nil || !pre.mayMatch(data) {
-			return nil
-		}
-		lines = splitLines(data)
+// file is a search's work on one file: its open buffer's lines if it has
+// one, or its text read from the disk.
+func (s searcher) file(root, rel string, open Lines, buf, low *[]byte) []Match {
+	if lines, ok := open(rel); ok {
+		return s.lines(rel, lines)
 	}
-	return matchLines(rel, lines, re, pre)
+	data := readText(filepath.Join(root, filepath.FromSlash(rel)), buf)
+	if data == nil {
+		return nil
+	}
+	return s.text(rel, data, low)
 }
 
 // MatchLines finds the lines re matches among lines, which file names: one
 // file's part of a search, or a single buffer's, for occur.
 func MatchLines(file string, lines []string, re *regexp.Regexp) []Match {
-	return matchLines(file, lines, re, newPrefilter(re))
+	return newSearcher(re).lines(file, lines)
 }
 
-// matchLines is MatchLines with the pattern's prefilter already made. A line
-// without the text every match needs is passed over before the pattern is
-// tried on it, as a file is.
-func matchLines(file string, lines []string, re *regexp.Regexp, pre prefilter) []Match {
+// lines finds the matching lines among lines. A line without the text every
+// match needs is passed over before the pattern is tried on it.
+func (s searcher) lines(file string, lines []string) []Match {
 	var out []Match
 	for i, line := range lines {
-		if !pre.lineMayMatch(line) {
+		if !s.lineMayMatch(line) {
 			continue
 		}
-		locs := re.FindAllStringIndex(line, -1)
-		if len(locs) == 0 {
-			continue
+		b := unsafe.Slice(unsafe.StringData(line), len(line))
+		if locs := s.locs(b); len(locs) > 0 {
+			out = append(out, shown(file, i, line, locs))
 		}
-		// An empty match - a pattern like "x*" - says nothing about where to
-		// look; a line matched only by those is still a match, at its start.
-		out = append(out, shown(file, i, line, locs))
 	}
 	return out
+}
+
+// text finds the matching lines of a file's text, as ripgrep does: it looks
+// through the whole text for what every match needs - with the processor's
+// fast byte search, not a line at a time - and only a line where that turns
+// up is split out and the pattern tried on it. Line numbers are counted, by
+// the same fast search for newlines, only as far as the next such line.
+// Splitting every file into lines to try each was nearly all of what a
+// search cost, and running the pattern over a whole file, which Go's regexp
+// does far more slowly than over a line, most of the rest.
+//
+// Ignoring case, the literal is looked for in a copy of the text lowered -
+// eight bytes at a time, by arithmetic on words rather than a byte at a time -
+// with the same fast search as when case counts. Hunting its letter in both
+// cases instead took two scans, and a call per place either turned up; this
+// is the common case, since a search typed in lower case ignores case. The
+// copy's bytes are where the text's are, so a place found in it is the
+// place in the text. low holds the copy, grown as need be.
+func (s searcher) text(file string, data []byte, low *[]byte) []Match {
+	var out []Match
+	find := s.index
+	if s.fold && s.lit != nil && low != nil {
+		lowered := lowerASCII(data, low)
+		lit := s.lowLit
+		find = func(b []byte) int {
+			// b is data from some offset; the same offset of the copy.
+			off := len(data) - len(b)
+			return bytes.Index(lowered[off:], lit)
+		}
+	}
+	line, counted := 0, 0 // line is the number of the line starting at counted
+	for pos := 0; pos < len(data); {
+		hit := pos
+		if s.lit != nil {
+			i := find(data[pos:])
+			if i < 0 {
+				break
+			}
+			hit = pos + i
+			if !s.neighbours(data, hit) {
+				pos = hit + 1
+				continue
+			}
+		}
+		start := counted + bytes.LastIndexByte(data[counted:hit], '\n') + 1
+		end := len(data)
+		if i := bytes.IndexByte(data[hit:], '\n'); i >= 0 {
+			end = hit + i
+		}
+		line += bytes.Count(data[counted:start], []byte{'\n'})
+		counted = start
+		l := bytes.TrimSuffix(data[start:end], []byte{'\r'})
+		if locs := s.locs(l); len(locs) > 0 {
+			out = append(out, shown(file, line, string(l), locs))
+		}
+		pos = end + 1
+	}
+	return out
+}
+
+// neighbours reports whether the bytes either side of the literal found at
+// hit are ones a match can have there.
+func (s searcher) neighbours(data []byte, hit int) bool {
+	if s.before != nil && (hit == 0 || !s.before.has(data[hit-1])) {
+		return false
+	}
+	end := hit + len(s.lit)
+	return s.after == nil || end < len(data) && s.after.has(data[end])
+}
+
+// locs is where the pattern matches in line, as byte ranges.
+func (s searcher) locs(line []byte) [][]int {
+	if !s.only {
+		return s.re.FindAllIndex(line, -1)
+	}
+	var locs [][]int
+	for at := 0; at <= len(line); {
+		i := s.index(line[at:])
+		if i < 0 {
+			break
+		}
+		locs = append(locs, []int{at + i, at + i + len(s.lit)})
+		at += i + max(len(s.lit), 1)
+	}
+	return locs
 }
 
 // readText reads a text file into buf, growing it as need be, or gives nil
@@ -165,33 +264,123 @@ func splitLines(data []byte) []string {
 	return lines
 }
 
-// prefilter answers whether a file can hold a match at all, faster than
-// searching it a line at a time.
-//
-// Anything the pattern matches within a line it also matches in the whole
-// text read with ^ and $ at every line - the pattern is compiled that way
-// for this - so a file it finds nothing in has no matching line. The
-// converse need not hold, since a match in the whole text may run across
-// lines; a file that passes is searched line by line all the same.
+// searcher is a pattern made ready to search with.
 //
 // A pattern that is only text is looked for as text, which is much faster:
 // with the bytes it is, or, ignoring case - which is how a search typed in
-// lower case is made - with a scan for its first letter in either case.
+// lower case is made - with a scan for its rarest letter in either case.
 //
 // A pattern that is more than text usually still needs some: need\w+ := has
-// "need" in every match. The longest such piece is looked for first, and a
-// file without it is passed over without the pattern being tried at all.
-type prefilter struct {
-	re      *regexp.Regexp
-	literal []byte
-	fold    bool
+// "need" in every match. The longest such piece, lit, is looked for, and the
+// pattern is tried only where it turns up.
+type searcher struct {
+	re   *regexp.Regexp
+	lit  []byte
+	fold bool
 	// only reports that the pattern is the literal and nothing else, so
 	// finding the literal is finding a match.
 	only bool
+	// lowLit is lit lowered, for a search that ignores case.
+	lowLit []byte
+	// before and after are the bytes that can come just before and just
+	// after the literal in a match, when the pattern says: [A-Z]+_[0-9]
+	// needs a capital before the _ and a digit after it. Most places the
+	// literal turns up fail that, and are passed over without the pattern
+	// being tried on their line. Nil where anything can.
+	before, after *byteSet
 }
 
-func newPrefilter(re *regexp.Regexp) prefilter {
-	p := prefilter{re: regexp.MustCompile("(?m)" + re.String())}
+// byteSet is a set of bytes.
+type byteSet [4]uint64
+
+func (s *byteSet) add(b byte)      { s[b>>6] |= 1 << (b & 63) }
+func (s *byteSet) has(b byte) bool { return s[b>>6]&(1<<(b&63)) != 0 }
+func (s *byteSet) union(o *byteSet) {
+	for i := range s {
+		s[i] |= o[i]
+	}
+}
+func (s *byteSet) addRange(lo, hi int) {
+	for b := lo; b <= hi && b < utf8.RuneSelf; b++ {
+		s.add(byte(b))
+	}
+	if hi >= utf8.RuneSelf {
+		// A rune beyond ASCII is several bytes, any of which can be the
+		// one next to the literal.
+		for b := utf8.RuneSelf; b < 256; b++ {
+			s.add(byte(b))
+		}
+	}
+}
+
+// edgeSet is the bytes the first rune (or last, for last) of what re
+// matches can be made of, or nil when re does not say: it can match
+// nothing, or it is not so simple as one character or a run of them.
+func edgeSet(re *syntax.Regexp, last bool) *byteSet {
+	switch re.Op {
+	case syntax.OpConcat:
+		// From the edge inward: an operand that can match nothing - x* or
+		// x? - lets the one beyond it be at the edge too, and one that is
+		// only a place, as \b is, is passed over.
+		var acc byteSet
+		for i := range re.Sub {
+			sub := re.Sub[i]
+			if last {
+				sub = re.Sub[len(re.Sub)-1-i]
+			}
+			switch sub.Op {
+			case syntax.OpWordBoundary, syntax.OpNoWordBoundary, syntax.OpBeginLine,
+				syntax.OpEndLine, syntax.OpBeginText, syntax.OpEndText, syntax.OpEmptyMatch:
+				continue
+			case syntax.OpStar, syntax.OpQuest:
+				s := edgeSet(sub.Sub[0], last)
+				if s == nil {
+					return nil
+				}
+				acc.union(s)
+				continue
+			}
+			s := edgeSet(sub, last)
+			if s == nil {
+				return nil
+			}
+			acc.union(s)
+			return &acc
+		}
+		return nil
+	case syntax.OpPlus:
+		return edgeSet(re.Sub[0], last)
+	case syntax.OpRepeat:
+		if re.Min >= 1 {
+			return edgeSet(re.Sub[0], last)
+		}
+	case syntax.OpCharClass:
+		var s byteSet
+		for i := 0; i+1 < len(re.Rune); i += 2 {
+			s.addRange(int(re.Rune[i]), int(re.Rune[i+1]))
+		}
+		return &s
+	case syntax.OpLiteral:
+		if len(re.Rune) == 0 {
+			return nil
+		}
+		r := re.Rune[0]
+		if last {
+			r = re.Rune[len(re.Rune)-1]
+		}
+		var s byteSet
+		s.addRange(int(r), int(r))
+		if re.Flags&syntax.FoldCase != 0 && r < utf8.RuneSelf {
+			s.add(lower(byte(r)))
+			s.add(upper(byte(r)))
+		}
+		return &s
+	}
+	return nil
+}
+
+func newSearcher(re *regexp.Regexp) searcher {
+	p := searcher{re: re}
 	parsed, err := syntax.Parse(re.String(), syntax.Perl)
 	if err != nil {
 		return p
@@ -203,15 +392,23 @@ func newPrefilter(re *regexp.Regexp) prefilter {
 		p.only = true
 	case syntax.OpConcat:
 		// Every operand of a concatenation is needed, so its longest
-		// literal operand is.
+		// literal operand is, and whatever its neighbours say must come
+		// next to it.
 		lit = nil
-		for _, sub := range parsed.Sub {
+		k := 0
+		for i, sub := range parsed.Sub {
 			if sub.Op == syntax.OpLiteral && (lit == nil || len(sub.Rune) > len(lit.Rune)) {
-				lit = sub
+				lit, k = sub, i
 			}
 		}
 		if lit == nil {
 			return p
+		}
+		if k > 0 {
+			p.before = edgeSet(parsed.Sub[k-1], true)
+		}
+		if k+1 < len(parsed.Sub) {
+			p.after = edgeSet(parsed.Sub[k+1], false)
 		}
 	default:
 		return p
@@ -223,22 +420,47 @@ func newPrefilter(re *regexp.Regexp) prefilter {
 			return p // folding beyond ASCII is left to the pattern
 		}
 	}
-	p.literal, p.fold = []byte(string(lit.Rune)), fold
+	p.lit, p.fold = []byte(string(lit.Rune)), fold
+	if len(p.lit) == 0 {
+		p.lit, p.only = nil, false
+	}
+	if fold {
+		p.lowLit = bytes.ToLower(p.lit)
+	}
 	return p
 }
 
-// mayMatch reports whether data can hold a match.
-func (p prefilter) mayMatch(data []byte) bool {
-	if p.literal != nil {
-		has := bytes.Contains(data, p.literal)
-		if p.fold {
-			has = indexFold(data, p.literal) >= 0
-		}
-		if !has || p.only {
-			return has
-		}
+// lowerASCII is data with its ASCII capitals lowered, in to's storage, grown
+// as need be. Eight bytes at a time: a byte is a capital when adding to it
+// what takes 'A' to 0x80 sets its top bit and adding what takes 'Z'+1 there
+// does not, and a byte already past 0x7f - part of a character beyond ASCII -
+// is left alone. Lowering a capital is setting its 0x20 bit.
+func lowerASCII(data []byte, to *[]byte) []byte {
+	if cap(*to) < len(data) {
+		*to = make([]byte, len(data))
 	}
-	return p.re.Match(data)
+	out := (*to)[:len(data)]
+	const ones = 0x0101010101010101
+	const tops = 0x8080808080808080
+	i := 0
+	for ; i+8 <= len(data); i += 8 {
+		v := binary.LittleEndian.Uint64(data[i:])
+		seven := v &^ tops
+		capital := (seven + (0x80-'A')*ones) &^ (seven + (0x80-'Z'-1)*ones) &^ v & tops
+		binary.LittleEndian.PutUint64(out[i:], v|capital>>2)
+	}
+	for ; i < len(data); i++ {
+		out[i] = lower(data[i])
+	}
+	return out
+}
+
+// index is where the text every match needs next turns up in data, or -1.
+func (p searcher) index(data []byte) int {
+	if p.fold {
+		return indexFold(data, p.lit)
+	}
+	return bytes.Index(data, p.lit)
 }
 
 // commonness ranks bytes by how often they turn up in code and prose, most
@@ -262,18 +484,18 @@ func rarest(needle []byte) int {
 	return best
 }
 
-// lineMayMatch is mayMatch for a line: only the cheap check of the text
-// every match needs, since the pattern is tried on the line next anyway.
-func (p prefilter) lineMayMatch(line string) bool {
+// lineMayMatch reports whether line has the text every match needs: a cheap
+// check before the pattern is tried on it.
+func (p searcher) lineMayMatch(line string) bool {
 	switch {
-	case p.literal == nil:
+	case p.lit == nil:
 		return true
 	case p.fold:
 		// The line is only read, so it is looked at as bytes in place rather
 		// than copied: this runs on every line of every file that passed.
-		return indexFold(unsafe.Slice(unsafe.StringData(line), len(line)), p.literal) >= 0
+		return indexFold(unsafe.Slice(unsafe.StringData(line), len(line)), p.lit) >= 0
 	}
-	return strings.Contains(line, string(p.literal))
+	return strings.Contains(line, string(p.lit))
 }
 
 // indexFold is the first place in data that needle, which is ASCII, occurs

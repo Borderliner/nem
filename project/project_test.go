@@ -1,9 +1,12 @@
 package project
 
 import (
+	"bytes"
+	"math/rand/v2"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -268,26 +271,72 @@ func TestIndexFold(t *testing.T) {
 	}
 }
 
-// What the prefilter passes over must hold no match; what it keeps is
-// searched line by line.
-func TestPrefilterNeverHidesAMatch(t *testing.T) {
-	for _, tc := range []struct {
-		pattern, text string
-		want          bool
-	}{
-		{"needle", "a needle here", true},
-		{"(?i)needle", "a NEEDLE here", true},
-		{"(?i)need\\w+ :=", "x NEEDthis := 1", true},
-		{"(?i)need\\w+ :=", "no such thing", false},
-		{"^start", "first\nstart of line two", true},
-		{"end$", "the end\nnext", true},
-		{"a|b", "only b", true},
-		{"سلام", "متن سلام", true},
-		{"(?i)سلام", "hello", false},
-	} {
-		pre := newPrefilter(regexp.MustCompile(tc.pattern))
-		if got := pre.mayMatch([]byte(tc.text)); got != tc.want {
-			t.Errorf("prefilter %q on %q = %v, want %v", tc.pattern, tc.text, got, tc.want)
+// Searching a file's whole text finds exactly what trying the pattern on
+// each of its lines finds: the same lines, columns and spans, whatever the
+// pattern - text, text ignoring case, a pattern with text in it, one with
+// none, anchors, alternatives - and whatever the text - empty lines, CRLF,
+// no final newline, lines that are all one match.
+func TestSearchingTheWholeTextFindsWhatLineByLineDoes(t *testing.T) {
+	patterns := []string{"needle", "(?i)needle", "(?i)need\\w+ :=", "^start", "end$",
+		"a|b", "سلام", "(?i)سلام", "e", "", "x*", "\\bne", "[A-Z]{2,}_[0-9]+", "ee",
+		// What must be beside the text it looks for, in every shape.
+		"\\w+_\\b", "(?i)[a-c]+_x", "x*_[0-9]?c", "[α-ω]+_", "_[^a-z]", "\\b_\\d",
+		"(?i)b_X", "[A-Z]{2,}[a-z]*_", "_(?:1|2)", "ee+d?_"}
+	words := []string{"needle", "NEEDLE", "need", "needthis", ":=", "start", "end", "a", "b",
+		"سلام", "e", "ee", "ABC_12", "x", " ", "  ", "ne", "_", "AB_x", "ab_X", "xx_c",
+		"_9c", "λ_", "_A", "_1", "Bb_", "eed_", "é_"}
+	rng := rand.New(rand.NewPCG(1, 2))
+	for n := 0; n < 400; n++ {
+		var sb strings.Builder
+		for range rng.IntN(40) {
+			switch rng.IntN(8) {
+			case 0:
+				sb.WriteString("\n")
+			case 1:
+				sb.WriteString("\r\n")
+			default:
+				sb.WriteString(words[rng.IntN(len(words))])
+			}
+		}
+		text := sb.String()
+		lines := splitLines([]byte(text))
+		for _, pat := range patterns {
+			re := regexp.MustCompile(pat)
+			var want []Match
+			for i, line := range lines {
+				if locs := re.FindAllStringIndex(line, -1); len(locs) > 0 {
+					want = append(want, shown("f", i, line, locs))
+				}
+			}
+			var low []byte
+			got := newSearcher(re).text("f", []byte(text), &low)
+			if len(text) == 0 {
+				continue // no file has no lines; splitLines says one
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("pattern %q in %q:\n got %+v\nwant %+v", pat, text, got, want)
+			}
+		}
+	}
+}
+
+// Lowering eight bytes at a time lowers what lowering a byte at a time does:
+// the ASCII capitals, and nothing else - not a byte of a character beyond
+// ASCII, whatever its value.
+func TestLowerASCIIByWords(t *testing.T) {
+	rng := rand.New(rand.NewPCG(3, 4))
+	var to []byte
+	for n := 0; n < 2000; n++ {
+		data := make([]byte, rng.IntN(40))
+		for i := range data {
+			data[i] = byte(rng.IntN(256))
+		}
+		want := make([]byte, len(data))
+		for i, c := range data {
+			want[i] = lower(c)
+		}
+		if got := lowerASCII(data, &to); !bytes.Equal(got, want) {
+			t.Fatalf("lowerASCII(%q) = %q, want %q", data, got, want)
 		}
 	}
 }
