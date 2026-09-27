@@ -60,6 +60,11 @@ func TestClean(t *testing.T) {
 		"line with crlf\r":                     "line with crlf",
 		"bell\x07 and\ttab":                    "bell and\ttab",
 		"plain":                                "plain",
+		"\x1b]0;title\x1b\\after":              "after",
+		"\x1b[2Kerased \x1b[1;31mred":          "erased red",
+		"bold\x1b(B\x1b[m reset":               "bold reset",
+		"ends in escape\x1b":                   "ends in escape",
+		"\x1bMreverse index":                   "reverse index",
 	} {
 		if got := Clean(in); got != want {
 			t.Errorf("Clean(%q) = %q, want %q", in, got, want)

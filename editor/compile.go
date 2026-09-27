@@ -419,15 +419,24 @@ func (e *Editor) compileOutput(b *text.Buffer, st *compileState, out []byte) {
 		}
 	}
 
-	parts := strings.Split(st.open+string(out), "\n")
+	whole := st.open + string(out)
+	parts := strings.Split(whole, "\n")
 	st.open = parts[len(parts)-1]
-	var rs []rune
+	// One slice for all of it, sized once: the output of a busy build is
+	// most of what this does, and converting each line on its own grew the
+	// slice a line at a time.
+	rs := make([]rune, 0, utf8.RuneCountInString(whole))
 	for i, part := range parts[:len(parts)-1] {
 		line := compile.Clean(part)
 		st.note(last+i, line)
-		rs = append(append(rs, []rune(line)...), '\n')
+		for _, r := range line {
+			rs = append(rs, r)
+		}
+		rs = append(rs, '\n')
 	}
-	rs = append(rs, []rune(compile.Clean(st.open))...)
+	for _, r := range compile.Clean(st.open) {
+		rs = append(rs, r)
+	}
 	b.RegenerateTail(last, rs)
 
 	ws := e.tree.Windows()
