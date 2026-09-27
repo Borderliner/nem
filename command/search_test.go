@@ -1121,3 +1121,33 @@ func TestSearchFoldsBeyondASCII(t *testing.T) {
 		}
 	}
 }
+
+// Anchored on its rarest letter, a search still finds a needle wherever it
+// is - at a line's start and end, in any case when case is ignored, and
+// when it has no ASCII to anchor on at all.
+func TestSearchForwardAnchors(t *testing.T) {
+	b := text.NewBuffer()
+	if err := b.Insert(text.Pos{}, []rune("zebra\nthe QUICK fox\nسلام دنیا\nxxquizz")); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		pat  string
+		fold bool
+		want text.Pos
+		ok   bool
+	}{
+		{"zebra", true, at(0, 0), true},
+		{"quick", true, at(1, 4), true},
+		{"quick", false, at(0, 0), false},
+		{"QUICK", false, at(1, 4), true},
+		{"fox", true, at(1, 10), true},
+		{"دنیا", true, at(2, 5), true},
+		{"quiz", true, at(3, 2), true},
+		{"quizzz", true, at(0, 0), false},
+	} {
+		start, _, ok := command.SearchForward(b, tc.pat, text.Pos{}, tc.fold)
+		if ok != tc.ok || (ok && !start.Equal(tc.want)) {
+			t.Errorf("SearchForward(%q, fold %v) = %v, %v; want %v, %v", tc.pat, tc.fold, start, ok, tc.want, tc.ok)
+		}
+	}
+}

@@ -94,20 +94,64 @@ func SearchForward(b *text.Buffer, pat string, from text.Pos, fold bool) (start,
 		return from, from, false
 	}
 	from = b.ClampPos(from)
+	a, lo, up := anchor(needle, fold)
 	for ln := from.Line; ln < b.NumLines(); ln++ {
 		hay := b.Line(ln).View()
 		first := 0
 		if ln == from.Line {
 			first = int(from.Col)
 		}
-		for i := first; i+len(needle) <= len(hay); i++ {
-			if foldIf(hay[i], fold) == needle[0] && matchAt(hay, needle, i, fold) {
-				return text.Pos{Line: ln, Col: text.RuneIdx(i)},
-					text.Pos{Line: ln, Col: text.RuneIdx(i + len(needle))}, true
+		for i := first + a; i+len(needle)-a <= len(hay); i++ {
+			// The anchor's two cases compared as they are, and the fold
+			// only for a rune that is one of them: a search that finds
+			// nothing looks at every rune of every line.
+			if r := hay[i]; lo < 0 {
+				if foldIf(r, fold) != needle[0] {
+					continue
+				}
+			} else if r != lo && r != up {
+				continue
+			}
+			if matchAt(hay, needle, i-a, fold) {
+				return text.Pos{Line: ln, Col: text.RuneIdx(i - a)},
+					text.Pos{Line: ln, Col: text.RuneIdx(i - a + len(needle))}, true
 			}
 		}
 	}
 	return from, from, false
+}
+
+// commonness ranks ASCII by how often it turns up in code and prose, most
+// often first; a rune not in it is rarer than all of them.
+const commonness = " etaoinsrlcdhupmfgbywvkxjqz_.,;:()[]{}=\"'0123456789"
+
+// anchor picks the rune of needle a search scans for - its rarest, so the
+// scan stops as seldom as can be - and the two runes that are it: its lower
+// and upper case when case is ignored, itself twice when not. A needle with
+// no ASCII in it is anchored on its first rune, which the scan folds each
+// rune to compare with; lo is then -1.
+func anchor(needle []rune, fold bool) (at int, lo, up rune) {
+	best := -1
+	for i, r := range needle {
+		if r >= utf8.RuneSelf {
+			continue
+		}
+		rank := strings.IndexByte(commonness, byte(foldRune(r)))
+		if rank < 0 {
+			rank = len(commonness)
+		}
+		if best < 0 || rank > best {
+			at, best = i, rank
+		}
+	}
+	if best < 0 {
+		return 0, -1, -1
+	}
+	lo, up = needle[at], needle[at]
+	if fold && 'a' <= lo && lo <= 'z' {
+		up = lo - 'a' + 'A'
+	}
+	return at, lo, up
 }
 
 // SearchBackward finds the last occurrence of pat beginning strictly before
