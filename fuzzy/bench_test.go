@@ -39,3 +39,28 @@ func BenchmarkRankMostlyRejected(b *testing.B) {
 		_ = Rank("qqqq", c)
 	}
 }
+
+// manyPaths approximates project-find-file in a large repository: paths a
+// few directories deep, with the mix of sources, tests and other files a real
+// tree has, so a query rejects most of them for different reasons.
+func manyPaths(n int) []string {
+	tops := []string{"editor", "buffer", "internal", "ui", "fuzzy", "cmd", "docs", "vendor"}
+	subs := []string{"core", "edit", "display", "io", "keymap", "search", "util", "testdata"}
+	names := []string{"window", "buffer", "command", "render", "handler", "parse", "index", "state"}
+	exts := []string{".go", "_test.go", ".md", ".go", ".txt", ".json"}
+	out := make([]string, n)
+	for i := range out {
+		out[i] = fmt.Sprintf("%s/%s/%s_%d%s",
+			tops[i%len(tops)], subs[i/len(tops)%len(subs)], names[i/64%len(names)], i, exts[i%len(exts)])
+	}
+	return out
+}
+
+// Every file in a large project, which Rank shares out across the CPUs.
+func BenchmarkRankPaths100k(b *testing.B) {
+	c := manyPaths(100_000)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = Rank("edwin", c)
+	}
+}
