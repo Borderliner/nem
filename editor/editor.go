@@ -28,6 +28,7 @@ import (
 	"github.com/Borderliner/nem/keymap"
 	"github.com/Borderliner/nem/lua"
 	"github.com/Borderliner/nem/memory"
+	"github.com/Borderliner/nem/sysopen"
 	"github.com/Borderliner/nem/text"
 	"github.com/Borderliner/nem/ui"
 	"github.com/Borderliner/nem/view"
@@ -129,6 +130,13 @@ type Editor struct {
 	// layout is how letters of other keyboard layouts are read as keys. See
 	// layout.go.
 	layout keymap.Layout
+
+	// raw holds the buffers of files that are not text - an mp3, a PDF -
+	// opened as text anyway. They are drawn as their bytes are stored, with
+	// no colouring and no right-to-left layout: random bytes decode to
+	// Arabic and Hebrew letters as readily as to anything, and laying those
+	// out or lexing them only cost time and memory to rearrange noise.
+	raw map[*text.Buffer]bool
 
 	// startup shows the welcome panel. It is set by the caller when nem was
 	// started with no file to open, and cleared by the first keystroke - see
@@ -258,6 +266,7 @@ func New(scr tcell.Screen) (*Editor, error) {
 		grep:       map[*text.Buffer]*grepState{},
 		grepKeys:   gk,
 
+		raw:             map[*text.Buffer]bool{},
 		compile:         map[*text.Buffer]*compileState{},
 		compileKeys:     ck,
 		compileCommands: map[string]string{},
@@ -489,6 +498,11 @@ func (e *Editor) OpenFile(path string) (*text.Buffer, error) {
 	}
 	b.SetPath(abs)
 	e.adopt(b, e.uniqueName(filepath.Base(abs)))
+	// A file that is not text, opened as text anyway, is shown as it is
+	// stored: see raw.
+	if isText, err := sysopen.IsText(abs); err == nil && !isText {
+		e.raw[b] = true
+	}
 	// Back where it was left last time, and on the recent list for next time.
 	e.restorePlace(b, abs)
 	e.rememberFile(abs)
@@ -535,6 +549,7 @@ func (e *Editor) KillBuffer(b *text.Buffer) error {
 	delete(e.names, b)
 	delete(e.dired, b)
 	delete(e.grep, b)
+	delete(e.raw, b)
 	if st := e.compile[b]; st != nil && st.running {
 		st.proc.kill()
 	}

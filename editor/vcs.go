@@ -209,6 +209,9 @@ func (e *Editor) FileType(b *text.Buffer) string {
 	if b == nil {
 		return ""
 	}
+	if e.raw[b] {
+		return "binary"
+	}
 	if st := e.diredOf(b); st != nil {
 		if st.wd != nil {
 			return "wdired"

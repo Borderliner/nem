@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Borderliner/nem/command"
@@ -248,4 +249,42 @@ func TestALaunchFailureIsReported(t *testing.T) {
 	}
 	e.HandleEvent(ev)
 	wantEcho(t, e, "could not open photo.png")
+}
+
+// A file that is not text, opened as text, is drawn as its bytes are stored:
+// the letters its bytes happen to spell are not laid out right to left or
+// joined, and nothing is coloured. A text file with the same letters is.
+func TestNonTextOpenedAsTextIsDrawnAsStored(t *testing.T) {
+	dir := t.TempDir()
+	bin, txtFile := filepath.Join(dir, "song.dat"), filepath.Join(dir, "words.txt")
+	for p, data := range map[string]string{bin: "\x00سلام", txtFile: "سلام"} {
+		if err := os.WriteFile(p, []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e, scr := newTestEditor(t)
+	e.SetOpenBinary("text")
+
+	b, err := e.OpenFile(bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.active.Visit(b)
+	e.Redraw()
+	if got := e.FileType(b); got != "binary" {
+		t.Errorf("file type %q, want binary", got)
+	}
+	if !strings.Contains(screenRow(t, scr, 0), "سلام") {
+		t.Errorf("row %q; want the letters in the order they are stored", screenRow(t, scr, 0))
+	}
+
+	tb, err := e.OpenFile(txtFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.active.Visit(tb)
+	e.Redraw()
+	if e.FileType(tb) == "binary" || strings.Contains(screenRow(t, scr, 0), "سلام") {
+		t.Errorf("text file: type %q, row %q; want it laid out right to left", e.FileType(tb), screenRow(t, scr, 0))
+	}
 }

@@ -21,7 +21,7 @@ import (
 // recognised extension gets the plain lexer, which classifies nothing, so
 // *scratch* and *Buffer List* render uncoloured without a special case here.
 func (e *Editor) spansOf(b *text.Buffer, line int) []syntax.Span {
-	if b == nil {
+	if b == nil || e.raw[b] {
 		return nil
 	}
 	// A listing is coloured from the Listing that produced it, not lexed.

@@ -544,6 +544,7 @@ func (e *Editor) frame() ui.Frame {
 		ListingOf:   e.isListing,
 		CursorOf:    e.showsCursor,
 		DirectionOf: e.isProse,
+		RawOf:       func(b *text.Buffer) bool { return e.raw[b] },
 	}
 	if e.mini != nil {
 		f.Echo = e.mini.line()

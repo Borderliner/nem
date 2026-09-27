@@ -56,6 +56,10 @@ type Frame struct {
 	// ListingOf reports which buffers are listings rather than text. Optional:
 	// a nil ListingOf treats every buffer as text. See ListingFunc.
 	ListingOf ListingFunc
+	// RawOf reports which buffers are drawn as stored, with no right-to-left
+	// layout: a file that is not text, opened as text anyway, whose bytes
+	// only look like letters by chance. Optional: nil means none.
+	RawOf ListingFunc
 	// DirectionOf reports which buffers' lines each take their direction
 	// from their first letter - prose - and so are set against the right
 	// edge when that letter is Persian or Arabic. Every other buffer's lines
@@ -140,7 +144,11 @@ func Render(scr tcell.Screen, f Frame, th Theme) {
 			listing := f.isListing(win.Buf)
 			bar := listing && (f.CursorOf == nil || !f.CursorOf(win.Buf))
 			auto := f.DirectionOf != nil && f.DirectionOf(win.Buf)
-			drawWindow(scr, rect, win, win == f.Active, listing, bar, auto, th, info, f.SpansOf)
+			wth := th
+			if f.RawOf != nil && f.RawOf(win.Buf) {
+				wth.Bidi = false
+			}
+			drawWindow(scr, rect, win, win == f.Active, listing, bar, auto, wth, info, f.SpansOf)
 		}
 		for _, d := range f.Tree.Dividers(w, treeH) {
 			drawDivider(scr, d, th)
@@ -446,7 +454,7 @@ func placeCursor(scr tcell.Screen, w, h, echoY int, rects map[*view.Window]view.
 	pt := f.Active.Buf.ClampPos(f.Active.Pt)
 	l := f.Active.Buf.Line(pt.Line)
 	sx := int(l.DisplayCol(pt.Col) - f.Active.LeftCol)
-	if th.lineUsesBidi(l) {
+	if th.lineUsesBidi(l) && (f.RawOf == nil || !f.RawOf(f.Active.Buf)) {
 		auto := f.DirectionOf != nil && f.DirectionOf(f.Active.Buf)
 		sx = bidiCursorCol(l, pt.Col, text.ColIdx(textW), f.Active.LeftCol, auto)
 	}
