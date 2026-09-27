@@ -288,6 +288,7 @@ func TestFindFileAfterDescending(t *testing.T) {
 func TestFindFileUnderHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // where os.UserHomeDir looks on Windows
 	writeFiles(t, home, "notes/todo.txt")
 	e, scr := newTestEditor(t)
 	t.Chdir(t.TempDir())

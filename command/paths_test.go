@@ -26,6 +26,7 @@ func TestRestartPath(t *testing.T) {
 func TestExpandPath(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // where os.UserHomeDir looks on Windows
 	for in, want := range map[string]string{
 		"~":            home,
 		"~/":           home + string(filepath.Separator),

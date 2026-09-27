@@ -67,6 +67,7 @@ func TestRootFallsBackToABuildFile(t *testing.T) {
 func TestRootPassesOverHome(t *testing.T) {
 	home := tree(t, ".git/", "notes/todo.txt", "work/.projectile")
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // where os.UserHomeDir looks on Windows
 	if got, ok := Root(filepath.Join(home, "notes")); ok {
 		t.Errorf("Root(~/notes) = %q; want no project", got)
 	}
