@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 )
 
 // MaxFiles is where listing a project stops. A tree that large is a home
@@ -88,12 +89,18 @@ func gitFiles(root string) ([]string, error) {
 		}
 		return names, nil
 	}
-	tracked, err := run("--cached", "--recurse-submodules")
+	// The three at once: each is a process, and in a large repository each
+	// takes a good part of a second.
+	var tracked, untracked, deleted []string
+	var err error
+	var wg sync.WaitGroup
+	wg.Go(func() { tracked, err = run("--cached", "--recurse-submodules") })
+	wg.Go(func() { untracked, _ = run("--others", "--exclude-standard") })
+	wg.Go(func() { deleted, _ = run("--deleted") })
+	wg.Wait()
 	if err != nil {
 		return nil, nil
 	}
-	untracked, _ := run("--others", "--exclude-standard")
-	deleted, _ := run("--deleted")
 
 	gone := make(map[string]bool, len(deleted))
 	for _, d := range deleted {
