@@ -122,6 +122,9 @@ These work everywhere, unless a mode or a prompt below gives a key a meaning of 
 | `C-r` | `isearch-backward` | Search incrementally backward as you type. |
 | `M-%` | `query-replace` | Replace occurrences of a string, asking about each one. |
 | `M-s o` | `occur` | List the lines of this buffer that match a regexp, each leading to its line. |
+| `M-s r` | `rg` | Search a directory's files as the pattern is typed, ripgrep's options and all; C-u asks where. |
+| `M-s f` | `fzf` | Open a file anywhere under a directory, found by a few letters of its path; C-u asks where. |
+| `M-s l` | `fzf-lines` | Go to a line of the buffer, found by a few letters of it. |
 
 ### Files
 

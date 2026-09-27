@@ -75,6 +75,8 @@ A key in a mode - `dired: f` - works only in that mode's buffers; see [Keybindin
 | `forward-paragraph` | `M-}` | Move to the end of the paragraph, ARG paragraphs forward. |
 | `forward-sexp` | `C-M-f` | Move over the next balanced expression, ARG times. |
 | `forward-word` | `M-f` | Move point to the end of the next word. |
+| `fzf` | `M-s f` | Open a file anywhere under a directory, found by a few letters of its path; C-u asks where. |
+| `fzf-lines` | `M-s l` | Go to a line of the buffer, found by a few letters of it. |
 | `goto-line` | `M-g M-g` | Move point to the start of a numbered line. |
 | `grep-display-match` | grep: `o` | Show the match at point in the other window, staying here. |
 | `grep-goto-match` | grep: `RET` | Go to the match at point, in the other window. |
@@ -146,6 +148,7 @@ A key in a mode - `dired: f` - works only in that mode's buffers; see [Keybindin
 | `replace-string` |  | Replace a string everywhere after point, or in the region, without asking. |
 | `reverse-region` |  | Reverse the order of the region's lines. |
 | `revert-buffer` | `C-x x g` | Read the buffer's file again, throwing away any edits after asking; a listing is read again, a compilation run again. |
+| `rg` | `M-s r` | Search a directory's files as the pattern is typed, ripgrep's options and all; C-u asks where. |
 | `right-char` | `<right>` | Move one character to the right: forward, or backward in a line that reads right to left. |
 | `save-buffer` | `C-x C-s` | Save the current buffer, prompting for a name if it has none. |
 | `save-buffers-kill-terminal` | `C-x C-c` | Offer to save modified buffers, then exit. |
@@ -179,4 +182,4 @@ A key in a mode - `dired: f` - works only in that mode's buffers; see [Keybindin
 | `yank-pop` | `M-y` | Replace the text just yanked with the next-older kill-ring entry. |
 | `zap-to-char` | `M-z` | Kill up to and including the next occurrence of a character, ARG times. |
 
-169 commands in all.
+172 commands in all.
