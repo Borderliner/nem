@@ -49,9 +49,9 @@ func refScore(query, candidate string) (Match, bool) {
 // refRank ranks a plain query, as Rank did before there was any syntax.
 func refRank(query string, candidates []string) []Ranked {
 	out := []Ranked{}
-	for _, cand := range candidates {
+	for i, cand := range candidates {
 		if m, ok := refScore(query, cand); ok {
-			out = append(out, Ranked{Candidate: cand, Match: m})
+			out = append(out, Ranked{Candidate: cand, Match: m, Index: i})
 		}
 	}
 	if query == "" {

@@ -75,6 +75,10 @@ func Score(query, candidate string) (Match, bool) {
 type Ranked struct {
 	Candidate string
 	Match     Match
+	// Index is the candidate's place in the list given to Rank, so what
+	// matched can be put back in the list's own order: for a list kept in
+	// its order, or for the next keystroke's Rank to narrow.
+	Index int
 }
 
 // parallelMin is how many candidates it takes for Rank to share the scoring
@@ -98,8 +102,8 @@ func Rank(query string, candidates []string) []Ranked {
 	p := parse(query)
 	if len(p.groups) == 0 {
 		out := make([]Ranked, 0, len(candidates))
-		for _, cand := range candidates {
-			out = append(out, Ranked{Candidate: cand})
+		for i, cand := range candidates {
+			out = append(out, Ranked{Candidate: cand, Index: i})
 		}
 		return out
 	}
@@ -113,7 +117,7 @@ func Rank(query string, candidates []string) []Ranked {
 		var wg sync.WaitGroup
 		for w := range workers {
 			lo, hi := min(w*size, len(candidates)), min((w+1)*size, len(candidates))
-			wg.Go(func() { parts[w] = score(&p, candidates[lo:hi], nil) })
+			wg.Go(func() { parts[w] = score(&p, candidates[lo:hi], lo, nil) })
 		}
 		wg.Wait()
 		// Sized by what matched, not by what was offered: room for every
@@ -128,7 +132,7 @@ func Rank(query string, candidates []string) []Ranked {
 			out = append(out, part...)
 		}
 	} else {
-		out = score(&p, candidates, make([]Ranked, 0, len(candidates)))
+		out = score(&p, candidates, 0, make([]Ranked, 0, len(candidates)))
 	}
 	slices.SortStableFunc(out, func(x, y Ranked) int {
 		if x.Match.Score != y.Match.Score {
@@ -139,21 +143,22 @@ func Rank(query string, candidates []string) []Ranked {
 	return out
 }
 
-// score appends to out the candidates p matches, in input order.
+// score appends to out the candidates p matches, in input order; base is
+// the place of the first of them in the whole list.
 //
 // The query was parsed once for the whole pass, and each worker shares it
 // read-only. Candidates are decoded into one buffer reused across the pass:
 // decoding each into its own cost an allocation per candidate on every
 // keystroke, which dominated ranking a large directory.
-func score(p *pattern, candidates []string, out []Ranked) []Ranked {
+func score(p *pattern, candidates []string, base int, out []Ranked) []Ranked {
 	var cbuf []rune
-	for _, cand := range candidates {
+	for i, cand := range candidates {
 		if !p.admits(cand) {
 			continue
 		}
 		cbuf = decodeInto(cbuf, cand)
 		if m, ok := p.match(cbuf); ok {
-			out = append(out, Ranked{Candidate: cand, Match: m})
+			out = append(out, Ranked{Candidate: cand, Match: m, Index: base + i})
 		}
 	}
 	return out

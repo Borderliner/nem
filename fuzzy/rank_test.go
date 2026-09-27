@@ -171,3 +171,20 @@ func TestRankIsStableWhenScoreAndLengthBothTie(t *testing.T) {
 	}
 	in = nil
 }
+
+// Each ranked candidate says where it was in the list, empty query or not.
+func TestRankedKnowTheirPlace(t *testing.T) {
+	for _, q := range []string{"", "kill", "w"} {
+		for _, r := range Rank(q, nemCommands) {
+			if nemCommands[r.Index] != r.Candidate {
+				t.Fatalf("Rank(%q) puts %q at %d, where the list has %q", q, r.Candidate, r.Index, nemCommands[r.Index])
+			}
+		}
+	}
+	many := manyPaths(3 * parallelMin)
+	for _, r := range Rank("edwin", many) {
+		if many[r.Index] != r.Candidate {
+			t.Fatalf("Rank over many puts %q at %d, where the list has %q", r.Candidate, r.Index, many[r.Index])
+		}
+	}
+}
