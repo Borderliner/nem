@@ -536,10 +536,15 @@ func posAfter(p text.Pos, s string) text.Pos {
 // It does not filter. The minibuffer ranks candidates with fuzzy matching, so
 // narrowing here would defeat it: typing "fwc" for forward-char has no prefix
 // match, and a pre-filtered list would come back empty.
+//
+// The list is copied once, so nothing done to what it gives reaches names -
+// the registry's, say - and then given back the same every time: a prompt
+// tells from that that the list has not changed, and narrows its last
+// ranking rather than rank the whole list again at every keystroke. Copying
+// at every keystroke was 200,000 strings a keystroke in a large project.
 func CompleteFrom(names []string) CompleteFunc {
-	return func(string) []string {
-		return append([]string(nil), names...)
-	}
+	own := append([]string(nil), names...)
+	return func(string) []string { return own }
 }
 
 // keysOf annotates a command with the keys that run it, for M-x: as many as

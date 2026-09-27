@@ -133,6 +133,10 @@ type Seq struct {
 // selects which universe applies rather than narrowing one: a filename
 // completion reads the directory the input names, and then offers everything in
 // it rather than only the entries whose base matches.
+//
+// The prompt only reads the list, never changes it. Giving back the very
+// slice given the time before tells it that the list has not changed, and it
+// narrows its last ranking rather than rank the whole list again.
 type CompleteFunc func(input string) []string
 
 // Found is a candidate a ReadOpts.Search found: the text shown, and the runes
