@@ -3,6 +3,7 @@ package editor
 import (
 	"fmt"
 	"slices"
+	"sync/atomic"
 	"unicode/utf8"
 
 	"github.com/Borderliner/nem/command"
@@ -77,6 +78,40 @@ type completion struct {
 	// grow-only minibuffer does: were it to shrink with every keystroke, the
 	// windows above would change size under the user as they typed.
 	peak int
+
+	// keepOrder lists the matches in the candidates' own order. See
+	// ReadOpts.KeepOrder.
+	keepOrder bool
+
+	// A live list's candidates are a background search's results - see
+	// ReadOpts.Search. gen counts the searches started, so results that
+	// arrive after a newer search began are known for stale; stop stops the
+	// one running; pending says it has not come back yet.
+	live    bool
+	gen     int
+	stop    *atomic.Bool
+	pending bool
+}
+
+// newLiveCompletion is a list whose candidates a search will supply.
+func newLiveCompletion() *completion {
+	return &completion{rows: completionRows, style: completionBottom, live: true}
+}
+
+// setFound makes a live search's results the candidates, in its order, the
+// parts that matched highlighted.
+func (c *completion) setFound(found []command.Found) {
+	c.ranked = c.ranked[:0]
+	for _, f := range found {
+		var idx []int
+		for _, sp := range f.Spans {
+			for i := sp[0]; i < sp[1]; i++ {
+				idx = append(idx, i)
+			}
+		}
+		c.ranked = append(c.ranked, fuzzy.Ranked{Candidate: f.Text, Match: fuzzy.Match{Indices: idx}})
+	}
+	c.sel, c.top, c.pending = 0, 0, false
 }
 
 func newCompletion(f command.CompleteFunc, input string) *completion {
@@ -99,8 +134,20 @@ func newCompletion(f command.CompleteFunc, input string) *completion {
 // keeps the two in agreement: what is highlighted is what RET takes, and C-n
 // off the exact match is still honoured.
 func (c *completion) refresh(input string) {
-	c.ranked = rankPastSharedPrefix(input, c.complete(input))
+	if c.live {
+		return // the search's results come in their own time; see setFound
+	}
+	cands := c.complete(input)
+	c.ranked = rankPastSharedPrefix(input, cands)
 	c.sel, c.top = 0, 0
+	if c.keepOrder && input != "" {
+		at := make(map[string]int, len(cands))
+		for i, cand := range cands {
+			at[cand] = i
+		}
+		slices.SortFunc(c.ranked, func(a, b fuzzy.Ranked) int { return at[a.Candidate] - at[b.Candidate] })
+		return
+	}
 	if input == "" && len(c.history) > 0 {
 		at := make(map[string]int, len(c.history))
 		for i, h := range c.history {
@@ -331,8 +378,13 @@ func (e *Editor) panelFor(ms *miniState) (ui.Panel, int, int, bool) {
 
 // countNote is the position readout: which candidate is selected, of how many.
 func (c *completion) countNote() string {
-	if n := len(c.ranked); n > 0 {
+	switch n := len(c.ranked); {
+	case n > 0 && c.pending:
+		return fmt.Sprintf("%d/%d …", c.sel+1, n)
+	case n > 0:
 		return fmt.Sprintf("%d/%d", c.sel+1, n)
+	case c.pending:
+		return "searching …"
 	}
 	return "no match"
 }

@@ -219,6 +219,9 @@ func (e *Editor) handleEvent(ev tcell.Event) {
 			// Output from a command running in the background; see
 			// process.go.
 			e.processWoke(d.p)
+		case liveFound:
+			// A live prompt's search is back; see searchLive.
+			e.liveArrived(d)
 		}
 	case *tcell.EventFocus:
 		// Back from another window, where files may have changed.

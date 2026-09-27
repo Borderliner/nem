@@ -31,6 +31,7 @@ package command
 
 import (
 	"errors"
+	"sync/atomic"
 
 	"github.com/Borderliner/nem/icons"
 	"github.com/Borderliner/nem/keymap"
@@ -134,6 +135,13 @@ type Seq struct {
 // it rather than only the entries whose base matches.
 type CompleteFunc func(input string) []string
 
+// Found is a candidate a ReadOpts.Search found: the text shown, and the runes
+// of it that matched, as ranges from start to end.
+type Found struct {
+	Text  string
+	Spans [][2]int
+}
+
 // ReadOpts configures a minibuffer prompt.
 type ReadOpts struct {
 	// Prompt is shown at the start of the minibuffer line, e.g. "Find file: ".
@@ -217,6 +225,28 @@ type ReadOpts struct {
 	// minibuffer window and it will move point in the prompt instead, which
 	// reads as a rendering bug rather than as the mistake it is.
 	OnChange func(string)
+
+	// KeepOrder lists the candidates that match in the order Complete gives
+	// them, rather than best match first - the lines of a buffer, which read
+	// best in their own order, as fzf's --no-sort has them.
+	KeepOrder bool
+
+	// Preview, when non-nil, is called with the highlighted candidate each
+	// time the highlight moves to another, as it is typed for or stepped
+	// through, and with "" when nothing is highlighted. Like OnChange it runs
+	// with Win reporting the text window, so it can show there what the
+	// candidate leads to. A command previewing should put things back if the
+	// prompt is abandoned.
+	Preview func(candidate string)
+
+	// Search, when non-nil, is where the candidates come from instead of
+	// Complete: a search run on what is typed - a project searched as the
+	// pattern is typed - whose results are the candidates, in the order it
+	// gives them, with the parts that matched highlighted. It runs in the
+	// background, so typing never waits for it; a run overtaken by the next
+	// keystroke is told to stop through stop, and what it returns then is
+	// thrown away. It must not touch the editor.
+	Search func(input string, stop *atomic.Bool) []Found
 
 	// Session, when non-nil, is the incremental-search session this prompt
 	// drives. The minibuffer calls its Update after every edit and its Advance

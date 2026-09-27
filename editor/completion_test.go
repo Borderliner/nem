@@ -3,7 +3,9 @@ package editor
 import (
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Borderliner/nem/command"
 	"github.com/Borderliner/nem/text"
@@ -680,5 +682,75 @@ func TestEditingThePromptRefiltersTheList(t *testing.T) {
 	ms.replace(e, "")
 	if got := ms.comp.count(); got != 3 {
 		t.Errorf("after clearing the prompt, %d candidates matched, want all 3", got)
+	}
+}
+
+// feedAfter injects groups of keys in turn, waiting between them: for keys
+// that must come after a search in the background has come back.
+func feedAfter(t *testing.T, scr tcell.SimulationScreen, wait time.Duration, groups ...[]injected) {
+	t.Helper()
+	go func() {
+		for i, g := range groups {
+			if i > 0 {
+				time.Sleep(wait)
+			}
+			for _, ev := range g {
+				scr.InjectKey(ev.key, ev.r, ev.mod)
+			}
+		}
+	}()
+}
+
+// A prompt whose candidates a search supplies lists what the search found
+// for what was typed, in its order and highlighted where it matched, and
+// RET takes the highlighted one. The search runs in the background, so the
+// prompt does not wait on it.
+func TestASearchInTheBackgroundSuppliesTheCandidates(t *testing.T) {
+	e, scr := newTestEditor(t)
+	var calls atomic.Int32
+	search := func(input string, stop *atomic.Bool) []command.Found {
+		calls.Add(1)
+		if input == "" {
+			return nil
+		}
+		return []command.Found{
+			{Text: "second " + input, Spans: [][2]int{{7, 7 + len(input)}}},
+			{Text: "first " + input, Spans: [][2]int{{6, 6 + len(input)}}},
+		}
+	}
+	feedAfter(t, scr, 150*time.Millisecond, txt("ab"), key(t, "C-n", "RET"))
+	got, err := e.ReadString(command.ReadOpts{Prompt: "Find: ", Search: search})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "first ab" {
+		t.Errorf("took %q, want the search's second result, in its own order", got)
+	}
+	if calls.Load() < 2 {
+		t.Errorf("searched %d times, want once as the prompt opened and again as it was typed in", calls.Load())
+	}
+}
+
+// KeepOrder lists what matches in the candidates' own order, not the best
+// match first, and Preview hears of each candidate the highlight moves to.
+func TestKeepOrderAndPreview(t *testing.T) {
+	e, scr := newTestEditor(t)
+	var seen []string
+	feed(t, scr, txt("ma"), key(t, "C-n", "RET"))
+	got, err := e.ReadString(command.ReadOpts{
+		Prompt:    "Pick: ",
+		Complete:  command.CompleteFrom([]string{"xmxa", "ma", "mxa"}),
+		KeepOrder: true,
+		Preview:   func(c string) { seen = append(seen, c) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// In their order, xmxa is first, though ma matches better.
+	if got != "ma" {
+		t.Errorf("took %q, want ma: the second in the candidates' own order", got)
+	}
+	if len(seen) < 2 || seen[len(seen)-1] != "ma" || seen[len(seen)-2] != "xmxa" {
+		t.Errorf("previewed %q, want xmxa then ma", seen)
 	}
 }

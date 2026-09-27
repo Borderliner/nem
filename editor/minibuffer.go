@@ -3,6 +3,7 @@ package editor
 import (
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/Borderliner/nem/command"
@@ -63,6 +64,10 @@ type miniState struct {
 	histAt  int
 	typed   string
 
+	// previewed is the candidate Preview was last told of; nil before the
+	// first.
+	previewed *string
+
 	done  bool
 	abort bool
 }
@@ -108,8 +113,17 @@ func newMiniState(opts command.ReadOpts, buf *text.Buffer, win *view.Window) *mi
 		last:   buf.String(),
 		histAt: -1,
 	}
-	if opts.Complete != nil {
+	switch {
+	case opts.Search != nil:
+		ms.comp = newLiveCompletion()
+	case opts.Complete != nil:
 		ms.comp = newCompletion(opts.Complete, ms.contents())
+		ms.comp.keepOrder = opts.KeepOrder
+		if opts.KeepOrder {
+			ms.comp.refresh(ms.contents())
+		}
+	}
+	if ms.comp != nil {
 		ms.comp.icon = opts.Icon
 		ms.comp.annotate = opts.Annotate
 	}
@@ -212,6 +226,11 @@ func (e *Editor) ReadString(opts command.ReadOpts) (string, error) {
 
 // readLoop is the nested event loop a prompt runs in.
 func (e *Editor) readLoop(ms *miniState) {
+	if ms.comp != nil && ms.comp.live {
+		e.searchLive(ms, ms.contents())
+		defer ms.comp.stop.Store(true) // a search still running is for nothing now
+	}
+	ms.preview(e)
 	e.Redraw()
 	for !ms.done && !e.quit {
 		ev := e.nextEvent()
@@ -220,10 +239,67 @@ func (e *Editor) readLoop(ms *miniState) {
 			return
 		}
 		e.handleEvent(ev)
+		if !ms.done {
+			ms.preview(e)
+		}
 		if !e.paste.active {
 			e.Redraw()
 		}
 	}
+}
+
+// preview tells the prompt's Preview of the highlighted candidate, when it is
+// another than it was last told of.
+func (ms *miniState) preview(e *Editor) {
+	if ms.opts.Preview == nil || ms.comp == nil {
+		return
+	}
+	cand, _ := ms.comp.selected()
+	if ms.previewed != nil && *ms.previewed == cand {
+		return
+	}
+	ms.previewed = &cand
+	e.withTextWindow(func() { ms.opts.Preview(cand) })
+}
+
+// liveFound is a live search's results, posted to the event loop by the
+// goroutine that ran it.
+type liveFound struct {
+	ms    *miniState
+	gen   int
+	found []command.Found
+}
+
+// searchLive starts a search for input in the background, stopping the one
+// before it. Its results arrive as a liveFound event.
+func (e *Editor) searchLive(ms *miniState, input string) {
+	c := ms.comp
+	if c.stop != nil {
+		c.stop.Store(true)
+	}
+	c.gen++
+	stop := new(atomic.Bool)
+	c.stop, c.pending = stop, true
+	gen, search, scr := c.gen, ms.opts.Search, e.scr
+	go func() {
+		found := search(input, stop)
+		// Posting fails only while the queue is full; the loop empties it
+		// soon enough, unless a newer search has made this one stale.
+		for !stop.Load() {
+			if scr.PostEvent(tcell.NewEventInterrupt(liveFound{ms, gen, found})) == nil {
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}()
+}
+
+// liveArrived shows a live search's results, if they are still wanted.
+func (e *Editor) liveArrived(d liveFound) {
+	if e.mini != d.ms || d.gen != d.ms.comp.gen {
+		return
+	}
+	d.ms.comp.setFound(d.found)
 }
 
 // control handles a prompt-control key.
@@ -489,7 +565,11 @@ func (e *Editor) afterMiniEdit() {
 
 	// The candidate list is recomputed from the new contents before the hooks
 	// run, so anything they trigger sees a list that matches what is on screen.
-	if ms.comp != nil {
+	// A live list is searched for in the background instead.
+	switch {
+	case ms.comp != nil && ms.comp.live:
+		e.searchLive(ms, cur)
+	case ms.comp != nil:
 		ms.comp.refresh(cur)
 	}
 
