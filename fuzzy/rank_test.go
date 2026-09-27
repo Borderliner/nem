@@ -2,7 +2,9 @@ package fuzzy
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -170,6 +172,41 @@ func TestRankIsStableWhenScoreAndLengthBothTie(t *testing.T) {
 		t.Fatalf("Rank reordered within equal-scoring groups:\n got %v\nwant %v", got, want)
 	}
 	in = nil
+}
+
+// Runs sorted apart and merged are the whole sorted at once, whatever their
+// lengths - a worker whose share matched nothing brings an empty one - and
+// however many ties the scores and lengths leave to the list's order. Each
+// keeps its indices, and a match that had none has nil.
+func TestMergeIsTheWholeSorted(t *testing.T) {
+	r := rand.New(rand.NewPCG(3, 4))
+	for range 500 {
+		var cands []string
+		var want []Ranked
+		runs := make([]run, 1+r.IntN(14))
+		for w := range runs {
+			for range r.IntN(3) * r.IntN(40) {
+				cand := strings.Repeat("x", r.IntN(4))
+				h := hit{score: r.IntN(5) - 2, length: len(cand), index: len(cands), at: len(runs[w].ind), n: r.IntN(3)}
+				var idx []int
+				for k := range h.n {
+					idx = append(idx, h.index*10+k)
+				}
+				runs[w].hits = append(runs[w].hits, h)
+				runs[w].ind = append(runs[w].ind, idx...)
+				cands = append(cands, cand)
+				want = append(want, Ranked{Candidate: cand, Match: Match{Score: h.score, Indices: idx}, Index: h.index})
+			}
+			slices.SortFunc(runs[w].hits, better)
+		}
+		slices.SortStableFunc(want, func(x, y Ranked) int {
+			return better(hit{score: x.Match.Score, length: len(x.Candidate), index: x.Index},
+				hit{score: y.Match.Score, length: len(y.Candidate), index: y.Index})
+		})
+		if got := merge(runs, cands); len(got) != len(want) || len(want) > 0 && !reflect.DeepEqual(got, want) {
+			t.Fatalf("merged %v; want %v", got, want)
+		}
+	}
 }
 
 // Each ranked candidate says where it was in the list, empty query or not.

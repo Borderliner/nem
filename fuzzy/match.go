@@ -235,7 +235,7 @@ func leadingPenalty(j int) int {
 // other, so the columns cut off are ones that could never be part of the
 // answer, and the table is the same without them. For a word matched deep in
 // a long path it is a fraction of the width.
-func bestAlignment(q, c []rune, ignoreCase bool) (int, []int) {
+func bestAlignment(q, c []rune, ignoreCase bool, a *arena) (int, []int) {
 	n := len(q)
 	head, tail := q[0], q[n-1]
 	if ignoreCase {
@@ -257,7 +257,7 @@ func bestAlignment(q, c []rune, ignoreCase bool) (int, []int) {
 		return 0, nil
 	}
 	if n == 1 {
-		return bestPlace(q[0], head, c, lo, hi, ignoreCase)
+		return bestPlace(q[0], head, c, lo, hi, ignoreCase, a)
 	}
 	w := c[lo : hi+1]
 	m := len(w)
@@ -338,7 +338,7 @@ func bestAlignment(q, c []rune, ignoreCase bool) (int, []int) {
 		return 0, nil
 	}
 
-	idx := make([]int, n)
+	idx := a.take(n)
 	for i, j := n-1, bestJ; i >= 0; i-- {
 		idx[i] = lo + j
 		j = par[i*m+j]
@@ -351,7 +351,7 @@ func bestAlignment(q, c []rune, ignoreCase bool) (int, []int) {
 // it with, the table is one row, each place scored alone; this is that row,
 // read as the table's is, the first of the best, without filling it. It is
 // the first keystroke's work, over every candidate there is.
-func bestPlace(r, want rune, c []rune, lo, hi int, ignoreCase bool) (int, []int) {
+func bestPlace(r, want rune, c []rune, lo, hi int, ignoreCase bool, a *arena) (int, []int) {
 	best, at := negInf, lo
 	for j := lo; j <= hi; j++ {
 		cr := c[j]
@@ -369,7 +369,46 @@ func bestPlace(r, want rune, c []rune, lo, hi int, ignoreCase bool) (int, []int)
 			best, at = v, j
 		}
 	}
-	return best, []int{at}
+	idx := a.take(1)
+	idx[0] = at
+	return best, idx
+}
+
+// arena hands out the indices of a ranking pass from blocks it shares out:
+// one allocation a block rather than one a candidate matched, since a
+// keystroke in a very large tree matches most of the files in it. Where the
+// indices are copied out as soon as they are made, reset frees the arena for
+// the next candidate, and the same memory serves the whole pass. Each slice
+// is capped at its length, so appending to one copies it rather than
+// writing over the next. A nil arena allocates each slice on its own, for a
+// match that is scored alone.
+type arena struct{ buf []int }
+
+// The first block is small, since most lists are - M-x's commands, a
+// directory - and each is twice the last, up to a few hundred candidates'
+// worth, for the lists that are not.
+const (
+	firstBlock = 16
+	maxBlock   = 4096
+)
+
+// reset frees all of a's memory for reuse. No slice taken before it may
+// still be in use.
+func (a *arena) reset() { a.buf = a.buf[:0] }
+
+// take returns a slice of n indices from a.
+func (a *arena) take(n int) []int {
+	if a == nil {
+		return make([]int, n)
+	}
+	if cap(a.buf)-len(a.buf) < n {
+		// A new block, not a larger copy: the slices already taken from
+		// the old one are in use, and keep it.
+		a.buf = make([]int, 0, max(n, min(2*cap(a.buf), maxBlock), firstBlock))
+	}
+	k := len(a.buf)
+	a.buf = a.buf[:k+n]
+	return a.buf[k : k+n : k+n]
 }
 
 // scoreRun scores t matched as one contiguous run at c[s:], by the rules
@@ -430,8 +469,8 @@ const maxCells = 1 << 18
 // scored by the same rules as bestAlignment. It is not the best alignment,
 // but found in one pass and no memory beyond the indices, for a query and
 // candidate too long to search every alignment of.
-func firstAlignment(q, c []rune, ignoreCase bool) (int, []int) {
-	idx := make([]int, 0, len(q))
+func firstAlignment(q, c []rune, ignoreCase bool, a *arena) (int, []int) {
+	idx := a.take(len(q))[:0]
 	score := 0
 	for j := 0; j < len(c) && len(idx) < len(q); j++ {
 		r := q[len(idx)]

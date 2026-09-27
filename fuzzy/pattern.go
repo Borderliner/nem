@@ -211,14 +211,14 @@ func (t *term) found(c []rune) bool {
 
 // score scores a positive t against c, which found has already accepted,
 // and returns the rune offsets it matched.
-func (t *term) score(c []rune) (int, []int) {
+func (t *term) score(c []rune, a *arena) (int, []int) {
 	n := len(t.text)
 	switch t.kind {
 	case termFuzzy:
 		if n*len(c) > maxCells {
-			return firstAlignment(t.text, c, t.ignoreCase)
+			return firstAlignment(t.text, c, t.ignoreCase, a)
 		}
-		return bestAlignment(t.text, c, t.ignoreCase)
+		return bestAlignment(t.text, c, t.ignoreCase, a)
 	case termExact:
 		// The best of its occurrences, as bestAlignment takes the best of its
 		// alignments: 'go against "cargo/go.mod" is the go that starts a word.
@@ -228,17 +228,17 @@ func (t *term) score(c []rune) (int, []int) {
 				best, at = v, s
 			}
 		}
-		return best, runIndices(at, n)
+		return best, runIndices(at, n, a)
 	case termSuffix:
 		at := len(c) - n
-		return scoreRun(t.text, c, at, t.ignoreCase), runIndices(at, n)
+		return scoreRun(t.text, c, at, t.ignoreCase), runIndices(at, n, a)
 	}
-	return scoreRun(t.text, c, 0, t.ignoreCase), runIndices(0, n)
+	return scoreRun(t.text, c, 0, t.ignoreCase), runIndices(0, n, a)
 }
 
 // runIndices returns the n offsets from at.
-func runIndices(at, n int) []int {
-	idx := make([]int, n)
+func runIndices(at, n int, a *arena) []int {
+	idx := a.take(n)
 	for k := range idx {
 		idx[k] = at + k
 	}
@@ -259,13 +259,13 @@ func (g group) holds(c []rune) bool {
 // holds only through a negated term scores nothing: preferring it to a
 // positive match that scored below zero would throw that match's indices
 // away for a term that matched nothing to show.
-func (g group) score(c []rune) (int, []int) {
+func (g group) score(c []rune, a *arena) (int, []int) {
 	if len(g) == 1 {
 		// holds has already accepted c, and a lone term needs no second look.
 		if g[0].not {
 			return 0, nil
 		}
-		return g[0].score(c)
+		return g[0].score(c, a)
 	}
 	best, bestIdx, ok := 0, []int(nil), false
 	for i := range g {
@@ -273,7 +273,7 @@ func (g group) score(c []rune) (int, []int) {
 		if t.not || !t.found(c) {
 			continue
 		}
-		if s, idx := t.score(c); !ok || s > best {
+		if s, idx := t.score(c, a); !ok || s > best {
 			best, bestIdx, ok = s, idx, true
 		}
 	}
@@ -299,12 +299,13 @@ func (p *pattern) admits(s string) bool {
 }
 
 // match scores c against p, where c is a candidate admits has let through,
-// decoded. The lone fuzzy terms admits looked for are known to hold, and
-// every other group is tested before any is scored, so a candidate that the
-// last group rejects costs no alignment for the first.
-func (p *pattern) match(c []rune) (Match, bool) {
+// decoded, taking the indices from a. The lone fuzzy terms admits looked for
+// are known to hold, and every other group is tested before any is scored,
+// so a candidate that the last group rejects costs no alignment for the
+// first.
+func (p *pattern) match(c []rune, a *arena) (Match, bool) {
 	if p.plain {
-		s, idx := p.groups[0][0].score(c)
+		s, idx := p.groups[0][0].score(c, a)
 		return Match{Score: s, Indices: idx}, true
 	}
 	for _, g := range p.groups[:p.lone] {
@@ -315,13 +316,13 @@ func (p *pattern) match(c []rune) (Match, bool) {
 	var m Match
 	merged := false
 	for _, g := range p.groups {
-		s, idx := g.score(c)
+		s, idx := g.score(c, a)
 		m.Score += s
 		switch {
 		case idx == nil:
 		case m.Indices == nil:
-			// Every term's indices are its own fresh slice, so the first can
-			// take the rest without a copy.
+			// Every term's indices are a slice of their own, capped at its
+			// length, so the first can take the rest: appending copies it.
 			m.Indices = idx
 		default:
 			m.Indices = append(m.Indices, idx...)

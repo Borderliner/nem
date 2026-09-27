@@ -91,3 +91,22 @@ func BenchmarkRankExtendedCommands(b *testing.B) {
 		_ = Rank("buf | win !kill", nemCommands)
 	}
 }
+
+// The first keystroke in a very large tree: one letter, which most of the
+// paths have somewhere, so nearly every one is scored and sorted.
+func BenchmarkRankOneLetter200k(b *testing.B) {
+	c := manyPaths(200_000)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = Rank("e", c)
+	}
+}
+
+// Two letters over the same tree: still most of it, and now a table each.
+func BenchmarkRankTwoLetters200k(b *testing.B) {
+	c := manyPaths(200_000)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = Rank("ed", c)
+	}
+}

@@ -37,6 +37,7 @@
 package fuzzy
 
 import (
+	"cmp"
 	"runtime"
 	"slices"
 	"sync"
@@ -68,7 +69,7 @@ func Score(query, candidate string) (Match, bool) {
 	if !p.admits(candidate) {
 		return Match{}, false
 	}
-	return p.match([]rune(candidate))
+	return p.match([]rune(candidate), nil)
 }
 
 // Ranked is one candidate and how it matched.
@@ -90,9 +91,7 @@ const parallelMin = 4096
 // Rank returns the matching candidates, best first.
 //
 // The order is total: by score descending, then by shorter candidate, then by
-// the candidate's position in the input. That last tie-break comes free from
-// a stable sort over a slice built in input order - an explicit position map
-// would cost an allocation per candidate on every keystroke for nothing.
+// the candidate's position in the input.
 func Rank(query string, candidates []string) []Ranked {
 	// An empty query is a prompt before the first keystroke: everything matches
 	// equally, so input order is the answer. Sorting would apply the
@@ -108,58 +107,181 @@ func Rank(query string, candidates []string) []Ranked {
 		return out
 	}
 
-	var out []Ranked
-	if workers := runtime.GOMAXPROCS(0); len(candidates) >= parallelMin && workers > 1 {
-		// Each worker scores a run of the candidates, and the runs are joined
-		// in input order, so the result is exactly the one-core result.
-		parts := make([][]Ranked, workers)
-		size := (len(candidates) + workers - 1) / workers
-		var wg sync.WaitGroup
-		for w := range workers {
-			lo, hi := min(w*size, len(candidates)), min((w+1)*size, len(candidates))
-			wg.Go(func() { parts[w] = score(&p, candidates[lo:hi], lo, nil) })
-		}
-		wg.Wait()
-		// Sized by what matched, not by what was offered: room for every
-		// file in a large project was megabytes a keystroke, nearly all
-		// of it for candidates the query had already turned away.
-		n := 0
-		for _, part := range parts {
-			n += len(part)
-		}
-		out = make([]Ranked, 0, n)
-		for _, part := range parts {
-			out = append(out, part...)
-		}
-	} else {
-		out = score(&p, candidates, 0, make([]Ranked, 0, len(candidates)))
+	workers := runtime.GOMAXPROCS(0)
+	if len(candidates) < parallelMin || workers < 2 {
+		// Found in the list's order, so a stable sort settles the ties on
+		// score and length without ever comparing places: for a list this
+		// short, faster than pdqsort, which must. Each match's indices are
+		// the result's, and the arena keeps them.
+		out := make([]Ranked, 0, len(candidates))
+		var a arena
+		scan(&p, candidates, &a, false, func(i int, m Match) {
+			out = append(out, Ranked{Candidate: candidates[i], Match: m, Index: i})
+		})
+		slices.SortStableFunc(out, func(x, y Ranked) int {
+			if x.Match.Score != y.Match.Score {
+				return cmp.Compare(y.Match.Score, x.Match.Score)
+			}
+			return len(x.Candidate) - len(y.Candidate)
+		})
+		return out
 	}
-	slices.SortStableFunc(out, func(x, y Ranked) int {
-		if x.Match.Score != y.Match.Score {
-			return y.Match.Score - x.Match.Score
-		}
-		return len(x.Candidate) - len(y.Candidate)
-	})
-	return out
+	// Each worker scores and sorts a run of the candidates, and the runs are
+	// merged. The order is total, so this is exactly the one-core result.
+	// Sorting the whole on one core, after the scoring, was most of the time
+	// a keystroke took over the files of a very large tree; and at tens of
+	// thousands a run, a stable sort's extra log factor loses to pdqsort.
+	runs := make([]run, workers)
+	size := (len(candidates) + workers - 1) / workers
+	var wg sync.WaitGroup
+	for w := range workers {
+		lo, hi := min(w*size, len(candidates)), min((w+1)*size, len(candidates))
+		wg.Go(func() {
+			r := &runs[w]
+			var a arena
+			scan(&p, candidates[lo:hi], &a, true, func(i int, m Match) { r.add(lo+i, len(candidates[lo+i]), m) })
+			slices.SortFunc(r.hits, better)
+		})
+	}
+	wg.Wait()
+	return merge(runs, candidates)
 }
 
-// score appends to out the candidates p matches, in input order; base is
-// the place of the first of them in the whole list.
+// scan calls add with the place of each candidate p matches, in input order,
+// and its match.
 //
 // The query was parsed once for the whole pass, and each worker shares it
-// read-only. Candidates are decoded into one buffer reused across the pass:
-// decoding each into its own cost an allocation per candidate on every
-// keystroke, which dominated ranking a large directory.
-func score(p *pattern, candidates []string, base int, out []Ranked) []Ranked {
+// read-only. Candidates are decoded into one buffer reused across the pass,
+// and indices are taken from a, reset for each candidate when add copies
+// them out: an allocation for each candidate, on every keystroke, dominated
+// ranking a large directory.
+func scan(p *pattern, candidates []string, a *arena, reset bool, add func(int, Match)) {
 	var cbuf []rune
 	for i, cand := range candidates {
 		if !p.admits(cand) {
 			continue
 		}
 		cbuf = decodeInto(cbuf, cand)
-		if m, ok := p.match(cbuf); ok {
-			out = append(out, Ranked{Candidate: cand, Match: m, Index: base + i})
+		if reset {
+			a.reset()
+		}
+		if m, ok := p.match(cbuf, a); ok {
+			add(i, m)
+		}
+	}
+}
+
+// hit is a match as a worker finds and sorts it: numbers only. A Ranked holds a
+// string and a slice, and a sort moves each element many times; moving
+// pointers about the heap is work the collector has to be told of, which
+// was a fifth of a keystroke's time over the files of a very large tree.
+type hit struct {
+	score  int
+	length int // of the candidate, in bytes
+	index  int // the candidate's place in the list
+	// The match's indices are the run's ind[at:at+n].
+	at, n int
+}
+
+// run is what one worker finds: the hits, in the list's order until they
+// are sorted, and the indices of them all, end to end.
+type run struct {
+	hits []hit
+	ind  []int
+}
+
+// better orders x before y when x is the better match: the higher score, then
+// the shorter candidate, then the earlier in the list. No two candidates
+// share a place in the list, so the order is total: runs sorted by it apart,
+// by any sort, and merged, are the one ranking a sort of the whole makes.
+func better(x, y hit) int {
+	if x.score != y.score {
+		return cmp.Compare(y.score, x.score)
+	}
+	if x.length != y.length {
+		return x.length - y.length
+	}
+	return x.index - y.index
+}
+
+// ranked returns h, a hit of r's, as Rank reports it.
+func (r *run) ranked(h hit, candidates []string) Ranked {
+	var idx []int
+	if h.n > 0 {
+		// A match with no positive term has no indices, and they are nil,
+		// as Score reports them.
+		idx = r.ind[h.at : h.at+h.n : h.at+h.n]
+	}
+	return Ranked{Candidate: candidates[h.index], Match: Match{Score: h.score, Indices: idx}, Index: h.index}
+}
+
+// merge joins runs, each sorted by better, into one ranking.
+//
+// It is sized by what matched, not by what was offered: room for every file
+// in a large project was megabytes a keystroke, nearly all of it for
+// candidates the query had already turned away.
+func merge(runs []run, candidates []string) []Ranked {
+	n := 0
+	for _, r := range runs {
+		n += len(r.hits)
+	}
+	out := make([]Ranked, 0, n)
+	// h is a heap of the runs with hits left, by the first of each.
+	h := make([]*run, 0, len(runs))
+	for i := range runs {
+		if len(runs[i].hits) > 0 {
+			h = append(h, &runs[i])
+		}
+	}
+	less := func(i, j int) bool { return better(h[i].hits[0], h[j].hits[0]) < 0 }
+	down := func(i int) {
+		for {
+			l := 2*i + 1
+			if l >= len(h) {
+				return
+			}
+			if r := l + 1; r < len(h) && less(r, l) {
+				l = r
+			}
+			if !less(l, i) {
+				return
+			}
+			h[i], h[l] = h[l], h[i]
+			i = l
+		}
+	}
+	for i := len(h)/2 - 1; i >= 0; i-- {
+		down(i)
+	}
+	for len(h) > 1 {
+		r := h[0]
+		out = append(out, r.ranked(r.hits[0], candidates))
+		if r.hits = r.hits[1:]; len(r.hits) == 0 {
+			h[0] = h[len(h)-1]
+			h = h[:len(h)-1]
+		}
+		down(0)
+	}
+	if len(h) == 1 {
+		for _, x := range h[0].hits {
+			out = append(out, h[0].ranked(x, candidates))
 		}
 	}
 	return out
+}
+
+// add adds to r the match m of the candidate at index, of length bytes,
+// copying its indices.
+func (r *run) add(index, length int, m Match) {
+	// Both grow by doubling, where append grows a long slice by a quarter
+	// at a time: a keystroke that matched most of a very large tree copied
+	// what it had found five times over.
+	if len(r.hits) == cap(r.hits) {
+		r.hits = slices.Grow(r.hits, max(len(r.hits), 64))
+	}
+	if cap(r.ind)-len(r.ind) < len(m.Indices) {
+		r.ind = slices.Grow(r.ind, max(len(r.ind), len(m.Indices), 256))
+	}
+	r.hits = append(r.hits, hit{score: m.Score, length: length, index: index, at: len(r.ind), n: len(m.Indices)})
+	r.ind = append(r.ind, m.Indices...)
 }
