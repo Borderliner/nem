@@ -233,6 +233,44 @@ func bestAlignment(q, c []rune, ignoreCase bool) (int, []int) {
 	return bestScore, idx
 }
 
+// scoreRun scores t matched as one contiguous run at c[s:], by the rules
+// bestAlignment scores any alignment by: every rune its match and boundary
+// bonus, every rune after the first the consecutive bonus, and the runes
+// skipped before it their penalty. An exact or anchored term is so on the
+// same scale as a fuzzy one, and a run that starts a word still wins.
+func scoreRun(t, c []rune, s int, ignoreCase bool) int {
+	score := (len(t)-1)*bonusConsecutive - leadingPenalty(s)
+	for k, r := range t {
+		score += scoreMatch + boundaryBonus(c, s+k)
+		if ignoreCase && r == c[s+k] {
+			score += bonusCaseMatch
+		}
+	}
+	return score
+}
+
+// runesAt reports whether t matches c rune for rune at offset s. The caller
+// makes sure it fits.
+func runesAt(c []rune, s int, t []rune, ignoreCase bool) bool {
+	for k, r := range t {
+		if !runesEqual(r, c[s+k], ignoreCase) {
+			return false
+		}
+	}
+	return true
+}
+
+// indexRunes returns the first offset at or after from where t matches c as a
+// contiguous run, or -1 if there is none.
+func indexRunes(c []rune, from int, t []rune, ignoreCase bool) int {
+	for s := from; s+len(t) <= len(c); s++ {
+		if runesAt(c, s, t, ignoreCase) {
+			return s
+		}
+	}
+	return -1
+}
+
 // maxCells is the largest table bestAlignment fills: a query and candidate
 // of lengths n and m take n*m cells. Typed queries against names and paths
 // are thousands; a kill yanked into a prompt, against a buffer named after

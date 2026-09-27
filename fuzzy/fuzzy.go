@@ -6,6 +6,31 @@
 // and charges for the gaps between them, so the ranking reflects how a reader
 // would judge the match rather than merely whether one exists.
 //
+// A query is read as fzf reads its extended search syntax. Spaces separate
+// terms, and a candidate must match every one. A term is fuzzy, as above,
+// unless it is marked:
+//
+//	'abc    exact: abc appears, contiguous
+//	^abc    prefix: the candidate starts with abc
+//	abc$    suffix: the candidate ends with abc
+//	^abc$   the candidate is abc
+//	!abc    the candidate does not contain abc; !^abc and !abc$ say it does
+//	        not start or end with it, and !'abc is !abc
+//	a | b   either: a lone | joins the terms each side into one that
+//	        matches when any of them does, so "a | b c" is (a or b) and c
+//
+// A backslash before a space makes the space part of a term. Case is smart
+// per term: a term with an upper-case letter is exact about case, and one
+// without ignores it. A marker with no word after it yet - the ' typed before
+// one, or a | with no term after it - is ignored rather than matched, so the
+// list does not empty and refill as the user types. A query far longer than
+// anyone types was yanked into the prompt, and is read as text, not syntax.
+//
+// A candidate scores the sum of its terms' scores. An exact or anchored term
+// is scored as the same runes matched in a row would be, word starts and all,
+// and a negated one adds nothing. So a query of one plain word ranks exactly
+// as it would if there were no syntax at all.
+//
 // Ordering is total and stable, and pinned by test against a fixed candidate
 // set: predictability is a feature here, because a menu that reorders for
 // reasons the user cannot see is worse than one that ranks imperfectly.
@@ -23,7 +48,9 @@ type Match struct {
 	// candidates scored against the same query.
 	Score int
 	// Indices are the RUNE offsets in the candidate that the query matched,
-	// strictly ascending, one per query rune. Callers emphasise exactly these
+	// strictly ascending. For a plain query there is one per query rune; for
+	// one of several terms they are every term's together, each offset once,
+	// and a negated term contributes none. Callers emphasise exactly these
 	// positions, which is why they are rune offsets and not byte offsets.
 	Indices []int
 }
@@ -31,13 +58,14 @@ type Match struct {
 // Score reports how well query matches candidate, and whether it matches at all.
 //
 // An empty query matches every candidate with score 0 and no indices, so a
-// prompt showing everything before the user types needs no special case.
+// prompt showing everything before the user types needs no special case. So
+// does a query of markers alone, such as a ' with no word after it yet.
 func Score(query, candidate string) (Match, bool) {
-	q := []rune(query)
-	if len(q) == 0 {
+	p := parse(query)
+	if len(p.groups) == 0 {
 		return Match{}, true
 	}
-	return scoreRunes(q, []rune(candidate), smartCaseFold(q))
+	return p.match([]rune(candidate))
 }
 
 // scoreRunes is the shared core, taking pre-decoded runes so Rank can decode the
@@ -82,16 +110,16 @@ func Rank(query string, candidates []string) []Ranked {
 	// An empty query is a prompt before the first keystroke: everything matches
 	// equally, so input order is the answer. Sorting would apply the
 	// shorter-wins tie-break and reorder the menu before the user typed
-	// anything.
-	if query == "" {
+	// anything. A query of markers alone is the same prompt a keystroke
+	// later, the ' or ^ typed before a word, and shows the same list.
+	p := parse(query)
+	if len(p.groups) == 0 {
 		for _, cand := range candidates {
 			out = append(out, Ranked{Candidate: cand})
 		}
 		return out
 	}
 
-	q := []rune(query)
-	ignoreCase := smartCaseFold(q)
 	if workers := runtime.GOMAXPROCS(0); len(candidates) >= parallelMin && workers > 1 {
 		// Each worker scores a run of the candidates, and the runs are joined
 		// in input order, so the result is exactly the one-core result.
@@ -100,14 +128,14 @@ func Rank(query string, candidates []string) []Ranked {
 		var wg sync.WaitGroup
 		for w := range workers {
 			lo, hi := min(w*size, len(candidates)), min((w+1)*size, len(candidates))
-			wg.Go(func() { parts[w] = score(q, candidates[lo:hi], ignoreCase, nil) })
+			wg.Go(func() { parts[w] = score(&p, candidates[lo:hi], nil) })
 		}
 		wg.Wait()
-		for _, p := range parts {
-			out = append(out, p...)
+		for _, part := range parts {
+			out = append(out, part...)
 		}
 	} else {
-		out = score(q, candidates, ignoreCase, out)
+		out = score(&p, candidates, out)
 	}
 	slices.SortStableFunc(out, func(x, y Ranked) int {
 		if x.Match.Score != y.Match.Score {
@@ -118,12 +146,13 @@ func Rank(query string, candidates []string) []Ranked {
 	return out
 }
 
-// score appends to out the candidates q matches, in input order.
-func score(q []rune, candidates []string, ignoreCase bool, out []Ranked) []Ranked {
+// score appends to out the candidates p matches, in input order. The query
+// was parsed once for the whole pass, and each worker shares it read-only.
+func score(p *pattern, candidates []string, out []Ranked) []Ranked {
 	var cbuf []rune
 	for _, cand := range candidates {
 		cbuf = decodeInto(cbuf, cand)
-		if m, ok := scoreRunes(q, cbuf, ignoreCase); ok {
+		if m, ok := p.match(cbuf); ok {
 			out = append(out, Ranked{Candidate: cand, Match: m})
 		}
 	}
