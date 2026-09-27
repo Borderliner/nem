@@ -98,6 +98,12 @@ type Line struct {
 	// lines of code, which is what lets a caller skip work only text in
 	// other scripts needs. Known once the cache is built.
 	plain int
+
+	// wraps is where the line's rows start when it is wrapped wrapW columns
+	// wide, or nil until it is asked for. It is built from the layout and
+	// goes with it. See WrapRows.
+	wraps []RuneIdx
+	wrapW ColIdx
 }
 
 // NewLine returns a Line holding a copy of rs.
@@ -126,6 +132,7 @@ func (l *Line) build() {
 	if l.valid && l.tabW == tw {
 		return
 	}
+	l.wraps = nil // measured from the layout about to change
 
 	rs := l.runes
 	n := len(rs)
@@ -270,7 +277,7 @@ func (l *Line) edited(rs []rune, at RuneIdx) {
 // file scrolled through from end to end keeps only what is on screen
 // measured, rather than every line it ever showed.
 func (l *Line) Forget() {
-	l.segs, l.valid, l.keep = nil, false, 0
+	l.segs, l.valid, l.keep, l.wraps = nil, false, 0, nil
 }
 
 // ASCII reports whether every rune of the line is ASCII: nothing to lay out
