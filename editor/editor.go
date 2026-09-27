@@ -272,16 +272,16 @@ func New(scr tcell.Screen) (*Editor, error) {
 		return nil, fmt.Errorf("registering dired commands: %w", err)
 	}
 	if err := registerWdiredCommands(e, reg); err != nil {
-		return nil, fmt.Errorf("registering dired commands: %w", err)
+		return nil, fmt.Errorf("registering wdired commands: %w", err)
 	}
 	if err := registerGrepCommands(e, reg); err != nil {
-		return nil, fmt.Errorf("registering dired commands: %w", err)
+		return nil, fmt.Errorf("registering search result commands: %w", err)
 	}
 	if err := registerProjectCommands(e, reg); err != nil {
-		return nil, fmt.Errorf("registering dired commands: %w", err)
+		return nil, fmt.Errorf("registering project commands: %w", err)
 	}
 	if err := registerRevertCommands(e, reg); err != nil {
-		return nil, fmt.Errorf("registering dired commands: %w", err)
+		return nil, fmt.Errorf("registering revert commands: %w", err)
 	}
 	if err := registerExternalCommands(e, reg); err != nil {
 		return nil, fmt.Errorf("registering external commands: %w", err)
