@@ -2,6 +2,7 @@ package editor
 
 import (
 	"testing"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 )
@@ -111,4 +112,26 @@ func TestKmacroWithNothingRecorded(t *testing.T) {
 	hit(t, e, "<f4>")
 	wantEcho(t, e, "no keyboard macro defined")
 	wantText(t, e, "text")
+}
+
+// A macro that plays the macro - itself, the only one there is - stops at
+// that call with an error, rather than playing itself inside itself until
+// the editor hangs, or runs out of stack and dies.
+func TestKmacroThatCallsItselfStops(t *testing.T) {
+	e, _ := newTestEditor(t, "")
+	for _, ev := range append(txt("a"), key(t, "C-x", "e")...) {
+		e.km.last = append(e.km.last, tcell.NewEventKey(ev.key, ev.r, ev.mod))
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		hit(t, e, "C-x", "e")
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the macro is still playing itself")
+	}
+	wantText(t, e, "a")
+	wantEcho(t, e, "calls itself")
 }

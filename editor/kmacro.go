@@ -36,6 +36,10 @@ var (
 	errKmacroNone = errors.New("no keyboard macro defined")
 	// errUndefinedKey stops a macro that plays a key bound to nothing.
 	errUndefinedKey = errors.New("undefined key")
+	// errKmacroRecursive stops a macro that plays the macro: there is only
+	// the one, so it would be playing itself inside itself, with no end but
+	// the stack's.
+	errKmacroRecursive = errors.New("keyboard macro calls itself; stopped")
 )
 
 // kmacroState is the whole feature's state.
@@ -181,6 +185,9 @@ func (e *Editor) kmacroInsertCounter() error {
 func (e *Editor) kmacroCall() error {
 	if len(e.km.last) == 0 {
 		return errKmacroNone
+	}
+	if e.km.playing > 0 {
+		return errKmacroRecursive
 	}
 	n, explicit := e.Arg()
 	if !explicit || n < 0 {
