@@ -61,6 +61,11 @@ func TestParseSpecAngleBracketSpecials(t *testing.T) {
 		{"<pgup>", Key{Special: KeyPgUp}},
 		{"<prior>", Key{Special: KeyPgUp}}, // emacs alias
 		{"<next>", Key{Special: KeyPgDn}},  // emacs alias
+		// emacs's name for Shift-TAB, which the terminal sends as a key of
+		// its own.
+		{"<backtab>", Key{Special: KeyTab, Shift: true}},
+		{"<BackTab>", Key{Special: KeyTab, Shift: true}},
+		{"M-<backtab>", Key{Special: KeyTab, Shift: true, Meta: true}},
 	}
 	for _, c := range cases {
 		keys := mustParse(t, c.spec)

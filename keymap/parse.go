@@ -23,6 +23,12 @@ var specialByName = func() map[string]SpecialKey {
 	return m
 }()
 
+// backtab is emacs's name for Shift-TAB, which terminals send as a key of
+// its own (CSI Z) rather than as TAB with Shift held. It is accepted on input
+// as S-<tab>, which is how the editor decodes that key; it is not a special
+// key of its own, so String writes it S-<tab>.
+const backtab = "<backtab>"
+
 // bareRuneNames are unbracketed names that stand for a character.
 var bareRuneNames = map[string]rune{
 	"SPC": ' ',
@@ -101,7 +107,12 @@ func parseKey(tok string) (Key, error) {
 			}
 			return Key{}, fmt.Errorf("keymap: unterminated special key name %q", tok)
 		}
-		sk, ok := specialByName[strings.ToLower(tok)]
+		name := strings.ToLower(tok)
+		if name == backtab {
+			k.Special, k.Shift = KeyTab, true
+			return k, nil
+		}
+		sk, ok := specialByName[name]
 		if !ok {
 			return Key{}, fmt.Errorf("keymap: unknown special key %q", tok)
 		}
