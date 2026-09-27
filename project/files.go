@@ -35,6 +35,10 @@ var skipDirs = map[string]bool{
 	".eunit": true, "_build": true, ".zig-cache": true, "zig-cache": true,
 }
 
+// vcsDirs are the version control systems' own stores, left out even of a
+// search told to ignore nothing.
+var vcsDirs = map[string]bool{".git": true, ".hg": true, ".jj": true, ".bzr": true, "_darcs": true, ".pijul": true, ".sl": true, ".svn": true}
+
 // Files lists the files of the project at root, relative to it and sorted,
 // with "/" between the parts of a path whatever the OS.
 //
@@ -50,13 +54,20 @@ var skipDirs = map[string]bool{
 // matched against every part of a path, so "*.log" leaves out every log and
 // "tmp" every directory called tmp.
 func Files(root string) ([]string, error) {
+	return FilesWith(root, false)
+}
+
+// FilesWith is Files, and with noIgnore - a search's -u - the files
+// .gitignore leaves out as well, and the directories a walk passes over.
+// Only a repository's own store is still left out.
+func FilesWith(root string, noIgnore bool) ([]string, error) {
 	var files []string
 	var err error
 	if exists(filepath.Join(root, ".git")) {
-		files, err = gitFiles(root)
+		files, err = gitFiles(root, noIgnore)
 	}
 	if files == nil {
-		files, err = walkFiles(root)
+		files, err = walkFiles(root, noIgnore)
 	}
 	if r := readRules(root); r != nil {
 		files = slices.DeleteFunc(files, r.excludes)
@@ -71,7 +82,7 @@ func Files(root string) ([]string, error) {
 // the tracked list, new files only with the untracked one, and a file deleted
 // but not yet committed is still in the tracked list until it is asked for by
 // itself and taken out.
-func gitFiles(root string) ([]string, error) {
+func gitFiles(root string, noIgnore bool) ([]string, error) {
 	if _, err := exec.LookPath("git"); err != nil {
 		return nil, nil
 	}
@@ -95,7 +106,13 @@ func gitFiles(root string) ([]string, error) {
 	var err error
 	var wg sync.WaitGroup
 	wg.Go(func() { tracked, err = run("--cached", "--recurse-submodules") })
-	wg.Go(func() { untracked, _ = run("--others", "--exclude-standard") })
+	wg.Go(func() {
+		if noIgnore {
+			untracked, _ = run("--others")
+		} else {
+			untracked, _ = run("--others", "--exclude-standard")
+		}
+	})
 	wg.Go(func() { deleted, _ = run("--deleted") })
 	wg.Wait()
 	if err != nil {
@@ -124,7 +141,7 @@ func gitFiles(root string) ([]string, error) {
 var errStop = errors.New("stop")
 
 // walkFiles lists the files under root by walking the tree.
-func walkFiles(root string) ([]string, error) {
+func walkFiles(root string, noIgnore bool) ([]string, error) {
 	var files []string
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -134,7 +151,7 @@ func walkFiles(root string) ([]string, error) {
 			return nil // an unreadable corner is left out, not the whole list
 		}
 		if d.IsDir() {
-			if p != root && skipDirs[d.Name()] {
+			if p != root && skipDirs[d.Name()] && (!noIgnore || vcsDirs[d.Name()]) {
 				return fs.SkipDir
 			}
 			return nil
