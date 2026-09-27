@@ -128,15 +128,32 @@ func TestMarkersAloneAreIgnored(t *testing.T) {
 }
 
 // One plain word - no spaces, no markers - is what every query was before
-// the syntax, and must score exactly as it did: same score, same indices.
-// scoreRunes is that scorer, unchanged.
+// the syntax, and must score exactly as it did: same score, same indices,
+// same order. refScore and refRank are that scorer, as first written.
 func TestPlainQueryScoresAsItAlwaysDid(t *testing.T) {
 	r := rand.New(rand.NewPCG(1, 2))
-	alphabet := []rune("abcdefgkilnorw-_/.ABCDÉé日")
-	cands := append(slices.Clone(nemCommands), "Makefile", "été/ÉTÉ.go", "日本語-x", "a-b_c/d.e")
+	// Runes whose folding is not ASCII's: the Kelvin sign is a k, dotted
+	// capital I is an i, and final sigma is its own lower case.
+	alphabet := []rune("abcdefgikl-_/.ABCDIKÉéßσςΣİ\u212a日")
+	exotic := []string{
+		"Makefile", "été/ÉTÉ.go", "日本語-x", "a-b_c/d.e", "\u212aelvin-kelvin",
+		"İstanbul-ıi", "ΣΑΣ-σας", "straße/STRASSE", "x@y`z[a]b{c}", "aB_cD-eF/gH.iJ kL",
+		"\xffab\xe2cd", // invalid UTF-8, decoded as U+FFFD
+	}
+	cands := append(slices.Clone(nemCommands), exotic...)
 	matched := 0
-	for range 5000 {
+	for range 20000 {
 		cand := cands[r.IntN(len(cands))]
+		if r.IntN(2) == 0 {
+			// A short random candidate, dense in the runes that fold
+			// unusually, so their every placement gets tried: first, last,
+			// the best of several.
+			c := make([]rune, 1+r.IntN(12))
+			for i := range c {
+				c[i] = alphabet[r.IntN(len(alphabet))]
+			}
+			cand = string(c)
+		}
 		var q []rune
 		if r.IntN(2) == 0 {
 			// Most random queries match nothing, which tests only the
@@ -157,7 +174,7 @@ func TestPlainQueryScoresAsItAlwaysDid(t *testing.T) {
 		}
 		query := string(q)
 		got, gotOK := Score(query, cand)
-		want, wantOK := scoreRunes(q, []rune(cand), smartCaseFold(q))
+		want, wantOK := refScore(query, cand)
 		if gotOK != wantOK || !reflect.DeepEqual(got, want) {
 			t.Fatalf("Score(%q, %q) = %v, %v; want %v, %v", query, cand, got, gotOK, want, wantOK)
 		}
@@ -165,8 +182,71 @@ func TestPlainQueryScoresAsItAlwaysDid(t *testing.T) {
 			matched++
 		}
 	}
-	if matched < 1000 {
-		t.Fatalf("only %d of 5000 queries matched, too few to show the scores agree", matched)
+	if matched < 5000 {
+		t.Fatalf("only %d of 20000 queries matched, too few to show the scores agree", matched)
+	}
+
+	// And ranked, on one core and shared across many.
+	paths := manyPaths(3 * parallelMin)
+	for _, q := range []string{"fwc", "kill", "a", "k", "K", "i", "ßS", "edwin", "hdlr", "d3fi", "Edw", "zz"} {
+		for _, pool := range [][]string{cands, paths} {
+			if got, want := Rank(q, pool), refRank(q, pool); !reflect.DeepEqual(got, want) {
+				t.Errorf("Rank(%q) over %d candidates differs from the first scorer's", q, len(pool))
+			}
+		}
+	}
+}
+
+// Exact, anchored and negated terms find what comparing every rune at every
+// offset finds, in runes that fold unusually as much as in ASCII.
+func TestExactTermsAgreeWithAPlainSearch(t *testing.T) {
+	r := rand.New(rand.NewPCG(3, 4))
+	alphabet := []rune("abkiAKIÉéσςΣİK-")
+	pick := func(lo, hi int) []rune {
+		out := make([]rune, lo+r.IntN(hi-lo+1))
+		for i := range out {
+			out[i] = alphabet[r.IntN(len(alphabet))]
+		}
+		return out
+	}
+	for range 20000 {
+		c, w := pick(0, 10), pick(1, 3)
+		if len(c) > 0 && r.IntN(2) == 0 {
+			// Often the word is taken from the candidate, re-cased, so that
+			// it is there to be found.
+			s := r.IntN(len(c))
+			w = slices.Clone(c[s:min(len(c), s+1+r.IntN(3))])
+			if r.IntN(2) == 0 {
+				w[0] = unicode.ToUpper(w[0])
+			}
+		}
+		ignoreCase := smartCaseFold(w)
+		at := func(s int) bool {
+			if s < 0 || s+len(w) > len(c) {
+				return false
+			}
+			for k := range w {
+				if !refRunesEqual(w[k], c[s+k], ignoreCase) {
+					return false
+				}
+			}
+			return true
+		}
+		contains := false
+		for s := range len(c) + 1 {
+			contains = contains || at(s)
+		}
+		for q, want := range map[string]bool{
+			"'" + string(w):       contains,
+			"!" + string(w):       !contains,
+			"^" + string(w):       at(0),
+			string(w) + "$":       at(len(c) - len(w)),
+			"^" + string(w) + "$": at(0) && len(c) == len(w),
+		} {
+			if _, got := Score(q, string(c)); got != want {
+				t.Fatalf("Score(%q, %q) matched = %v, want %v", q, string(c), got, want)
+			}
+		}
 	}
 }
 
