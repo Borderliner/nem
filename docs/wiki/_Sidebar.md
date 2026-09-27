@@ -5,4 +5,5 @@
 - [Lua API](Lua-API)
 - [Keybindings](Keybindings)
 - [Commands](Commands)
+- [Searching](Searching)
 - [Recipes](Recipes)

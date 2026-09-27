@@ -15,6 +15,7 @@ This wiki is the reference for configuring it and for every key it binds.
 | [Lua API](Lua-API) | `nem.set`, `nem.bind`, `nem.command`, `nem.run`, `nem.hook` and `nem.buf` |
 | [Keybindings](Keybindings) | Every key, globally and in each mode, in prompts and in questions |
 | [Commands](Commands) | Every command by name, with its keys: what `M-x` runs |
+| [Searching](Searching) | The built-in ripgrep and fzf, their options, and the syntax every list narrows by |
 | [Recipes](Recipes) | Configs to copy: projectile's keys, format on save, commands of your own |
 
 ## A first init.lua
@@ -44,6 +45,8 @@ and nem starts anyway with its defaults for whatever failed.
   `forward-char`.
 - Pausing after a prefix key such as `C-x` lists what can follow it.
 - `<f1> b` lists every binding; `<f1> k` then a key says what the key does.
+- `M-s r` searches the project as you type, and `M-s f` finds a file in it:
+  ripgrep and fzf, built in. See [Searching](Searching).
 
 These pages are kept with nem's code, in `docs/wiki` in the
 [repository](https://github.com/Borderliner/nem), and the key and command

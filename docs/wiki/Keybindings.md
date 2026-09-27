@@ -310,6 +310,8 @@ While candidates are listed, the keys that page and jump through a buffer move t
 | `M-<` | First candidate. |
 | `M->` | Last candidate. |
 
+The list narrows as you type, fuzzily - `fwc` finds `forward-char` - and reads fzf's syntax: several words must all match, `'abc` is exact, `^abc` a prefix, `abc$` a suffix, `!abc` leaves out what has it, and `a | b` matches either. [Searching](Searching#narrowing-a-list-fzfs-syntax) has the whole of it.
+
 An incremental search (`C-s`, `C-r`) moves to the first match as you type. `C-s` and `C-r` go on to the next and previous match, wrapping round the buffer after saying they have reached its end; `RET` stops at the match, and `C-g` goes back to where the search began.
 
 ## Answering a question
