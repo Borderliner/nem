@@ -24,6 +24,7 @@ func RegisterAll(r *Registry) error {
 		{"comment", RegisterComment},
 		{"space", RegisterSpace},
 		{"indent", RegisterIndent},
+		{"transform", RegisterTransform},
 		{"paragraph", RegisterParagraph},
 		{"sexp", RegisterSexp},
 		{"info", RegisterInfo},

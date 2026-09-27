@@ -66,6 +66,8 @@ var defaultBindings = []struct{ Spec, Command string }{
 	// the region's lines, and <backtab> - Shift-TAB - shifts them back.
 	{"<backtab>", "indent-rigidly-left-to-tab-stop"},
 	{"C-x TAB", "indent-rigidly"},
+	{"C-x C-u", "upcase-region"},
+	{"C-x C-l", "downcase-region"},
 
 	// Keyboard macros.
 	{"<f3>", "kmacro-start-macro-or-insert-counter"},
