@@ -262,7 +262,7 @@ func replaceMatches(e Env, r replaceRun) error {
 	var last text.Pos // where the last match ended, when haveLast is set
 	haveLast := false
 	done := func() {
-		msg := fmt.Sprintf("Replaced %d occurrences", n)
+		msg := fmt.Sprintf("Replaced %d occurrence%s", n, plural(n))
 		if skipped > 0 {
 			msg += fmt.Sprintf(" (skipped %d that cannot be edited)", skipped)
 		}

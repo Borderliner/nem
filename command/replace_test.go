@@ -100,6 +100,9 @@ func TestQueryReplaceRegexpAsksAboutEachMatch(t *testing.T) {
 
 	f = qrr(t, `\d`, "#", "yq", "1 2 3")
 	textIs(t, f, "# 2 3")
+	if got := lastEcho(t, f.Echoes); got != "Replaced 1 occurrence" {
+		t.Errorf("echo %q", got)
+	}
 }
 
 // It starts from point, as query-replace does.
