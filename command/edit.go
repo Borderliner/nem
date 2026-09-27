@@ -40,7 +40,7 @@ func RegisterEdit(r *Registry) error {
 		{Name: "transpose-chars", Doc: "Transpose the characters around point.", Fn: transposeChars, Interactive: true},
 		{Name: "transpose-words", Doc: "Transpose the words around point.", Fn: transposeWords, Interactive: true},
 		{Name: "newline", Doc: "Insert a newline, copying the current line's indentation.", Fn: newline, Interactive: true},
-		{Name: "indent-for-tab-command", Doc: "Indent by inserting a tab.", Fn: indentForTab, Interactive: true},
+		{Name: "indent-for-tab-command", Doc: "Indent at point with the file's tabs or spaces.", Fn: indentForTab, Interactive: true},
 		{Name: "upcase-word", Doc: "Convert the following word to upper case.", Fn: upcaseWord, Interactive: true},
 		{Name: "downcase-word", Doc: "Convert the following word to lower case.", Fn: downcaseWord, Interactive: true},
 		{Name: "capitalize-word", Doc: "Capitalize the following word.", Fn: capitalizeWord, Interactive: true},
@@ -367,25 +367,6 @@ func newline(e Env) error {
 		ins = append(ins, '\n')
 		ins = append(ins, indent...)
 	}
-	if err := b.Insert(p, ins); err != nil {
-		return err
-	}
-	edSetPoint(e, edAdvance(p, ins))
-	return nil
-}
-
-// indentForTab inserts a tab.
-//
-// Language-aware indentation is deliberately deferred: it needs the syntax
-// knowledge that arrives with highlighting, and guessing without it produces
-// indentation that is wrong in a way users cannot correct.
-func indentForTab(e Env) error {
-	n, _ := e.Arg()
-	if n < 1 {
-		n = 1
-	}
-	b, p := e.Buf(), e.Win().Pt
-	ins := []rune(strings.Repeat("\t", n))
 	if err := b.Insert(p, ins); err != nil {
 		return err
 	}
