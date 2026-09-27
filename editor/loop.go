@@ -441,6 +441,7 @@ func (e *Editor) dispatch(name string) error {
 	}
 	e.runHooks(e.after, name)
 
+	e.keepPromptWindow()
 	// Outside the childDispatched guard on purpose: clamping is idempotent and
 	// costs one comparison per window, and a nested dispatch that shortens a
 	// buffer must not be able to leave a window stranded either.
@@ -535,6 +536,22 @@ func (e *Editor) clampWindowPoints() {
 	if e.mini != nil {
 		e.mini.win.Pt = e.mini.win.Buf.ClampPos(e.mini.win.Pt)
 	}
+}
+
+// keepPromptWindow moves a buffer a command showed in the prompt's window -
+// C-x b typed at a prompt, which acts on the window a prompt makes current -
+// to the window the prompt was opened from, as emacs's switch-to-buffer
+// goes to another window from the minibuffer's. The prompt's window shows
+// the prompt: left showing a file, what was typed next went into the file.
+func (e *Editor) keepPromptWindow() {
+	ms := e.mini
+	if ms == nil || ms.win.Buf == ms.buf {
+		return
+	}
+	b, pt := ms.win.Buf, ms.win.Pt
+	ms.win.Visit(ms.buf)
+	e.active.Visit(b)
+	e.active.Pt = b.ClampPos(pt)
 }
 
 // Redraw paints one frame. Exported so tests can assert on rendered output.
