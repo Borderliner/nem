@@ -379,7 +379,12 @@ Scripts get `string`, `table` and `math`, but not `io` or `os`, so a hook cannot
 shell out to an external formatter. A formatter written in Lua against `nem.buf`
 works.
 
-See [docs/config.md](docs/config.md).
+Every setting, every Lua call and every key is in the
+[wiki](https://github.com/Borderliner/nem/wiki): [Settings](https://github.com/Borderliner/nem/wiki/Settings),
+[Lua API](https://github.com/Borderliner/nem/wiki/Lua-API),
+[Keybindings](https://github.com/Borderliner/nem/wiki/Keybindings),
+[Commands](https://github.com/Borderliner/nem/wiki/Commands) and
+[Recipes](https://github.com/Borderliner/nem/wiki/Recipes).
 
 ## Not yet
 

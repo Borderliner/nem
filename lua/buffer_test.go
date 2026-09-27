@@ -260,7 +260,7 @@ func TestSetTextRoundTripsAWholeBufferTransform(t *testing.T) {
 // would cost the user their unsaved work.
 //
 // If this test starts failing because the call now succeeds, upstream has fixed
-// it and the workaround note in docs/config.md can go.
+// it and the note on it in docs/wiki/Lua-API.md can go.
 func TestConcatenatedGoResultAsMethodReceiver(t *testing.T) {
 	_, f := hostOver(t, `
 	  local n = 0
@@ -268,7 +268,7 @@ func TestConcatenatedGoResultAsMethodReceiver(t *testing.T) {
 	`, "a", "b")
 	err := runTErr(t, f)
 	if !strings.Contains(err.Error(), "nil pointer") {
-		t.Errorf("error = %q; expected the upstream nil-pointer crash. If upstream fixed this, drop the workaround note in docs/config.md", err)
+		t.Errorf("error = %q; expected the upstream nil-pointer crash. If upstream fixed this, drop the note in docs/wiki/Lua-API.md", err)
 	}
 
 	// The documented workaround must work.
@@ -486,7 +486,7 @@ func TestThrowingMidTransformLeavesACoherentBuffer(t *testing.T) {
 
 // --- the documented hook ----------------------------------------------------
 
-// The strip-trailing-whitespace hook docs/config.md publishes must actually run
+// The strip-trailing-whitespace hook the wiki publishes must actually run
 // and actually strip.
 func TestDocumentedStripTrailingWhitespaceHook(t *testing.T) {
 	f := commandtest.New("keep   ", "clean", "trailing\t")

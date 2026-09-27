@@ -1,7 +1,8 @@
 -- Example nem config. Copy to ~/.config/nem/init.lua and restart nem.
 --
 -- Everything here uses only the documented API: nem.set, nem.bind, nem.command,
--- nem.run, nem.hook, nem.api_version, and the nem.buf table. See docs/config.md.
+-- nem.run, nem.hook, nem.api_version, and the nem.buf table. See the wiki:
+-- https://github.com/Borderliner/nem/wiki/Lua-API
 
 nem.set("tab-width", 4)
 nem.set("scroll-margin", 3)

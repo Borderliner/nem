@@ -217,7 +217,7 @@ func TestBadBindingsAreRejected(t *testing.T) {
 	}
 }
 
-// A prefix conflict must name what it collided with, as docs/config.md promises.
+// A prefix conflict must name what it collided with, as the wiki promises.
 func TestPrefixConflictNamesTheConflict(t *testing.T) {
 	h, _, _ := newHost(t, `
 		nem.bind("C-c", "undo")
@@ -291,7 +291,7 @@ func TestLuaCommandIsFirstClass(t *testing.T) {
 	}
 }
 
-// docs/config.md's worked example must actually run, verbatim in spirit.
+// The wiki's worked example must actually run, verbatim in spirit.
 func TestDocumentedReverseLineExample(t *testing.T) {
 	h, f, km := newHost(t, `
 		nem.command("reverse-line", "Reverse the characters on the current line.",
@@ -578,7 +578,7 @@ func TestTimeoutStopsARunawayScript(t *testing.T) {
 
 // --- capability boundary ----------------------------------------------------
 
-// docs/config.md promises scripts get the nem table and nothing else. A script
+// The wiki promises scripts get the nem table and nothing else. A script
 // must not be able to reach the filesystem or spawn a process.
 func TestDangerousLibrariesAreAbsent(t *testing.T) {
 	for _, global := range []string{"io", "os", "debug", "package", "require", "dofile", "loadfile", "coroutine"} {

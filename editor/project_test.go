@@ -302,7 +302,7 @@ func TestNextErrorWithoutASearch(t *testing.T) {
 	wantEcho(t, e, "C-x p g")
 }
 
-// The bindings docs/config.md suggests load: the results' mode is bindable
+// The bindings the wiki suggests load: the results' mode is bindable
 // by name, and projectile's C-c p can be had.
 func TestProjectBindingsFromConfig(t *testing.T) {
 	e, _ := newTestEditor(t)
