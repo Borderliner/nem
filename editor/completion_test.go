@@ -3,12 +3,14 @@ package editor
 import (
 	"fmt"
 	"math/rand/v2"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/Borderliner/nem/command"
+	"github.com/Borderliner/nem/fuzzy"
 	"github.com/Borderliner/nem/text"
 	"github.com/Borderliner/nem/view"
 	"github.com/gdamore/tcell/v2"
@@ -814,5 +816,73 @@ func TestSyntaxIsNotCutByASharedPrefix(t *testing.T) {
 	c.refresh("a$")
 	if got := candidates(c); len(got) != 1 || got[0] != "aa" {
 		t.Errorf("a$ lists %q, want aa alone", got)
+	}
+}
+
+// Walking into a directory keeps its listing order whatever its path is
+// written with: Windows's backslashes, which only escape a space in fzf's
+// syntax, and spaces, which separate its words.
+func TestSharedPrefixIsCutFromAnyPath(t *testing.T) {
+	for _, dir := range []string{`C:\Users\me\sub\`, "/home/me/My Files/sub/", `C:\Program Files\sub\`} {
+		names := []string{dir, dir + "notes.txt", dir + ".hidden"}
+		c := newCompletion(command.CompleteFrom(names), dir)
+		if got := candidates(c); !slices.Equal(got, names) {
+			t.Errorf("in %s the list is %q, want it in its own order %q", dir, got, names)
+		}
+	}
+}
+
+// Cut short, a word could begin with a marker it only had in the middle:
+// x'ab less the x every candidate starts with is 'ab, which is exact.
+func TestSharedPrefixIsNotCutToAMarker(t *testing.T) {
+	c := newCompletion(command.CompleteFrom([]string{"xab", "x'ab"}), "")
+	c.refresh("x'ab")
+	if got := candidates(c); len(got) != 1 || got[0] != "x'ab" {
+		t.Errorf("x'ab lists %q, want x'ab alone", got)
+	}
+}
+
+// Whatever cutLen cuts, the candidates that match are the ones the whole
+// input matches: only the ranking may change, which is the point of it.
+// Inputs and candidates are random, from runes that are fzf's syntax, a
+// path's, and neither, the candidates sharing prefixes as a directory's do.
+func TestCuttingTheSharedPrefixKeepsTheMatches(t *testing.T) {
+	rng := rand.New(rand.NewPCG(9, 10))
+	runes := []rune(`ab '^$!|\/`)
+	pick := func(lo, hi int) string {
+		out := make([]rune, lo+rng.IntN(hi-lo+1))
+		for i := range out {
+			out[i] = runes[rng.IntN(len(runes))]
+		}
+		return string(out)
+	}
+	cut := 0
+	for range 20000 {
+		prefix := pick(0, 6)
+		cands := make([]string, 1+rng.IntN(6))
+		for i := range cands {
+			cands[i] = prefix + pick(0, 4)
+		}
+		input := prefix[:rng.IntN(len(prefix)+1)] + pick(0, 4)
+		if rng.IntN(2) == 0 {
+			input = prefix + pick(0, 3)
+		}
+		if cutLen(input, cands) > 0 {
+			cut++
+		}
+		matched := func(r []fuzzy.Ranked) []string {
+			var out []string
+			for _, x := range r {
+				out = append(out, x.Candidate)
+			}
+			slices.Sort(out)
+			return out
+		}
+		if got, want := matched(rankPastSharedPrefix(input, cands)), matched(fuzzy.Rank(input, cands)); !slices.Equal(got, want) {
+			t.Fatalf("%q cut by %d over %q matches %q; whole, it matches %q", input, cutLen(input, cands), cands, got, want)
+		}
+	}
+	if cut < 2000 {
+		t.Fatalf("only %d of 20000 inputs were cut, too few for the test to mean much", cut)
 	}
 }

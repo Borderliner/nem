@@ -238,24 +238,55 @@ func sameList(a, b []string) bool {
 // breaks ties by length. So walking into a directory highlighted its shortest
 // entry, a dotfile as often as not, when RET should find the first. Ranked on
 // what follows it, a directory just entered keeps its listing order, as a
-// prompt does before the first keystroke. Which candidates match is unchanged:
-// the prefix is literally identical, so it always matches in place.
-//
-// A query written in fzf's syntax - several words, 'exact, ^prefix, suffix$,
-// !not, a | b - is ranked whole: cutting a prefix off it could cut a word in
-// two, and a$ with every candidate starting with a would be left as $, which
-// matches everything.
+// prompt does before the first keystroke. Which candidates match is unchanged,
+// since the prefix is cut only where cutting it changes nothing else: not from
+// a$ over candidates all starting with a, which would be left as $, and match
+// every one of them. cutLen has the rule.
 func rankPastSharedPrefix(input string, cands []string) []fuzzy.Ranked {
 	return rankPast(input, cands, cutLen(input, cands))
 }
 
 // cutLen is how much of input rankPastSharedPrefix cuts off: the prefix every
-// candidate shares with it, unless it is written in fzf's syntax.
+// candidate shares with it, where cutting it leaves the query matching what it
+// matched whole.
+//
+// That holds for a query of one plain fuzzy word, cut anywhere that does not
+// leave the rest of it starting with a marker: the shared prefix matches in
+// place, so the candidates matching the word are those whose rest matches the
+// rest of it. And it holds for plain words cut whole, all of them: each is in
+// the prefix, and so matches every candidate, as the nothing left does. A
+// directory just entered is that, even with spaces in its path. Anything
+// else - a word marked ', ^, ! or $, a |, an escaped space, or a word cut in
+// two when there are others - could match otherwise, and is not cut. A
+// backslash is only an escape before a space, and a Windows path is cut as
+// any other.
 func cutLen(input string, cands []string) int {
-	if strings.ContainsAny(input, " '^$!|\\") {
+	n := sharedPrefixLen(input, cands)
+	if n == 0 || !plainWords(input) {
 		return 0
 	}
-	return sharedPrefixLen(input, cands)
+	if n == len(input) {
+		return n
+	}
+	if rest := input[n:]; strings.Contains(input, " ") || strings.ContainsRune("'^!", rune(rest[0])) || rest == "|" {
+		return 0
+	}
+	return n
+}
+
+// plainWords reports whether every word of input is a plain fuzzy term in
+// fzf's syntax, as Rank reads it: none marked ', ^, ! or $, none a | between
+// others, and no space escaped into one.
+func plainWords(input string) bool {
+	if strings.Contains(input, "\\ ") {
+		return false
+	}
+	for _, w := range strings.Split(input, " ") {
+		if w == "|" || w != "" && (strings.ContainsRune("'^!", rune(w[0])) || strings.HasSuffix(w, "$")) {
+			return false
+		}
+	}
+	return true
 }
 
 // rankPast ranks cands against input past its first n bytes, which every
