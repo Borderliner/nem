@@ -394,13 +394,23 @@ func TestAutosaveNewer(t *testing.T) {
 
 // ---------------------------------------------------------------- DefaultRoot
 
+// absolute spells an absolute path the way this platform does. On Windows a
+// path needs a volume to be absolute: /custom/state there is relative to the
+// current drive, and DefaultRoot would rightly ignore it.
+func absolute(p string) string {
+	if runtime.GOOS == "windows" {
+		return `C:` + filepath.FromSlash(p)
+	}
+	return p
+}
+
 func TestDefaultRootUsesXDGStateHome(t *testing.T) {
-	t.Setenv("XDG_STATE_HOME", "/custom/state")
+	t.Setenv("XDG_STATE_HOME", absolute("/custom/state"))
 	got, err := backup.DefaultRoot()
 	if err != nil {
 		t.Fatalf("DefaultRoot: %v", err)
 	}
-	if want := "/custom/state/nem"; got != want {
+	if want := absolute("/custom/state/nem"); got != want {
 		t.Errorf("DefaultRoot = %q, want %q", got, want)
 	}
 }
@@ -410,6 +420,8 @@ func TestDefaultRootUsesXDGStateHome(t *testing.T) {
 // than resolving against the current working directory.
 func TestDefaultRootIgnoresRelativeXDGStateHome(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", "relative/state")
+	// LOCALAPPDATA comes before the home directory, and Windows always sets it.
+	t.Setenv("LOCALAPPDATA", "")
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Skipf("no home directory in this environment: %v", err)
@@ -425,6 +437,7 @@ func TestDefaultRootIgnoresRelativeXDGStateHome(t *testing.T) {
 
 func TestDefaultRootFallsBackToHome(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", "")
+	t.Setenv("LOCALAPPDATA", "")
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Skipf("no home directory in this environment: %v", err)
@@ -551,25 +564,25 @@ func TestRootThatIsAFileErrors(t *testing.T) {
 // would be untestable from any single platform.
 func TestDefaultRootFollowsThePlatformConvention(t *testing.T) {
 	t.Run("XDG_STATE_HOME wins", func(t *testing.T) {
-		t.Setenv("XDG_STATE_HOME", "/xdg")
-		t.Setenv("LOCALAPPDATA", `/local`)
+		t.Setenv("XDG_STATE_HOME", absolute("/xdg"))
+		t.Setenv("LOCALAPPDATA", absolute("/local"))
 		got, err := backup.DefaultRoot()
 		if err != nil {
 			t.Fatal(err)
 		}
-		if want := filepath.Join("/xdg", "nem"); got != want {
+		if want := filepath.Join(absolute("/xdg"), "nem"); got != want {
 			t.Errorf("DefaultRoot() = %q, want %q", got, want)
 		}
 	})
 
 	t.Run("LOCALAPPDATA when XDG is unset", func(t *testing.T) {
 		t.Setenv("XDG_STATE_HOME", "")
-		t.Setenv("LOCALAPPDATA", "/local")
+		t.Setenv("LOCALAPPDATA", absolute("/local"))
 		got, err := backup.DefaultRoot()
 		if err != nil {
 			t.Fatal(err)
 		}
-		if want := filepath.Join("/local", "nem"); got != want {
+		if want := filepath.Join(absolute("/local"), "nem"); got != want {
 			t.Errorf("DefaultRoot() = %q, want %q", got, want)
 		}
 	})
