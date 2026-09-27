@@ -3,6 +3,7 @@ package syntax
 import (
 	"embed"
 	"fmt"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -47,7 +48,10 @@ func loadEmbedded() {
 	sort.Strings(names) // deterministic match order
 
 	for _, name := range names {
-		data, err := rulesFS.ReadFile(filepath.Join("rules", name))
+		// An embed.FS names its files with forward slashes on every platform.
+		// filepath.Join would use backslashes on Windows, where the file would
+		// then not be found and nothing bundled would load.
+		data, err := rulesFS.ReadFile(path.Join("rules", name))
 		if err != nil {
 			embeddedErr = fmt.Errorf("reading %s: %w", name, err)
 			return
