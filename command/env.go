@@ -261,6 +261,11 @@ type Env interface {
 	// recenter-top-bottom cannot be written without it.
 	TextHeight() int
 
+	// WrapWidth reports the width long lines are folded at in the active
+	// window, or 0 when they are not folded. Wrapped, C-n, C-v and C-l go
+	// by rows on screen rather than by buffer lines, as emacs's do.
+	WrapWidth() int
+
 	// --- the universal argument ------------------------------------------
 
 	// Arg reports the prefix argument. n is 1 when none was given, and

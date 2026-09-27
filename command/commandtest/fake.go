@@ -62,6 +62,9 @@ type Fake struct {
 
 	// Height is what TextHeight reports. New sets it to 24.
 	Height int
+	// Wrap is what WrapWidth reports: 0, lines not wrapped, unless a test
+	// wraps them.
+	Wrap int
 
 	// Replies are consumed in order by ReadString. The Quit sentinel makes a
 	// prompt report command.ErrQuit.
@@ -213,6 +216,7 @@ func (f *Fake) AddBuffer(name string, lines ...string) *text.Buffer {
 func (f *Fake) Win() *view.Window { return f.win }
 func (f *Fake) Buf() *text.Buffer { return f.win.Buf }
 func (f *Fake) TextHeight() int   { return f.Height }
+func (f *Fake) WrapWidth() int    { return f.Wrap }
 
 // --- command.Env: the universal argument ---
 

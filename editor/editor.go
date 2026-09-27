@@ -377,6 +377,20 @@ func (e *Editor) Win() *view.Window {
 // Buf returns the active window's buffer.
 func (e *Editor) Buf() *text.Buffer { return e.Win().Buf }
 
+// WrapWidth reports the width lines are wrapped at in the active window: its
+// text area's, or 0 when lines are not wrapped. A prompt's one line never is.
+func (e *Editor) WrapWidth() int {
+	if !e.th.Wrap || e.scr == nil || e.mini != nil && !e.miniTransparent {
+		return 0
+	}
+	w, h := e.scr.Size()
+	rect, ok := e.tree.Layout(w, h-1)[e.active]
+	if !ok {
+		return 0
+	}
+	return max(ui.TextWidth(rect, e.active, e.isListing(e.active.Buf), e.th), 1)
+}
+
 // TextHeight reports the rows of buffer text the active window shows. A prompt
 // is a single row.
 func (e *Editor) TextHeight() int {

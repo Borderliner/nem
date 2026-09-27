@@ -121,7 +121,7 @@ func charBackward(w *view.Window, n int) {
 // which stops at them - C-u 0 F4 running a C-n macro to the last line.
 func nextLine(e Env) error {
 	n, _ := e.Arg()
-	if !lineDelta(e.Win(), n) {
+	if !lineDelta(e, n) {
 		return ErrEndOfBuffer
 	}
 	return nil
@@ -129,7 +129,7 @@ func nextLine(e Env) error {
 
 func previousLine(e Env) error {
 	n, _ := e.Arg()
-	if !lineDelta(e.Win(), -n) {
+	if !lineDelta(e, -n) {
 		return ErrBeginningOfBuffer
 	}
 	return nil
@@ -141,8 +141,12 @@ func previousLine(e Env) error {
 // is what makes the descend-and-return case work.
 //
 // It reports whether point went all n lines, rather than stopping at an end
-// of the buffer.
-func lineDelta(w *view.Window, n int) bool {
+// of the buffer. With lines wrapped it goes by rows on screen instead.
+func lineDelta(e Env, n int) bool {
+	w := e.Win()
+	if width := e.WrapWidth(); width > 0 {
+		return rowDelta(w, n, width)
+	}
 	b := w.Buf
 	if w.GoalCol == view.GoalColUnset {
 		w.GoalCol = b.Line(w.Pt.Line).DisplayCol(w.Pt.Col)
@@ -158,6 +162,21 @@ func lineDelta(w *view.Window, n int) bool {
 	w.Pt.Line = target
 	w.Pt.Col = b.Line(target).RuneAt(w.GoalCol)
 	return full
+}
+
+// rowDelta is lineDelta for wrapped lines: point goes n rows on screen, as
+// emacs's C-n does with line-move-visual, so a long line is walked a row at
+// a time rather than jumped over. The goal column is a column of the row.
+func rowDelta(w *view.Window, n, width int) bool {
+	b := w.Buf
+	cur := view.RowOf(b, w.Pt, width)
+	if w.GoalCol == view.GoalColUnset {
+		_, _, rowCol := view.RowSpan(b, cur, width)
+		w.GoalCol = b.Line(w.Pt.Line).DisplayCol(w.Pt.Col) - rowCol
+	}
+	to, moved := view.StepRows(b, cur, n, width)
+	w.Pt = view.PosInRow(b, to, width, w.GoalCol)
+	return moved == max(n, -n)
 }
 
 // --- word motion ------------------------------------------------------------
@@ -301,6 +320,19 @@ func scrollBy(e Env, dir int) error {
 
 	w := e.Win()
 	b := w.Buf
+	if width := e.WrapWidth(); width > 0 {
+		// Wrapped, a screenful is of rows, and point keeps its column in
+		// its row.
+		cur := view.RowOf(b, w.Pt, width)
+		_, _, rowCol := view.RowSpan(b, cur, width)
+		col := b.Line(w.Pt.Line).DisplayCol(w.Pt.Col) - rowCol
+		to, _ := view.StepRows(b, cur, lines, width)
+		w.Pt = view.PosInRow(b, to, width, col)
+		top, _ := view.StepRows(b, view.RowPos{Line: w.Top, Row: w.TopRow}, lines, width)
+		w.Top, w.TopRow = top.Line, top.Row
+		clearGoal(w)
+		return nil
+	}
 	last := b.NumLines() - 1
 
 	target := w.Pt.Line + lines
@@ -322,7 +354,7 @@ func scrollBy(e Env, dir int) error {
 	if top > last {
 		top = last
 	}
-	w.Top = top
+	w.SetTop(top)
 
 	clearGoal(w)
 	return nil
@@ -384,19 +416,23 @@ func recenterTopBottom(e Env) error {
 		h = 1
 	}
 
-	var top int
+	// How many rows are to be above point's.
+	var above int
 	switch seq.RecenterCycle {
 	case 0:
-		top = w.Pt.Line - (h-1)/2
+		above = (h - 1) / 2
 	case 1:
-		top = w.Pt.Line
+		above = 0
 	default:
-		top = w.Pt.Line - h + 1
+		above = h - 1
 	}
-	if top < 0 {
-		top = 0
+	if width := e.WrapWidth(); width > 0 {
+		// Wrapped, the rows counted are rows on screen.
+		top, _ := view.StepRows(w.Buf, view.RowOf(w.Buf, w.Pt, width), -above, width)
+		w.Top, w.TopRow = top.Line, top.Row
+	} else {
+		w.SetTop(max(w.Pt.Line-above, 0))
 	}
-	w.Top = top
 
 	clearGoal(w)
 	return nil
