@@ -3,6 +3,7 @@ package memory
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 )
@@ -36,8 +37,12 @@ func TestRoundTrip(t *testing.T) {
 	if p, ok := back.PlaceOf("/a.go"); !ok || p.Line != 10 || p.Col != 2 || p.Top != 4 {
 		t.Errorf("place %+v, %v", p, ok)
 	}
-	if fi, err := os.Stat(filepath.Join(dir, FileName)); err != nil || fi.Mode().Perm() != 0o600 {
-		t.Errorf("memory file mode %v (%v), want 0600", fi.Mode().Perm(), err)
+	// Windows has no permission bits to check: Go reports every writable file
+	// there as 0666, and the profile's ACL is what keeps the file private.
+	if runtime.GOOS != "windows" {
+		if fi, err := os.Stat(filepath.Join(dir, FileName)); err != nil || fi.Mode().Perm() != 0o600 {
+			t.Errorf("memory file mode %v (%v), want 0600", fi.Mode().Perm(), err)
+		}
 	}
 }
 

@@ -251,6 +251,9 @@ func TestWriteLeavesNoTempFiles(t *testing.T) {
 // Backups hold whatever the user was editing, which may be private, so the
 // store is readable only by its owner.
 func TestCreatedDirectoriesAndFilesArePrivate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no permission bits on Windows; the profile's ACL keeps the store private")
+	}
 	root := filepath.Join(t.TempDir(), "state", "nem")
 	s := backup.New(root)
 	file := "/home/reza/p/main.go"
@@ -519,6 +522,9 @@ func TestFailedWriteCleansUpAndReportsThePath(t *testing.T) {
 // succeeding silently. If it ever did succeed silently, a user would believe
 // they had recovery files that do not exist.
 func TestWritesFailCleanlyOnAnUnwritableRoot(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("directory permissions do not restrict writing on Windows")
+	}
 	root := filepath.Join(t.TempDir(), "state")
 	if err := os.MkdirAll(root, 0o500); err != nil { // r-x: no writing
 		t.Fatalf("setup: %v", err)
