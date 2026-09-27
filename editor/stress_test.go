@@ -64,13 +64,13 @@ C-x|TAB C-x|( C-x|) C-x|e C-h|k C-h|b C-x|n C-x|x|g C-x|C-s RET RET C-g C-g y n 
 // separator: typed at a prompt for a file to save in, one could name a file
 // outside the test's directory - at the root, for a test run as root.
 var stressText = []string{"a", "b", "x", " ", " ", "(", ")", "\"", "{", "}", ";", "س", "ل", "ا", "م",
-	"日", "é", "́", "👍", "👩‍💻", "‌", "1", "۱", "-", "*", "#"}
+	"日", "é", "\u0301", "👍", "👩\u200d💻", "\u200c", "1", "۱", "-", "*", "#"}
 
 // stressFile is what is being edited: a Go file, so it is coloured, with a
 // little of everything.
 var stressFile = strings.Join([]string{
 	"package main", "", "func main() {", "\tfmt.Println(\"سلام دنیا\")", "}", "",
-	"// 日本語 comment with é and é and 👩‍💻", "\t\tindented\ttabs", strings.Repeat("long ", 60),
+	"// 日本語 comment with é and e\u0301 and 👩\u200d💻", "\t\tindented\ttabs", strings.Repeat("long ", 60),
 	"(a (b c) [d {e}])", "این یک متن فارسی است با English در میان.", "",
 }, "\n")
 
