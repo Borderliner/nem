@@ -24,9 +24,9 @@ on Linux, macOS and Windows.
 - **Emacs's editing, without the weight** — the motion and editing set, the kill
   ring, incremental search, query-replace, keyboard macros, `M-x` with fuzzy
   completion, and a prefix key that shows what can follow it.
-- **The tools a programmer reaches for** — dired, projects in the manner of
-  projectile, `M-x compile` with every error a key away, search and replace
-  across a project, shell commands and filters, imenu.
+- **The tools a programmer reaches for** — ripgrep and fzf built in, dired,
+  projects in the manner of projectile, `M-x compile` with every error a key
+  away, search and replace across a project, shell commands and filters, imenu.
 - **Right-to-left text done right** — Persian, Arabic and Hebrew laid out and
   joined, and key bindings that keep working whatever keyboard layout is on.
 - **It does not lose your work** — saves that replace a file whole or not at
@@ -155,6 +155,21 @@ seven.
 
 ### Finding things
 
+**ripgrep and fzf, built in** — nothing to install beside nem, and fast on
+trees of hundreds of thousands of files.
+
+| Key | Does |
+|---|---|
+| `M-s r` | search every file of the project as you type, with ripgrep's options: `-t go -w count`, `-i -g '!vendor/**' TODO`, `-F`, `-u` |
+| `M-s f` | open any file under the project by a few letters of its path |
+| `M-s l` | go to a line of the buffer by a few letters of it, the cursor following the list |
+
+In `M-s r`, `RET` goes to the match highlighted and `M-RET` lists them all, as
+`C-x p g` does - which takes ripgrep's options too. Every list under a prompt
+reads fzf's syntax: words in any order, `'exact`, `^prefix`, `suffix$`, `!not`,
+`a | b`. The [wiki](https://github.com/Borderliner/nem/wiki/Searching) has all
+of it.
+
 - **Incremental search** — `C-s` moves as you type, Backspace walks back, `C-g`
   returns to where you began, and past the last match it says so, then wraps.
   `C-r` goes the other way.
@@ -214,7 +229,7 @@ whole of it, as projectile does.
 |---|---|
 | `C-x p f` | find any file in the project by a few letters of its path |
 | `C-x p p` | switch to another project, and find a file in it |
-| `C-x p g` | search every file for a regexp, listing each matching line |
+| `C-x p g` | search every file for a regexp, ripgrep's options and all, listing each matching line |
 | `C-x p r` | query-replace across the project, file by file |
 | `C-x p c` | compile the project, from its top |
 | `C-x p t` | go from a file to its test and back |
@@ -322,6 +337,7 @@ kept with the code and checked against it by the tests:
 | [Lua API](https://github.com/Borderliner/nem/wiki/Lua-API) | `nem.set` `nem.bind` `nem.command` `nem.run` `nem.hook` `nem.buf` |
 | [Keybindings](https://github.com/Borderliner/nem/wiki/Keybindings) | every key, globally, in each mode, in prompts |
 | [Commands](https://github.com/Borderliner/nem/wiki/Commands) | every command, with its keys |
+| [Searching](https://github.com/Borderliner/nem/wiki/Searching) | the built-in ripgrep and fzf, and the syntax lists narrow by |
 | [Recipes](https://github.com/Borderliner/nem/wiki/Recipes) | configs to copy |
 
 ## Design
