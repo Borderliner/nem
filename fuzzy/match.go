@@ -3,6 +3,7 @@ package fuzzy
 import (
 	"sync"
 	"unicode"
+	"unicode/utf8"
 )
 
 // Scoring constants. The relative sizes matter far more than the absolute
@@ -80,6 +81,11 @@ type scratch struct {
 	d   []int // best score with q[i] matched at c[j], row-major
 	par []int // the c index that q[i-1] matched, for backtracking
 	bon []int // boundaryBonus per candidate position
+
+	// qf and cf hold the query and candidate folded, when case is ignored,
+	// so a cell compares two runes rather than folding both first: each rune
+	// of the candidate is folded once, not once for every rune of the query.
+	qf, cf []rune
 }
 
 var scratchPool = sync.Pool{New: func() any { return new(scratch) }}
@@ -96,7 +102,23 @@ func (s *scratch) resize(n, m int) {
 	s.bon = s.bon[:m]
 }
 
-// fold reports the matching function and whether case is being ignored.
+// folded returns q and c as a cell compares them: folded into s's buffers
+// when case is ignored, and as they are when it is not.
+func (s *scratch) folded(q, c []rune, ignoreCase bool) (qf, cf []rune) {
+	if !ignoreCase {
+		return q, c
+	}
+	s.qf, s.cf = s.qf[:0], s.cf[:0]
+	for _, r := range q {
+		s.qf = append(s.qf, fold(r))
+	}
+	for _, r := range c {
+		s.cf = append(s.cf, fold(r))
+	}
+	return s.qf, s.cf
+}
+
+// smartCaseFold reports whether case is to be ignored in matching q.
 //
 // Smart case, matching nem's isearch: a query typed entirely in lower case
 // ignores case, and a single upper-case rune makes the whole query sensitive.
@@ -109,24 +131,55 @@ func smartCaseFold(q []rune) bool {
 	return true
 }
 
-func runesEqual(qr, cr rune, ignoreCase bool) bool {
-	if qr == cr {
-		return true
+// fold returns r as it is compared when case is ignored: in lower case.
+//
+// Folding runs for every rune of every candidate, and calling out to
+// unicode.ToLower for each was a third of the time spent ranking. ASCII is
+// lowered inline instead - the same answer, since for ASCII ToLower only
+// maps A-Z to a-z - and anything else still goes through unicode, which
+// knows that the Kelvin sign is a k.
+func fold(r rune) rune {
+	if r < utf8.RuneSelf {
+		if 'A' <= r && r <= 'Z' {
+			r += 'a' - 'A'
+		}
+		return r
 	}
-	return ignoreCase && unicode.ToLower(qr) == unicode.ToLower(cr)
+	return unicode.ToLower(r)
+}
+
+// runesEqual reports whether qr matches cr, ignoring case if asked.
+func runesEqual(qr, cr rune, ignoreCase bool) bool {
+	return qr == cr || ignoreCase && fold(qr) == fold(cr)
 }
 
 // isSubsequence reports whether q appears in c in order. A cheap O(len(c))
 // rejection so the dynamic programming below only runs on real candidates,
-// which matters because most candidates do not match.
+// which matters because most candidates do not match. It folds the rune it
+// is looking for once, not at every rune it looks at.
 func isSubsequence(q, c []rune, ignoreCase bool) bool {
-	qi := 0
-	for ci := 0; ci < len(c) && qi < len(q); ci++ {
-		if runesEqual(q[qi], c[ci], ignoreCase) {
-			qi++
+	if len(q) == 0 {
+		return true
+	}
+	qi, want := 0, q[0]
+	if ignoreCase {
+		want = fold(want)
+	}
+	for _, r := range c {
+		if ignoreCase {
+			r = fold(r)
+		}
+		if r != want {
+			continue
+		}
+		if qi++; qi == len(q) {
+			return true
+		}
+		if want = q[qi]; ignoreCase {
+			want = fold(want)
 		}
 	}
-	return qi == len(q)
+	return false
 }
 
 // leadingPenalty charges for runes skipped before the first match.
@@ -153,13 +206,14 @@ func bestAlignment(q, c []rune, ignoreCase bool) (int, []int) {
 	defer scratchPool.Put(s)
 	s.resize(n, m)
 	d, par, bon := s.d, s.par, s.bon
+	qf, cf := s.folded(q, c, ignoreCase)
 
 	for j := range c {
 		bon[j] = boundaryBonus(c, j)
 	}
 
 	for j := 0; j < m; j++ {
-		if runesEqual(q[0], c[j], ignoreCase) {
+		if qf[0] == cf[j] {
 			score := scoreMatch + bon[j] - leadingPenalty(j)
 			if ignoreCase && q[0] == c[j] {
 				score += bonusCaseMatch
@@ -184,7 +238,7 @@ func bestAlignment(q, c []rune, ignoreCase bool) (int, []int) {
 					acc, accK = v, k
 				}
 			}
-			if !runesEqual(q[i], c[j], ignoreCase) {
+			if qf[i] != cf[j] {
 				d[row+j], par[row+j] = negInf, -1
 				continue
 			}
@@ -261,10 +315,19 @@ func runesAt(c []rune, s int, t []rune, ignoreCase bool) bool {
 }
 
 // indexRunes returns the first offset at or after from where t matches c as a
-// contiguous run, or -1 if there is none.
+// contiguous run, or -1 if there is none. It looks for t's first rune, folded
+// once, and compares the rest only where that is found: most candidates an
+// exact term rejects never get past the first rune.
 func indexRunes(c []rune, from int, t []rune, ignoreCase bool) int {
+	if len(t) == 0 {
+		return min(from, len(c))
+	}
+	first := t[0]
+	if ignoreCase {
+		first = fold(first)
+	}
 	for s := from; s+len(t) <= len(c); s++ {
-		if runesAt(c, s, t, ignoreCase) {
+		if r := c[s]; (r == first || ignoreCase && fold(r) == first) && runesAt(c, s+1, t[1:], ignoreCase) {
 			return s
 		}
 	}
