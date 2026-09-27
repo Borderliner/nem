@@ -308,3 +308,17 @@ func TestFindFileQuitChangesNothing(t *testing.T) {
 	}
 	wantText(t, e, "original")
 }
+
+// A prefix argument is the command's, not the first key typed into the
+// prompt it opens - and the command still has it once the prompt is done.
+func TestPrefixArgumentSkipsThePrompt(t *testing.T) {
+	e, scr := newTestEditor(t, "abcdefgh")
+	// The C-g ends the prompt should RET be refused, as it is for a name
+	// mangled by the argument, so the test fails rather than hangs.
+	feed(t, scr, txt("forward-char"), key(t, "RET", "C-g"))
+	press(t, e, "C-u", "M-x")
+	if got := e.mem.HistoryOf("command"); len(got) == 0 || got[0] != "forward-char" {
+		t.Errorf("M-x read %q", got)
+	}
+	wantPt(t, e, 0, 4)
+}

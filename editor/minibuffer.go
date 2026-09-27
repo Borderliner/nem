@@ -173,11 +173,17 @@ func (e *Editor) ReadString(opts command.ReadOpts) (string, error) {
 	// lives in ms.line(), not in e.echo, so there is nothing of the prompt's to
 	// clean up — and a message the prompt produced, such as a failing
 	// incremental search, must survive the prompt closing.
-	savedMini, savedPending := e.mini, e.pending
+	// The prefix argument belongs to the command that opened the prompt, not
+	// to the first key typed into it: kept, C-u M-! typed its first letter
+	// four times. It is set aside while the prompt is open and given back
+	// after, for a command that reads it once it has its answer, as M-x does
+	// to pass it on.
+	savedMini, savedPending, savedArg := e.mini, e.pending, e.arg
 	e.mini, e.pending = ms, nil
+	e.arg.reset()
 	e.miniDepth++
 	defer func() {
-		e.mini, e.pending = savedMini, savedPending
+		e.mini, e.pending, e.arg = savedMini, savedPending, savedArg
 		e.miniDepth--
 	}()
 
