@@ -293,11 +293,7 @@ func indentRigidly(e Env) error {
 // and TAB can shift them again.
 func shiftLines(e Env, first, last int, ind Indent, target func(width int) int) error {
 	b := e.Buf()
-	type change struct {
-		line, old int // the line, and how many runes of indentation it has
-		ws        []rune
-	}
-	var changes []change
+	var spans []lineSpan
 	for i := first; i <= last; i++ {
 		rs := b.Line(i).View()
 		n := indentOf(rs)
@@ -305,54 +301,11 @@ func shiftLines(e Env, first, last int, ind Indent, target func(width int) int) 
 			continue
 		}
 		cur := indentWidth(rs[:n], ind.Width)
-		want := max(0, target(cur))
-		if want == cur {
-			continue
-		}
-		changes = append(changes, change{i, n, makeIndent(want, ind)})
-	}
-	if len(changes) == 0 {
-		return nil
-	}
-
-	// Asked before anything is changed, so a buffer that refuses one line's
-	// edit refuses the lot rather than being left half shifted.
-	for _, c := range changes {
-		at := text.Pos{Line: c.line}
-		if c.old > 0 {
-			if err := b.Vet(at, text.Pos{Line: c.line, Col: text.RuneIdx(c.old)}, nil); err != nil {
-				return err
-			}
-		}
-		if len(c.ws) > 0 {
-			if err := b.Vet(at, at, c.ws); err != nil {
-				return err
-			}
+		if want := max(0, target(cur)); want != cur {
+			spans = append(spans, lineSpan{line: i, to: text.RuneIdx(n), text: makeIndent(want, ind)})
 		}
 	}
-
-	b.BeginUndoGroup()
-	defer b.EndUndoGroup()
-	pt := e.Win().Pt
-	for _, c := range changes {
-		// The new indentation goes in before the old comes out, so the
-		// buffer carries the mark across as point is carried below: a
-		// position at the start of the line stays there, one in the text
-		// moves with it.
-		at := text.Pos{Line: c.line}
-		if err := b.Insert(at, c.ws); err != nil {
-			return err
-		}
-		n := text.RuneIdx(len(c.ws))
-		if err := b.Delete(text.Pos{Line: c.line, Col: n}, text.Pos{Line: c.line, Col: n + text.RuneIdx(c.old)}); err != nil {
-			return err
-		}
-		if pt.Line == c.line && pt.Col > 0 {
-			pt.Col = max(n, pt.Col-text.RuneIdx(c.old)+n)
-		}
-	}
-	edSetPoint(e, pt)
-	return nil
+	return rewriteSpans(e, spans)
 }
 
 // indentWidth is how many columns the indentation ws takes, with a tab

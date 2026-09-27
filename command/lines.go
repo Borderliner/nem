@@ -188,6 +188,61 @@ func deleteLine(b *text.Buffer, i int) error {
 	)
 }
 
+// lineSpan is a stretch of one line, from and to, and what it is to become.
+type lineSpan struct {
+	line     int
+	from, to text.RuneIdx
+	text     []rune
+}
+
+// rewriteSpans replaces each span, each on a line of its own, with its text,
+// as one undo step. A buffer that would refuse any of them is asked first and
+// left as it was, rather than rewritten in part.
+//
+// Each new text goes in before the old comes out, so a position at the start
+// of a span stays there and one at or past its end moves with what follows:
+// the buffer carries the mark that way, and point is carried the same. A
+// region of whole lines, from the start of one to the start of another,
+// still covers the same lines afterwards; one ending at the end of a span
+// still ends there.
+func rewriteSpans(e Env, spans []lineSpan) error {
+	b := e.Buf()
+	for _, s := range spans {
+		from, to := text.Pos{Line: s.line, Col: s.from}, text.Pos{Line: s.line, Col: s.to}
+		if s.to > s.from {
+			if err := b.Vet(from, to, nil); err != nil {
+				return err
+			}
+		}
+		if len(s.text) > 0 {
+			if err := b.Vet(from, from, s.text); err != nil {
+				return err
+			}
+		}
+	}
+	if len(spans) == 0 {
+		return nil
+	}
+
+	b.BeginUndoGroup()
+	defer b.EndUndoGroup()
+	pt := e.Win().Pt
+	for _, s := range spans {
+		if err := b.Insert(text.Pos{Line: s.line, Col: s.from}, s.text); err != nil {
+			return err
+		}
+		n := text.RuneIdx(len(s.text))
+		if err := b.Delete(text.Pos{Line: s.line, Col: s.from + n}, text.Pos{Line: s.line, Col: s.to + n}); err != nil {
+			return err
+		}
+		if pt.Line == s.line && pt.Col > s.from {
+			pt.Col = max(s.from+n, pt.Col-s.to+s.from+n)
+		}
+	}
+	edSetPoint(e, pt)
+	return nil
+}
+
 // insertLine inserts s so that it becomes line i, raising the line count by one.
 func insertLine(b *text.Buffer, i int, s string) error {
 	if i < b.NumLines() {
