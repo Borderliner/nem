@@ -458,6 +458,8 @@ func TestDefaultRootFallsBackToHome(t *testing.T) {
 // through a temporary file and a rename gives this for free, because rename needs
 // permission on the directory rather than on the file it replaces; writing the
 // destination directly would fail at open and leave the stale backup in place.
+// Windows will not rename over a read-only file, so there the write has to make
+// the old backup writable first.
 //
 // This is also the property that distinguishes an atomic write from a direct
 // one, which is otherwise invisible from outside.

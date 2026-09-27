@@ -276,11 +276,27 @@ func writeAtomic(p string, content []byte) error {
 	if err := os.Chmod(tmp, fileMode); err != nil {
 		return fmt.Errorf("backup: setting the mode of %s: %w", tmp, err)
 	}
-	if err := os.Rename(tmp, p); err != nil {
+	if err := os.Rename(tmp, p); err != nil && !replaceReadOnly(tmp, p) {
 		return fmt.Errorf("backup: renaming %s to %s: %w", tmp, p, err)
 	}
 	syncDir(dir)
 	return nil
+}
+
+// replaceReadOnly retries a rename that failed because p is read-only, and
+// reports whether the retry succeeded.
+//
+// Renaming over a file on Unix needs permission on the directory alone, so
+// there the mode of the file being replaced never matters. Windows refuses to
+// replace a read-only file at all. Everything in the store is nem's to
+// replace, so a read-only file is made writable and the rename tried again;
+// anything else in the way, a directory say, is left as it is.
+func replaceReadOnly(tmp, p string) bool {
+	fi, err := os.Lstat(p)
+	if err != nil || !fi.Mode().IsRegular() || fi.Mode().Perm()&0o200 != 0 {
+		return false
+	}
+	return os.Chmod(p, fileMode) == nil && os.Rename(tmp, p) == nil
 }
 
 // syncDir flushes a directory entry so the rename itself survives a crash.
