@@ -34,6 +34,12 @@ var hookCommands = map[string][]string{
 	"after-save":  {"save-buffer", "write-file"},
 }
 
+// modeKeymaps are the keymaps of nem's modes, by the names nem.bind knows
+// them by: nem.bind("k", "dired-do-delete", "dired").
+func (e *Editor) modeKeymaps() map[string]*keymap.Map {
+	return map[string]*keymap.Map{"dired": e.diredKeys, "wdired": e.wdiredKeys, "grep": e.grepKeys, "compilation": e.compileKeys}
+}
+
 // LoadConfig loads the Lua config at path, applies its settings, and wires its
 // hooks into dispatch. An empty path uses the default location.
 //
@@ -55,7 +61,7 @@ func (e *Editor) LoadConfig(path string) error {
 	h, err := lua.New(lua.Options{
 		Registry:    e.reg,
 		Keymap:      e.keys,
-		ModeKeymaps: map[string]*keymap.Map{"dired": e.diredKeys, "wdired": e.wdiredKeys, "grep": e.grepKeys, "compilation": e.compileKeys},
+		ModeKeymaps: e.modeKeymaps(),
 		ConfigPath:  path,
 		Timeout:     configTimeout,
 	})
