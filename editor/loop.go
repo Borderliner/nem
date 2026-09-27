@@ -421,6 +421,11 @@ func (e *Editor) dispatch(name string) error {
 		edited, revBefore = w.Buf, w.Buf.Revision()
 	}
 
+	// Every command starts from points inside their buffers, whatever moved
+	// them between commands: a prompt's session, output from a process, a
+	// file reverted underneath.
+	e.clampWindowPoints()
+
 	// A region the command is about to replace is deleted first, inside an undo
 	// group that stays open across the command so the two undo together. skip
 	// is true when the deletion was the whole operation.
@@ -526,6 +531,9 @@ func (e *Editor) bookkeep(name string) {
 func (e *Editor) clampWindowPoints() {
 	for _, w := range e.tree.Windows() {
 		w.Pt = w.Buf.ClampPos(w.Pt)
+	}
+	if e.mini != nil {
+		e.mini.win.Pt = e.mini.win.Buf.ClampPos(e.mini.win.Pt)
 	}
 }
 
