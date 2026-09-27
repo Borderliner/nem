@@ -48,7 +48,15 @@ type diredState struct {
 	now time.Time
 	// wd is set while the names are being edited. See wdired.go.
 	wd *wdiredState
+	// back and forward are the directories the listing showed before the
+	// one it shows and after it, as a browser keeps them: M-p and M-n step
+	// through them, and going anywhere new forgets the ones ahead.
+	back, forward []diredPlace
 }
+
+// diredPlace is a directory a listing showed, and the entry point was on
+// there, for going back to it.
+type diredPlace struct{ dir, at string }
 
 // errNotDired is returned by a dired command run anywhere else, say from M-x.
 var errNotDired = errors.New("not a dired buffer")
@@ -62,6 +70,10 @@ var diredBindings = []struct{ Spec, Command string }{
 	{"e", "dired-find-file"},
 	{"o", "dired-find-file-other-window"},
 	{"^", "dired-up-directory"},
+	{"M-<up>", "dired-up-directory"},
+	{"M-<down>", "dired-find-file"},
+	{"M-p", "dired-history-back"},
+	{"M-n", "dired-history-forward"},
 	{"n", "dired-next-line"},
 	{"SPC", "dired-next-line"},
 	{"C-n", "dired-next-line"},
@@ -425,6 +437,10 @@ func registerDiredCommands(e *Editor, reg *command.Registry) error {
 			})},
 		{Name: "dired-up-directory", Doc: "List the parent directory, with point on this one.",
 			Fn: inDired(func(b *text.Buffer, st *diredState) error { return e.diredUp(b, st) })},
+		{Name: "dired-history-back", Doc: "List the directory listed before this one, as a browser goes back.",
+			Fn: inDired(func(b *text.Buffer, st *diredState) error { return e.diredStep(b, st, true) })},
+		{Name: "dired-history-forward", Doc: "List the directory gone back from, as a browser goes forward.",
+			Fn: inDired(func(b *text.Buffer, st *diredState) error { return e.diredStep(b, st, false) })},
 		{Name: "dired-next-line", Doc: "Move to the next file, ARG files down.",
 			Fn: inDired(func(b *text.Buffer, st *diredState) error {
 				n, _ := e.Arg()
@@ -675,13 +691,61 @@ func promptDir(dir string) string {
 	return dir + sep
 }
 
-// diredGo points the listing in b at dir, putting point on focus.
+// diredGo points the listing in b at dir, putting point on focus, and
+// remembers where it was for going back.
 //
 // The same buffer follows you around the tree rather than one buffer being
 // left behind per directory visited. Emacs does the latter by default, and
 // the pile of stale listings it leaves is one of the first things people turn
 // off. Marks belong to a directory, so they do not come along.
 func (e *Editor) diredGo(b *text.Buffer, st *diredState, dir, focus string) error {
+	was := e.diredHere(st)
+	if err := e.diredShow(b, st, dir, focus); err != nil {
+		return err
+	}
+	if dir != was.dir {
+		st.back, st.forward = append(st.back, was), nil
+	}
+	return nil
+}
+
+// diredStep goes back through the listing's history, or forward, one
+// directory. A directory that has gone since cannot be listed: the step
+// fails, and the next goes on past it.
+func (e *Editor) diredStep(b *text.Buffer, st *diredState, back bool) error {
+	from, to := &st.back, &st.forward
+	if !back {
+		from, to = to, from
+	}
+	if len(*from) == 0 {
+		if back {
+			e.Echo("No earlier directory")
+		} else {
+			e.Echo("No later directory")
+		}
+		return nil
+	}
+	p := (*from)[len(*from)-1]
+	*from = (*from)[:len(*from)-1]
+	was := e.diredHere(st)
+	if err := e.diredShow(b, st, p.dir, p.at); err != nil {
+		return err
+	}
+	*to = append(*to, was)
+	return nil
+}
+
+// diredHere is where the listing is: its directory, and the entry at point.
+func (e *Editor) diredHere(st *diredState) diredPlace {
+	p := diredPlace{dir: st.dir}
+	if en, ok := e.entryAtPoint(st); ok {
+		p.at = en.Name
+	}
+	return p
+}
+
+// diredShow points the listing in b at dir, putting point on focus.
+func (e *Editor) diredShow(b *text.Buffer, st *diredState, dir, focus string) error {
 	entries, err := dired.Read(dir)
 	if err != nil {
 		return err

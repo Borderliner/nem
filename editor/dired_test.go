@@ -655,3 +655,121 @@ func TestIconsSettingAuto(t *testing.T) {
 		t.Errorf("off: asked %v, icons %v; want neither", asked, e.icons)
 	}
 }
+
+// M-<up> lists the parent, with point on the directory left, and M-<down>
+// opens what is at point: a directory is listed, a file visited.
+func TestDiredMetaArrowsWalkTheTree(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, filepath.Join("sub", "inner.txt"), "top.txt")
+	e, _ := newTestEditor(t)
+	_, st := listed(t, e, dir)
+
+	goTo(t, e, "sub")
+	press(t, e, "M-<down>")
+	if st.dir != filepath.Join(dir, "sub") {
+		t.Fatalf("M-<down> on sub lists %s", st.dir)
+	}
+	press(t, e, "M-<up>")
+	if st.dir != dir {
+		t.Fatalf("M-<up> lists %s, want %s", st.dir, dir)
+	}
+	if got := atEntry(t, e); got != "sub" {
+		t.Errorf("after M-<up>, point is on %q, want sub", got)
+	}
+	goTo(t, e, "top.txt")
+	press(t, e, "M-<down>")
+	if got, want := e.Buf().Path(), filepath.Join(dir, "top.txt"); got != want {
+		t.Errorf("M-<down> on top.txt visits %q", got)
+	}
+}
+
+// M-p goes back to the directory listed before, with point where it was
+// there, and M-n forward again, as a browser does. Going anywhere new
+// forgets the way forward.
+func TestDiredHistory(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, filepath.Join("a", "b", "deep.txt"), filepath.Join("a", "one.txt"), "top.txt")
+	a, ab := filepath.Join(dir, "a"), filepath.Join(dir, "a", "b")
+	e, _ := newTestEditor(t)
+	_, st := listed(t, e, dir)
+
+	want := func(keys, dir, at string) {
+		t.Helper()
+		if st.dir != dir {
+			t.Fatalf("after %s the listing is of %s, want %s", keys, st.dir, dir)
+		}
+		if at != "" && atEntry(t, e) != at {
+			t.Errorf("after %s point is on %q, want %q", keys, atEntry(t, e), at)
+		}
+	}
+	goTo(t, e, "a")
+	press(t, e, "RET")
+	goTo(t, e, "b")
+	press(t, e, "M-<down>")
+	want("two steps in", ab, "")
+
+	press(t, e, "M-p")
+	want("M-p", a, "b")
+	press(t, e, "M-p")
+	want("M-p M-p", dir, "a")
+	press(t, e, "M-p")
+	want("a third M-p", dir, "a")
+	wantEcho(t, e, "No earlier directory")
+
+	press(t, e, "M-n")
+	want("M-n", a, "b")
+	press(t, e, "M-n")
+	want("M-n M-n", ab, "")
+	press(t, e, "M-n")
+	wantEcho(t, e, "No later directory")
+
+	// Back one, then somewhere new: there is nothing forward any more, and
+	// back leads through the new way.
+	press(t, e, "M-p", "M-<up>")
+	want("M-p M-<up>", dir, "a")
+	press(t, e, "M-n")
+	wantEcho(t, e, "No later directory")
+	press(t, e, "M-p")
+	want("M-p after going up", a, "b")
+}
+
+// A directory gone since it was listed cannot be gone back to: the step says
+// so and leaves the listing where it is, and the next goes on past it.
+func TestDiredHistoryPassesAGoneDirectory(t *testing.T) {
+	dir := t.TempDir()
+	writeFiles(t, dir, filepath.Join("a", "b", "deep.txt"))
+	e, _ := newTestEditor(t)
+	_, st := listed(t, e, dir)
+	goTo(t, e, "a")
+	press(t, e, "RET")
+	goTo(t, e, "b")
+	press(t, e, "RET", "^")
+	if err := os.RemoveAll(filepath.Join(dir, "a", "b")); err != nil {
+		t.Fatal(err)
+	}
+	// Back from a: a/b, which is gone; then a, where b was entered from;
+	// then the top.
+	press(t, e, "M-p")
+	if st.dir != filepath.Join(dir, "a") {
+		t.Fatalf("stepping back to a gone directory moved the listing to %s", st.dir)
+	}
+	wantEcho(t, e, filepath.Join("a", "b"))
+	press(t, e, "M-p", "M-p")
+	if st.dir != dir {
+		t.Errorf("two steps past the gone directory list %s, want %s", st.dir, dir)
+	}
+}
+
+// The keys are dired's alone: in a buffer of text, M-<up> and M-<down> still
+// move lines, and M-p and M-n are not dired's history.
+func TestDiredHistoryKeysAreDiredsAlone(t *testing.T) {
+	e, _ := newTestEditor(t, "one", "two")
+	press(t, e, "C-n", "M-<up>")
+	wantText(t, e, "two\none")
+	press(t, e, "M-<down>")
+	wantText(t, e, "one\ntwo")
+	press(t, e, "M-p")
+	if strings.Contains(e.Message(), "directory") || strings.Contains(e.Message(), "dired") {
+		t.Errorf("M-p in a text buffer reached dired: %q", e.Message())
+	}
+}
