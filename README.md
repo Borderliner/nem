@@ -201,7 +201,10 @@ directory; `C-g` stops one you are waiting for.
 walks point back, and `C-g` returns you to where you started. `M-%` is
 query-replace with `y`/`n`/`!`/`q`. `M-s o` is emacs's occur: every line of
 the buffer matching a regexp, listed like a project search's results, each
-leading back to its line.
+leading back to its line. `M-g i` is imenu: a function, type, class or
+heading of the buffer by name, with its line beside it - for Go, Python,
+JavaScript and TypeScript, Rust, C and C++, Java and Kotlin, Ruby, Lua,
+shell, Makefiles, Emacs Lisp and Markdown.
 
 **Prefix keys, `M-x`, and `C-u`** — `C-x` is a real prefix keymap, `M-x` completes
 over every command by name, with the keys that run each one shown beside it,

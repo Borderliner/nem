@@ -29,6 +29,7 @@ var defaultBindings = []struct{ Spec, Command string }{
 	{"C-v", "scroll-up-command"}, {"<pgdn>", "scroll-up-command"},
 	{"M-v", "scroll-down-command"}, {"<pgup>", "scroll-down-command"},
 	{"M-g M-g", "goto-line"},
+	{"M-g i", "imenu"},
 	{"C-l", "recenter-top-bottom"},
 
 	// Editing.

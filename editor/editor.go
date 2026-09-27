@@ -309,6 +309,9 @@ func New(scr tcell.Screen) (*Editor, error) {
 	if err := registerRevertCommands(e, reg); err != nil {
 		return nil, fmt.Errorf("registering revert commands: %w", err)
 	}
+	if err := registerImenuCommands(e, reg); err != nil {
+		return nil, fmt.Errorf("registering imenu commands: %w", err)
+	}
 	if err := registerExternalCommands(e, reg); err != nil {
 		return nil, fmt.Errorf("registering external commands: %w", err)
 	}

@@ -342,3 +342,20 @@ func TestOccur(t *testing.T) {
 	}
 	wantPt(t, e, 1, 5)
 }
+
+// M-g i goes to a definition by name, leaving the mark where point was.
+func TestImenu(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "a.go")
+	if err := os.WriteFile(p, []byte("package a\n\nfunc First() {}\n\n\tfunc x() {}\nfunc Second() {\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e, scr := newTestEditor(t)
+	visiting(t, e, p)
+	feed(t, scr, txt("sec"), key(t, "RET"))
+	press(t, e, "M-g", "i")
+	wantPt(t, e, 5, 0)
+	if m := e.active.Buf.Mark(); m != (text.Pos{}) {
+		t.Errorf("mark at %v, want where point was", m)
+	}
+}
