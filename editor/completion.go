@@ -84,6 +84,20 @@ type completion struct {
 	// ReadOpts.KeepOrder.
 	keepOrder bool
 
+	// The last ranking, for the next keystroke's to narrow, as fzf does: the
+	// list Complete gave, the input and how much of it was cut, the
+	// candidates that matched, in the list's order, and how they ranked.
+	// While the list is the same and what is typed narrows what was - one
+	// more letter, one more word - only those are ranked, not the whole list
+	// again: the first keystroke in a large project ranks every file, the
+	// next only the files that one left. And a keystroke that leaves the
+	// query as it was, a space or a ' before the next word, ranks nothing.
+	lastCands  []string
+	lastInput  string
+	lastCut    int
+	lastPool   []string
+	lastRanked []fuzzy.Ranked
+
 	// A live list's candidates are a background search's results - see
 	// ReadOpts.Search. gen counts the searches started, so results that
 	// arrive after a newer search began are known for stale; stop stops the
@@ -139,14 +153,39 @@ func (c *completion) refresh(input string) {
 		return // the search's results come in their own time; see setFound
 	}
 	cands := c.complete(input)
-	c.ranked = rankPastSharedPrefix(input, cands)
+	cut := cutLen(input, cands)
 	c.sel, c.top = 0, 0
-	if c.keepOrder && input != "" {
-		at := make(map[string]int, len(cands))
-		for i, cand := range cands {
-			at[cand] = i
+	sameCands := sameList(cands, c.lastCands) && c.lastPool != nil
+	if sameCands && input != "" && c.lastInput != "" && cut == c.lastCut && fuzzy.Same(c.lastInput[cut:], input[cut:]) {
+		// The ranking is the last one, and so is what matched. It was
+		// only ever rearranged in place into the list's order, which is
+		// where keepOrder leaves it again; the history, which it is not,
+		// is only for an empty input.
+		c.ranked = c.lastRanked
+	} else {
+		pool := cands
+		if sameCands && fuzzy.Narrows(c.lastInput, input) {
+			pool = c.lastPool
 		}
-		slices.SortFunc(c.ranked, func(a, b fuzzy.Ranked) int { return at[a.Candidate] - at[b.Candidate] })
+		c.ranked = rankPast(input, pool, cut)
+		// What matched, in the list's order, for the next keystroke.
+		// Ranked's Index is a place in the pool, which is in the list's
+		// order itself.
+		matched := make([]bool, len(pool))
+		for _, r := range c.ranked {
+			matched[r.Index] = true
+		}
+		next := make([]string, 0, len(c.ranked))
+		for i, ok := range matched {
+			if ok {
+				next = append(next, pool[i])
+			}
+		}
+		c.lastPool = next
+	}
+	c.lastCands, c.lastInput, c.lastCut, c.lastRanked = cands, input, cut, c.ranked
+	if c.keepOrder && input != "" {
+		slices.SortFunc(c.ranked, func(a, b fuzzy.Ranked) int { return a.Index - b.Index })
 		return
 	}
 	if input == "" && len(c.history) > 0 {
@@ -172,11 +211,23 @@ func (c *completion) refresh(input string) {
 	}
 	for i, r := range c.ranked {
 		if r.Candidate == input {
-			copy(c.ranked[1:i+1], c.ranked[:i])
-			c.ranked[0] = r
+			if i > 0 {
+				// Into a copy: the ranking is kept for the next
+				// keystroke, which may not type this candidate.
+				promoted := make([]fuzzy.Ranked, 0, len(c.ranked))
+				promoted = append(promoted, r)
+				promoted = append(promoted, c.ranked[:i]...)
+				c.ranked = append(promoted, c.ranked[i+1:]...)
+			}
 			break
 		}
 	}
+}
+
+// sameList reports whether a and b are the one list: Complete giving back the
+// list it gave before, as a fixed list's does, rather than a new one.
+func sameList(a, b []string) bool {
+	return len(a) == len(b) && (len(a) == 0 || &a[0] == &b[0])
 }
 
 // rankPastSharedPrefix ranks cands against input, leaving out the longest
@@ -195,10 +246,23 @@ func (c *completion) refresh(input string) {
 // two, and a$ with every candidate starting with a would be left as $, which
 // matches everything.
 func rankPastSharedPrefix(input string, cands []string) []fuzzy.Ranked {
-	n := 0
-	if !strings.ContainsAny(input, " '^$!|\\") {
-		n = sharedPrefixLen(input, cands)
+	return rankPast(input, cands, cutLen(input, cands))
+}
+
+// cutLen is how much of input rankPastSharedPrefix cuts off: the prefix every
+// candidate shares with it, unless it is written in fzf's syntax.
+func cutLen(input string, cands []string) int {
+	if strings.ContainsAny(input, " '^$!|\\") {
+		return 0
 	}
+	return sharedPrefixLen(input, cands)
+}
+
+// rankPast ranks cands against input past its first n bytes, which every
+// candidate starts with. n comes from the whole list, not from cands, when
+// cands are what the last keystroke left: those may share more, and cutting
+// more would score them otherwise than the whole list's ranking does.
+func rankPast(input string, cands []string, n int) []fuzzy.Ranked {
 	if n == 0 {
 		return fuzzy.Rank(input, cands)
 	}

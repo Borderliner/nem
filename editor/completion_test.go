@@ -2,6 +2,7 @@ package editor
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -752,6 +753,57 @@ func TestKeepOrderAndPreview(t *testing.T) {
 	}
 	if len(seen) < 2 || seen[len(seen)-1] != "ma" || seen[len(seen)-2] != "xmxa" {
 		t.Errorf("previewed %q, want xmxa then ma", seen)
+	}
+}
+
+// Narrowing the last ranking, as each keystroke does while the list stays the
+// same, or keeping it for a keystroke that leaves the query as it was, lists
+// exactly what ranking the whole list again would: the same candidates,
+// scores and order, however the input is typed, backspaced and typed on, in
+// fzf's syntax or not, and whether or not it names a candidate outright.
+func TestNarrowingRanksAsTheWholeListWould(t *testing.T) {
+	var names []string
+	for _, a := range []string{"edit", "main", "test", "go", "win", "buf", "x"} {
+		for _, b := range []string{"or", "_test", ".go", "-line", "", "/sub"} {
+			for _, c := range []string{"", "s", "mode", "2"} {
+				names = append(names, a+b+c)
+			}
+		}
+	}
+	// fooBar outscores foobar for "foobar", on the word start at B, so the
+	// exact match is moved up past it: typed out, then followed by a space.
+	names = append(names, "fooBar", "foobar")
+	c := newCompletion(command.CompleteFrom(names), "")
+	check := func(input string) {
+		t.Helper()
+		c.refresh(input)
+		want := newCompletion(command.CompleteFrom(names), input).ranked
+		if len(c.ranked) != len(want) {
+			t.Fatalf("after typing %q: %d candidates, the whole list gives %d", input, len(c.ranked), len(want))
+		}
+		for i := range want {
+			if c.ranked[i].Candidate != want[i].Candidate || c.ranked[i].Match.Score != want[i].Match.Score {
+				t.Fatalf("after typing %q: candidate %d is %q (%d), the whole list gives %q (%d)", input, i,
+					c.ranked[i].Candidate, c.ranked[i].Match.Score, want[i].Candidate, want[i].Match.Score)
+			}
+		}
+	}
+	for _, input := range []string{"f", "foo", "foobar", "foobar ", "foobar '", "foobar", "foobar b", "foobar"} {
+		check(input)
+	}
+	pieces := []string{"e", "d", "i", "t", " ", "'", "^", "$", "!", "|", "g", "o", "_", "x", "m", "a", "n", "s"}
+	rng := rand.New(rand.NewPCG(5, 6))
+	input := ""
+	for step := 0; step < 3000; step++ {
+		switch {
+		case rng.IntN(4) == 0 && input != "":
+			input = input[:len(input)-1]
+		case rng.IntN(10) == 0:
+			input = ""
+		default:
+			input += pieces[rng.IntN(len(pieces))]
+		}
+		check(input)
 	}
 }
 
