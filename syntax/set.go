@@ -115,14 +115,16 @@ func Load(dir string) (*Set, []error) {
 			errs = append(errs, err)
 			continue
 		}
-		d, err := ParseDef(p, f)
+		// Named by the file alone: the directory is the one the user put it
+		// in, and the whole path crowds the echo area out of the message.
+		d, err := ParseDef(e.Name(), f)
 		f.Close()
 		if err != nil {
 			errs = append(errs, err)
 			continue
 		}
 		if prev, dup := user[d.Name]; dup {
-			errs = append(errs, fmt.Errorf("%s: language %s is already defined in %s", p, d.Name, prev.Source))
+			errs = append(errs, fmt.Errorf("%s: language %s is already defined in %s", e.Name(), d.Name, prev.Source))
 			continue
 		}
 		user[d.Name] = d
