@@ -55,8 +55,8 @@ Open an Ada file in one window and the definition in the other, with `C-x 2`
 and `C-x o`. Each time you save the definition with `C-x C-s`, nem reads it
 again and recolours the Ada file, so you see what each line does as you write
 it. If a line is wrong, the echo area says which one and why:
-`syntax: ada.syntax:12: unknown directive "keyword"`. The other languages are
-unaffected.
+`syntax: ada.syntax:12: unknown directive "keyword"`. Until you put it right,
+the colours stay as they were.
 
 A file of yours with the same name as one of nem's languages replaces it. To
 add to one of nem's languages rather than replace it, see
