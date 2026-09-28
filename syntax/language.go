@@ -27,6 +27,13 @@ type Language struct {
 	shebangs map[string]bool
 	headers  []*regexp.Regexp
 
+	// Everything below is made the first time the language lexes a line:
+	// what a file is written in is known from the names and first lines
+	// above, and a session colours a handful of languages of the dozens
+	// nem knows. Compiling them all up front cost a tenth of a second on
+	// the first file opened.
+	once sync.Once
+
 	ignoreCase bool
 	extra      runeSet // runes a name may hold besides letters, digits and _
 	// words gives each listed word its class, and what it declares the
@@ -154,24 +161,30 @@ func Compile(d *Def) (*Language, error) {
 		return nil, fmt.Errorf("%s: %d regions; at most %d", d.Source, len(d.Regions), maxRegions)
 	}
 	l := &Language{
-		name:       d.Name,
-		def:        d,
-		files:      d.Files,
-		headers:    d.Headers,
-		ignoreCase: d.IgnoreCase,
-		extra:      makeRuneSet(d.WordChars),
-		words:      map[string]wordInfo{},
-		calls:      d.Calls,
-		capIDs:     map[string]uint16{},
-	}
-	if l.calls == "" {
-		l.calls = "paren"
+		name:    d.Name,
+		def:     d,
+		files:   d.Files,
+		headers: d.Headers,
 	}
 	for _, s := range d.Shebangs {
 		if l.shebangs == nil {
 			l.shebangs = map[string]bool{}
 		}
 		l.shebangs[s] = true
+	}
+	return l, nil
+}
+
+// build makes what lexing needs, once.
+func (l *Language) build() {
+	d := l.def
+	l.ignoreCase = d.IgnoreCase
+	l.extra = makeRuneSet(d.WordChars)
+	l.words = map[string]wordInfo{}
+	l.calls = d.Calls
+	l.capIDs = map[string]uint16{}
+	if l.calls == "" {
+		l.calls = "paren"
 	}
 	info := func(w string) wordInfo {
 		if wi, ok := l.words[l.key(w)]; ok {
@@ -235,7 +248,6 @@ func Compile(d *Def) (*Language, error) {
 		l.matches = append(l.matches, m)
 	}
 	l.index()
-	return l, nil
 }
 
 // index numbers the matchers and gathers what any of them can begin with.
@@ -377,6 +389,7 @@ func (l *Language) capEnd(id uint16) *matcher {
 
 // Lex classifies one line.
 func (l *Language) Lex(line []rune, in State) ([]Span, State) {
+	l.once.Do(l.build)
 	x := lineLexer{l: l, line: line, n: len(line)}
 	i := 0
 	if k, depth, capID, open := openRegion(in); open && k < len(l.regions) {
@@ -921,6 +934,7 @@ func (x *lineLexer) prevIs(i int, r rune) bool {
 // Words lists a language's words of one class, sorted, for tests and for
 // describing a language.
 func (l *Language) Words(c Class) []string {
+	l.once.Do(l.build)
 	var out []string
 	for w, wi := range l.words {
 		if wi.class == c {
