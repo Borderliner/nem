@@ -367,3 +367,82 @@ func TestEditLanguage(t *testing.T) {
 		t.Error("the outline saved as it was did not load")
 	}
 }
+
+// set-language colours a buffer as the language chosen, whatever its name
+// says; M-; follows it; and the file is coloured so when it is opened again.
+// Choosing its own language undoes it, and text takes the colour away.
+func TestSetLanguage(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "notes.gnus")
+	if err := os.WriteFile(path, []byte("(setq gnus-select-method nil)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e, scr := newTestEditor(t)
+	visiting(t, e, path)
+	b := e.Buf()
+	if name := e.cacheFor(b).Lexer().Name(); name != "text" {
+		t.Fatalf("a .gnus file is %s before anything is chosen", name)
+	}
+
+	feed(t, scr, txt("elisp"), key(t, "RET"))
+	if err := e.Run("set-language"); err != nil {
+		t.Fatal(err)
+	}
+	if name := e.cacheFor(b).Lexer().Name(); name != "elisp" {
+		t.Fatalf("after set-language elisp the buffer is %s", name)
+	}
+	press(t, e, "M-;")
+	if got := b.Line(0).String(); !strings.HasPrefix(got, ";; ") {
+		t.Errorf("M-; wrote %q, not Emacs Lisp's comment", got)
+	}
+	if got := e.mem.LanguageOf(path); got != "elisp" {
+		t.Errorf("remembered %q for the file", got)
+	}
+
+	// Opened again, in another session with the same memory.
+	e2, scr2 := newTestEditor(t)
+	e2.mem = e.mem
+	visiting(t, e2, path)
+	if name := e2.cacheFor(e2.Buf()).Lexer().Name(); name != "elisp" {
+		t.Errorf("opened again, the file is %s", name)
+	}
+
+	// RET takes the file's own language, first in the list: undone.
+	feed(t, scr2, key(t, "RET"))
+	if err := e2.Run("set-language"); err != nil {
+		t.Fatal(err)
+	}
+	if name := e2.cacheFor(e2.Buf()).Lexer().Name(); name != "text" {
+		t.Errorf("undone, the file is %s", name)
+	}
+	if got := e2.mem.LanguageOf(path); got != "" {
+		t.Errorf("undone, memory still says %q", got)
+	}
+
+	// A buffer with no file takes a language for the session.
+	e3, scr3 := newTestEditor(t, "local x = 1")
+	feed(t, scr3, txt("lua"), key(t, "RET"))
+	if err := e3.Run("set-language"); err != nil {
+		t.Fatal(err)
+	}
+	if name := e3.cacheFor(e3.Buf()).Lexer().Name(); name != "lua" {
+		t.Errorf("*scratch* set to lua is %s", name)
+	}
+	// Saved under a name, it keeps the language, and the file remembers it.
+	saved := filepath.Join(t.TempDir(), "conf.txt")
+	if err := e3.SaveBuffer(e3.Buf(), saved); err != nil {
+		t.Fatal(err)
+	}
+	if name := e3.cacheFor(e3.Buf()).Lexer().Name(); name != "lua" || e3.mem.LanguageOf(e3.Buf().Path()) != "lua" {
+		t.Errorf("saved as conf.txt, the buffer is %s and remembered as %q", name, e3.mem.LanguageOf(e3.Buf().Path()))
+	}
+
+	// And text is no colour, even for a file whose name says Go.
+	e3.Buf().SetPath(filepath.Join(t.TempDir(), "main.go"))
+	feed(t, scr3, txt("text"), key(t, "RET"))
+	if err := e3.Run("set-language"); err != nil {
+		t.Fatal(err)
+	}
+	if name := e3.cacheFor(e3.Buf()).Lexer().Name(); name != "text" {
+		t.Errorf("main.go set to text is %s", name)
+	}
+}

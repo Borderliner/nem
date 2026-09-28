@@ -157,6 +157,7 @@ A key in a mode - `dired: f` - works only in that mode's buffers; see [Keybindin
 | `scroll-down-command` | `M-v` `<pgup>` | Move backward one screenful. |
 | `scroll-up-command` | `C-v` `<pgdn>` | Move forward one screenful. |
 | `self-insert-command` |  | Insert the character just typed. |
+| `set-language` |  | Colour this buffer as another language, remembered for its file; its own language undoes it. |
 | `set-mark-command` | `C-@` | Set the mark where point is. |
 | `shell-command` | `M-!` | Run a shell command and show its output; with C-u, insert it at point. A command ending in & runs in the background. |
 | `shell-command-on-region` | `M-\|` | Run a shell command with the region as its input and show its output; with C-u, replace the region with it. |
@@ -183,4 +184,4 @@ A key in a mode - `dired: f` - works only in that mode's buffers; see [Keybindin
 | `yank-pop` | `M-y` | Replace the text just yanked with the next-older kill-ring entry. |
 | `zap-to-char` | `M-z` | Kill up to and including the next occurrence of a character, ARG times. |
 
-173 commands in all.
+174 commands in all.

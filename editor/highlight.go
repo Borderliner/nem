@@ -123,12 +123,38 @@ func sameDir(a, b string) bool {
 	return err1 == nil && err2 == nil && os.SameFile(ia, ib)
 }
 
-// lexerFor picks the lexer for a buffer: its language by its name, or by its
-// first line, which is what identifies a script with no extension by its #!.
-// A buffer nothing matches gets the plain lexer, so *scratch* and *Buffer
-// List* render uncoloured without a special case.
+// lexerFor picks the lexer for a buffer: the language it was set to with
+// set-language, or else its language by its name, or by its first line, which
+// is what identifies a script with no extension by its #!. A buffer nothing
+// matches gets the plain lexer, so *scratch* and *Buffer List* render
+// uncoloured without a special case.
 func (e *Editor) lexerFor(b *text.Buffer) syntax.Lexer {
+	if name := e.chosenLanguage(b); name != "" {
+		if name == plainLanguage {
+			return syntax.PlainLexer{}
+		}
+		if l := e.languages().Language(name); l != nil {
+			return l
+		}
+		// A language chosen once and since removed: the file's own again.
+	}
 	return e.languages().For(b.Path(), firstLine(b))
+}
+
+// plainLanguage is what set-language calls no colour at all: the plain
+// lexer's name.
+const plainLanguage = "text"
+
+// chosenLanguage is the language b was set to with set-language - this
+// session, or for its file in an earlier one - or "".
+func (e *Editor) chosenLanguage(b *text.Buffer) string {
+	if name, ok := e.chosen[b]; ok {
+		return name
+	}
+	if b.Path() != "" && e.mem != nil {
+		return e.mem.LanguageOf(b.Path())
+	}
+	return ""
 }
 
 // firstLine is a buffer's first line, or "".
@@ -145,7 +171,8 @@ func (e *Editor) LanguageOf(b *text.Buffer) *syntax.Language {
 	if b == nil {
 		return nil
 	}
-	return e.languages().Detect(b.Path(), firstLine(b))
+	l, _ := e.lexerFor(b).(*syntax.Language)
+	return l
 }
 
 // cacheFor returns the buffer's highlight cache, creating it on first use.
@@ -188,4 +215,5 @@ func (e *Editor) retuneHighlight(b *text.Buffer) {
 // closes - along with a lexer state for every line each of them had.
 func (e *Editor) forgetHighlight(b *text.Buffer) {
 	delete(e.hl, b)
+	delete(e.chosen, b)
 }

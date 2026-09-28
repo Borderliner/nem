@@ -12,14 +12,77 @@ import (
 	"github.com/Borderliner/nem/text"
 )
 
-// registerLanguageCommands adds edit-language.
+// registerLanguageCommands adds set-language and edit-language.
 func registerLanguageCommands(e *Editor, reg *command.Registry) error {
-	return reg.Register(command.Command{
-		Name:        "edit-language",
-		Doc:         "Edit how a language is coloured, in its .syntax file beside init.lua; saving it recolours every buffer.",
-		Interactive: true,
-		Fn:          func(command.Env) error { return e.editLanguage() },
+	for _, c := range []command.Command{
+		{Name: "set-language", Doc: "Colour this buffer as another language, remembered for its file; its own language undoes it.",
+			Fn: func(command.Env) error { return e.setLanguage() }},
+		{Name: "edit-language", Doc: "Edit how a language is coloured, in its .syntax file beside init.lua; saving it recolours every buffer.",
+			Fn: func(command.Env) error { return e.editLanguage() }},
+	} {
+		c.Interactive = true
+		if err := reg.Register(c); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// setLanguage colours the buffer on screen as a language of the user's
+// choosing, whatever its name says: an Emacs Lisp file called .gnus, a shell
+// script called build.inc, or text with no colour at all. A file's choice is
+// remembered, so it opens as that language again; choosing the language its
+// name gives undoes it.
+func (e *Editor) setLanguage() error {
+	b := e.active.Buf
+	own := plainLanguage
+	if l := e.languages().Detect(b.Path(), firstLine(b)); l != nil {
+		own = l.Name()
+	}
+	// The file's own language first, so that RET puts it back; then the
+	// rest, and no colour last.
+	names := []string{own}
+	for _, l := range e.languages().Languages() {
+		if l.Name() != own {
+			names = append(names, l.Name())
+		}
+	}
+	if own != plainLanguage {
+		names = append(names, plainLanguage)
+	}
+	name, err := e.ReadString(command.ReadOpts{
+		Prompt:       fmt.Sprintf("Colour %s as (now %s): ", e.BufferName(b), e.lexerFor(b).Name()),
+		History:      "language",
+		Complete:     command.CompleteFrom(names),
+		RequireMatch: true,
 	})
+	if err != nil || name == "" {
+		return err
+	}
+	if name != plainLanguage && e.languages().Language(name) == nil {
+		return fmt.Errorf("no language %s; M-x edit-language adds one", name)
+	}
+	remembered := name
+	if name == own {
+		remembered = ""
+	}
+	if e.chosen == nil {
+		e.chosen = map[*text.Buffer]string{}
+	}
+	e.chosen[b] = remembered
+	if b.Path() != "" {
+		e.mem.SetLanguage(b.Path(), remembered)
+	}
+	e.retuneHighlight(b)
+	switch {
+	case remembered == "":
+		e.Echo("%s is coloured as its name says again", e.BufferName(b))
+	case b.Path() == "":
+		e.Echo("%s is coloured as %s", e.BufferName(b), name)
+	default:
+		e.Echo("%s is coloured as %s, and will be when it is opened again", e.BufferName(b), name)
+	}
+	return nil
 }
 
 // editLanguage opens the user's definition of a language, the one the buffer

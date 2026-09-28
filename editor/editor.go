@@ -106,6 +106,9 @@ type Editor struct {
 	// See highlight.go.
 	langs     *syntax.Set
 	syntaxDir string
+	// chosen is the language a buffer was set to with set-language, by
+	// buffer: a file's choice is also remembered for it, in mem.
+	chosen map[*text.Buffer]string
 
 	// vcs caches each buffer's git branch, because the modeline asks for it on
 	// every frame and the answer costs a walk up the directory tree. See vcs.go.
@@ -670,6 +673,10 @@ func (e *Editor) SaveBuffer(b *text.Buffer, path string) error {
 		delete(e.byName, e.names[b])
 		e.names[b] = name
 		e.byName[name] = b
+	}
+	// A language chosen for the buffer goes with it to its new name.
+	if name := e.chosen[b]; name != "" {
+		e.mem.SetLanguage(b.Path(), name)
 	}
 	// The buffer just became a .go file, or a .lua one. Lex it as what it is
 	// now rather than as what it was when it had no name.
