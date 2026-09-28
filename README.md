@@ -268,10 +268,11 @@ letter is still the letter.
 
 ### Looks
 
-- **Syntax colour** — lexers of its own for Go, Lua, JSON and Markdown; rules
-  built in for C, Python, shell, Rust, JavaScript, TypeScript, YAML, TOML, HTML,
-  CSS, SQL, Makefiles, Dockerfiles, XML and INI; and nano's, when nano is
-  installed, for forty more. A palette for dark terminals and one for light.
+- **Syntax colour** — over ninety languages built in, from Ada to Zig, and a
+  palette for dark terminals and one for light. Each language is a short
+  definition you can read and change, and adding one nem doesn't know is a file
+  of its keywords and how it writes comments and strings: see
+  [Languages](https://github.com/Borderliner/nem/wiki/Languages).
 - **Your terminal's colours** — nem never paints a background, so it sits in
   whatever theme you already use.
 - **Line numbers** — outside the text, so they can never be selected or copied,
@@ -325,6 +326,20 @@ A command you define is a command like any other: `M-x` finds it, a key runs it,
 `table` and `math` but not `io` or `os`, and a mistake in one is reported in the
 echo area while nem carries on with its defaults.
 
+Languages are configured beside `init.lua`, in `syntax/`, one small file each.
+`M-x edit-language` opens the one on screen, a copy of nem's to change, or an
+outline of a language nem doesn't know; saving it recolours every buffer:
+
+```
+language ada
+files *.adb *.ads
+ignore-case
+comment --
+string " doubled
+keywords begin end if then else loop procedure function is return
+declares function procedure function
+```
+
 ## Documentation
 
 The [wiki](https://github.com/Borderliner/nem/wiki) has the whole reference,
@@ -338,6 +353,7 @@ kept with the code and checked against it by the tests:
 | [Keybindings](https://github.com/Borderliner/nem/wiki/Keybindings) | every key, globally, in each mode, in prompts |
 | [Commands](https://github.com/Borderliner/nem/wiki/Commands) | every command, with its keys |
 | [Searching](https://github.com/Borderliner/nem/wiki/Searching) | the built-in ripgrep and fzf, and the syntax lists narrow by |
+| [Languages](https://github.com/Borderliner/nem/wiki/Languages) | the languages built in, and the format to add your own in |
 | [Recipes](https://github.com/Borderliner/nem/wiki/Recipes) | configs to copy |
 
 ## Design
@@ -354,7 +370,7 @@ Layered so the hard parts are testable without a terminal:
 | `editor` | The event loop that wires it all together |
 | `lua` | The config and scripting host |
 | `dired` `project` `compile` `imenu` | Directory listings, projects, compiler output, definitions |
-| `syntax` `highlight` `bidi` `fuzzy` | Lexers, incremental colouring, bidirectional text, fuzzy ranking |
+| `syntax` `highlight` `bidi` `fuzzy` | Language definitions, incremental colouring, bidirectional text, fuzzy ranking |
 | `backup` `memory` `editorconfig` `sysopen` `icons` | Backups and autosaves, history, `.editorconfig`, the system's apps, file icons |
 
 Two decisions shape the rest. **The minibuffer is a real buffer in a real
