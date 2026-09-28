@@ -27,12 +27,9 @@ compatible with redistributing nem under the MIT License; none is copyleft.
 The Apache 2.0 entries are listed here because that licence asks for its notice
 to travel with a derivative work, and a statically linked binary is one.
 
-## nano's syntax definitions
+## Language definitions
 
-nem can read syntax highlighting rules from `/usr/share/nano` when GNU nano is
-installed. Those files are GPL licensed and are **not** distributed with nem:
-they are read from the user's own system at runtime, the way nano reads them.
-Nothing from them is copied into this repository or into a released binary.
-
-The rules nem bundles in `syntax/rules/` are original work, written from each
-language's grammar, and are covered by nem's own MIT licence.
+The language definitions nem carries in `syntax/languages/` are original work,
+written from each language's grammar - a keyword list is a fact about a
+language - and are covered by nem's own MIT licence. nem reads no other
+editor's definitions.

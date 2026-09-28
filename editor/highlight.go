@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 
 	"github.com/Borderliner/nem/highlight"
 	"github.com/Borderliner/nem/syntax"
-	"github.com/Borderliner/nem/syntax/nanorc"
 	"github.com/Borderliner/nem/text"
 )
 
@@ -106,27 +104,7 @@ func sameDir(a, b string) bool {
 // A buffer nothing matches gets the plain lexer, so *scratch* and *Buffer
 // List* render uncoloured without a special case.
 func (e *Editor) lexerFor(b *text.Buffer) syntax.Lexer {
-	first := firstLine(b)
-	lex := e.languages().For(b.Path(), first)
-	if _, plain := lex.(syntax.PlainLexer); !plain || b.Path() == "" {
-		return lex
-	}
-	if n := nanoLexers().For(b.Path(), first); n != nil {
-		return n
-	}
-	return lex
-}
-
-// nanoSet holds the languages read from the system's nano installation, for
-// what no definition covers. Loaded once and lazily.
-var (
-	nanoOnce sync.Once
-	nanoSet  *nanorc.Set
-)
-
-func nanoLexers() *nanorc.Set {
-	nanoOnce.Do(func() { nanoSet, _ = nanorc.Load(nanorc.DefaultDirs()...) })
-	return nanoSet
+	return e.languages().For(b.Path(), firstLine(b))
 }
 
 // firstLine is a buffer's first line, or "".
