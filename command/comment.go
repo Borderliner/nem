@@ -1,10 +1,10 @@
 package command
 
 import (
-	"path/filepath"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/Borderliner/nem/syntax"
 	"github.com/Borderliner/nem/text"
 )
 
@@ -21,73 +21,46 @@ import (
 // end marker for languages that have only block comments.
 type commentSyntax struct{ start, end string }
 
-var (
-	slashes   = commentSyntax{start: "//"}
-	hash      = commentSyntax{start: "#"}
-	dashes    = commentSyntax{start: "--"}
-	semicolon = commentSyntax{start: ";"}
-	percent   = commentSyntax{start: "%"}
-	markup    = commentSyntax{start: "<!--", end: "-->"}
-	slashStar = commentSyntax{start: "/*", end: "*/"}
-)
+// hash is the comment written where nem does not know the language: the most
+// widely understood marker, and the one scripts and configuration use.
+var hash = commentSyntax{start: "#"}
 
-// commentByExt maps a lower-cased extension to its comment syntax.
-var commentByExt = map[string]commentSyntax{
-	"go": slashes, "c": slashes, "h": slashes, "cc": slashes, "cpp": slashes,
-	"cxx": slashes, "hpp": slashes, "java": slashes, "js": slashes, "mjs": slashes,
-	"cjs": slashes, "ts": slashes, "mts": slashes, "jsx": slashes, "tsx": slashes,
-	"rs": slashes, "swift": slashes, "kt": slashes, "scala": slashes, "dart": slashes,
-	"zig": slashes, "cs": slashes, "php": slashes, "scss": slashes, "jsonc": slashes,
-	"proto": slashes, "groovy": slashes, "gradle": slashes, "v": slashes,
-
-	"py": hash, "sh": hash, "bash": hash, "zsh": hash, "fish": hash, "rb": hash,
-	"pl": hash, "r": hash, "yaml": hash, "yml": hash, "toml": hash, "conf": hash,
-	"cfg": hash, "nix": hash, "tf": hash, "ex": hash, "exs": hash, "jl": hash,
-	"cmake": hash, "mk": hash, "env": hash, "ps1": hash, "nim": hash, "cr": hash,
-
-	"lua": dashes, "sql": dashes, "hs": dashes, "elm": dashes, "ada": dashes,
-
-	"ini": semicolon, "el": {start: ";;"}, "lisp": {start: ";;"}, "scm": {start: ";;"},
-	"clj": {start: ";;"}, "asm": semicolon, "s": semicolon,
-
-	"tex": percent, "erl": percent, "m": percent,
-
-	"html": markup, "htm": markup, "xml": markup, "svg": markup, "md": markup,
-	"markdown": markup, "vue": markup,
-
-	"css": slashStar, "ml": {start: "(*", end: "*)"},
-	"vim": {start: `"`},
+// languageOf is what an Env that knows the user's languages offers: the
+// editor's does, and a command reaches it through this rather than through
+// Env itself, so a test's Env need not.
+type languageOf interface {
+	LanguageOf(b *text.Buffer) *syntax.Language
 }
 
-// commentByName maps whole lower-cased file names, for files known by name.
-var commentByName = map[string]commentSyntax{
-	"makefile": hash, "gnumakefile": hash, "dockerfile": hash, "containerfile": hash,
-	"cmakelists.txt": hash, ".gitignore": hash, ".bashrc": hash, ".zshrc": hash,
-	".profile": hash, ".gitconfig": hash, ".editorconfig": hash, "go.mod": slashes,
-}
-
-// commentFor is the comment syntax for a file at path. A buffer with no file,
-// or a kind nem does not know, gets # - the most widely understood marker, and
-// the one scripts and configuration use.
-func commentFor(path string) commentSyntax {
-	if cs, ok := knownComment(path); ok {
+// commentFor is how b's language writes a comment, or # where nem does not
+// know the language.
+func commentFor(e Env, b *text.Buffer) commentSyntax {
+	if cs, ok := knownComment(e, b); ok {
 		return cs
 	}
 	return hash
 }
 
-// knownComment is the comment syntax for path when nem knows the kind of
-// file, and false when it would only be guessing.
-func knownComment(path string) (commentSyntax, bool) {
-	base := strings.ToLower(filepath.Base(path))
-	if cs, ok := commentByName[base]; ok {
-		return cs, true
+// knownComment is how b's language writes a comment, and false when nem
+// would only be guessing. It is the comment the language's definition lists
+// first - the user's definition, where there is one - so a language someone
+// adds comments as it colours, with nothing else to write.
+func knownComment(e Env, b *text.Buffer) (commentSyntax, bool) {
+	var l *syntax.Language
+	if lo, ok := e.(languageOf); ok {
+		l = lo.LanguageOf(b)
+	} else {
+		first := ""
+		if b.NumLines() > 0 {
+			first = b.Line(0).String()
+		}
+		l = syntax.Builtin().Detect(b.Path(), first)
 	}
-	if strings.HasPrefix(base, "dockerfile") {
-		return hash, true
+	if l == nil {
+		return commentSyntax{}, false
 	}
-	cs, ok := commentByExt[strings.TrimPrefix(filepath.Ext(base), ".")]
-	return cs, ok
+	start, end, ok := l.Comment()
+	return commentSyntax{start: start, end: end}, ok
 }
 
 // RegisterComment adds the comment commands to r.
@@ -102,7 +75,7 @@ func RegisterComment(r *Registry) error {
 
 func commentDwim(e Env) error {
 	b, w := e.Buf(), e.Win()
-	cs := commentFor(b.Path())
+	cs := commentFor(e, b)
 
 	first, last := w.Pt.Line, w.Pt.Line
 	if b.MarkActive() {

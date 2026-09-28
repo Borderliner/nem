@@ -305,3 +305,17 @@ func TestNamelessUnmarkedFileStaysPlain(t *testing.T) {
 		t.Error("a file with no extension and no shebang should stay plain")
 	}
 }
+
+// M-; writes the comment of the language the user defined, as it colours it.
+func TestCommentFollowsTheUsersLanguage(t *testing.T) {
+	e, _ := userLanguages(t, map[string]string{
+		"ada.syntax": "language ada\nfiles *.adb\ncomment --\n",
+	})
+	b := e.Buf()
+	b.SetPath(filepath.Join(t.TempDir(), "main.adb"))
+	b.Insert(text.Pos{}, []rune("Put_Line (X);"))
+	press(t, e, "M-;")
+	if got := b.Line(0).String(); !strings.HasPrefix(got, "-- Put_Line (X);") {
+		t.Errorf("M-; made %q, want Ada's comment", got)
+	}
+}

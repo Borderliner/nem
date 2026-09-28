@@ -93,9 +93,9 @@ var (
 // indentByExt is how each language is conventionally indented, by
 // lower-cased extension, for a file with nothing better to go on: no
 // .editorconfig says, and it has no indented lines yet - a new file, most
-// often. It sits with commentByExt in spirit: a table, not a guess from the
-// highlighter's rules, because a language's indentation is its community's
-// convention rather than anything its syntax says. A tab's width is left to
+// often. It is a table, not a guess from the highlighter's rules, because a
+// language's indentation is its community's convention rather than anything
+// its syntax says. A tab's width is left to
 // the tab-width setting.
 var indentByExt = map[string]Indent{
 	// gofmt insists on tabs, and make needs one to start each line of a

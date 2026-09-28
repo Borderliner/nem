@@ -109,7 +109,7 @@ func paragraphsBack(e Env, n int) error {
 // paragraphs worth re-wrapping are nearly all comments.
 func fillParagraph(e Env) error {
 	b, p := e.Buf(), e.Win().Pt
-	prefix := fillPrefix(b, p.Line)
+	prefix := fillPrefix(e, b, p.Line)
 	belongs := func(i int) bool {
 		s := b.Line(i).String()
 		return strings.HasPrefix(s, prefix) && strings.TrimSpace(s[len(prefix):]) != ""
@@ -170,10 +170,10 @@ func fillParagraph(e Env) error {
 // fillPrefix is what every line of line i's paragraph starts with: its
 // indentation, and a comment marker with the space after it when the file's
 // kind of comment starts the line.
-func fillPrefix(b *text.Buffer, i int) string {
+func fillPrefix(e Env, b *text.Buffer, i int) string {
 	rs := b.Line(i).View()
 	n := indentOf(rs)
-	if cs, ok := knownComment(b.Path()); ok && cs.end == "" {
+	if cs, ok := knownComment(e, b); ok && cs.end == "" {
 		if strings.HasPrefix(string(rs[n:]), cs.start) {
 			n += utf8.RuneCountInString(cs.start)
 			for n < len(rs) && isBlank(rs[n]) {
