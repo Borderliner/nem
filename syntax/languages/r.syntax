@@ -1,0 +1,41 @@
+# R.
+
+language r
+files *.r .rprofile
+shebang Rscript rscript
+
+# A name may hold dots: is.na, data.frame, .libPaths.
+word-chars .
+operators +-*/^<>=!&|~?:$@
+
+comment #
+string "
+string '
+# A raw string, r"(...)" with as many dashes as it likes between the quote
+# and the bracket, closes only at the same bracket, dashes and quote.
+region string
+    start [rR](["'])(-*)\(
+    end \)\2\1
+    multiline
+region string
+    start [rR](["'])(-*)\[
+    end \]\2\1
+    multiline
+region string
+    start [rR](["'])(-*)\{
+    end \}\2\1
+    multiline
+
+# A function is named by what it is assigned to.
+match (?P<function>[A-Za-z.][A-Za-z0-9._]*|`[^`]+`)\s*(?:<<?-|=)\s*function\b
+# A name in backquotes is a name, whatever it holds.
+match plain `[^`]*`
+# %in%, %>% and the other operators written between percent signs.
+match operator %[^%\s]*%
+
+keywords if else repeat while function for in next break return switch
+
+constants TRUE FALSE NULL NA NA_integer_ NA_real_ NA_complex_ NA_character_
+constants Inf NaN
+
+functions library require source

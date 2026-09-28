@@ -1,0 +1,40 @@
+# Windows batch files, whose words are written in any case.
+
+language batch
+files *.bat *.cmd
+
+ignore-case
+calls none
+numbers [0-9]+
+
+# REM and :: start a comment only where a command does: at the start of a
+# line, or REM after the & or ( that begins one. REM is listed below as the
+# comment, for M-;, and the plain rule above it keeps it from starting one
+# anywhere else, as in echo REMOVE.
+match comment (?i)^\s*@?rem(?:[\s:.,;=].*)?$
+match comment ^\s*::.*$
+match (?:(?P<operator>&&?|\|\|)|(?P<punctuation>\())\s*(?P<comment>(?i:rem)(?:\s.*)?)$
+match plain (?i)rem[A-Za-z0-9_]*
+comment REM
+string " raw
+
+# Labels, and the jumps to them.
+match function ^\s*:[A-Za-z0-9_.-]+
+match (?P<keyword>(?i:goto))\s+(?P<function>:?[A-Za-z0-9_.-]+)
+match (?P<keyword>(?i:call))\s+(?P<function>:[A-Za-z0-9_.-]+)
+# Variables: %NAME% and %NAME:~0,5%, a for loop's %%i, the arguments %1
+# and %~dp0, and !NAME! under delayed expansion.
+match constant %%~?[A-Za-z]+
+match constant %(?:~[A-Za-z]*)?[0-9*]
+match constant %[A-Za-z_][^%\s]*%
+match constant ![A-Za-z_][^!\s]*!
+
+keywords if else for in do goto call exit set setlocal endlocal shift not
+keywords exist defined errorlevel cmdextversion equ neq lss leq gtr geq
+
+constants on off nul con prn aux enabledelayedexpansion
+constants disabledelayedexpansion enableextensions disableextensions
+
+functions echo cd chdir pushd popd pause cls start title color copy xcopy
+functions del erase move ren rename mkdir md rmdir rd type dir choice
+functions timeout find findstr where ver vol path prompt date time assoc

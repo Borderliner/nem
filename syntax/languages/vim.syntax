@@ -1,0 +1,42 @@
+# Vim script.
+
+language vim
+files *.vim .vimrc .gvimrc _vimrc .exrc
+
+# An autoload function's name holds #: mylib#util#Run().
+word-chars #
+
+# A " begins a comment at the start of a line and a string anywhere else,
+# but a " with no other after it on its line is a comment after a command.
+# Vim9 script writes its comments with #.
+match comment ^[ \t:]*".*$
+match comment ^\s*#(?:\s.*)?$
+match comment "(?:[^"\\]|\\.)*$
+string "
+string ' doubled
+# Listed after the string it ties with, so that it never wins over one: it
+# is here as the comment M-; writes.
+comment "
+
+match ^\s*(?P<keyword>fu|fun|func|function|def)(?P<operator>!)?\s+(?P<function>(?:<[Ss][Ii][Dd]>|[gs]:)?[A-Za-z_][A-Za-z0-9_#.:]*)
+match (?P<function>(?:<[Ss][Ii][Dd]>|[gs]:)[A-Za-z_][A-Za-z0-9_#]*)\s*\(
+# Scoped variables, options, registers and environment variables:
+# g:name, a:0, &tabstop, &l:sw, @a, $HOME.
+match constant [gswtblvai]:[A-Za-z0-9_][A-Za-z0-9_#]*
+match constant &(?:[lg]:)?[a-z]+
+match constant @[A-Za-z0-9"*+:/.=_-]
+match constant \$[A-Za-z_][A-Za-z0-9_]*
+# Key notation in a mapping: <CR>, <C-w>, <leader>.
+match constant <[A-Za-z][A-Za-z0-9_-]*>
+
+keywords let unlet const call return if elseif else endif while endwhile for
+keywords endfor in try catch finally endtry throw function endfunction func
+keywords endfunc fu fun endf endfu endfun def enddef break continue execute
+keywords exe echo echom echomsg echoerr echon autocmd au augroup aug set
+keywords setlocal setl setglobal map nmap vmap xmap imap omap cmap noremap
+keywords nnoremap vnoremap xnoremap inoremap onoremap cnoremap tnoremap nno
+keywords vno xno ino unmap nunmap command com syntax syn highlight hi source
+keywords so runtime finish filetype colorscheme normal norm silent abort
+keywords range dict closure vim9script export import var is isnot
+
+constants true false null

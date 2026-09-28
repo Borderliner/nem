@@ -1,0 +1,36 @@
+# Tcl, and the Tk and Expect scripts written in it.
+
+language tcl
+files *.tcl *.tk
+shebang tclsh wish expect
+
+calls none
+
+# A # starts a comment only where a command could start: at the start of a
+# line, or after the ; that ends the command before it. Anywhere else it is
+# a word's text, as in Tk's -fill #ff0000.
+match comment ^\s*#.*$
+match (?P<punctuation>;)\s*(?P<comment>#.*)$
+# A " inside braces is text, so a string ends with its line: one opened
+# by {^"} must not colour the rest of the file.
+string "
+
+# A procedure's or method's name may be qualified by its namespace.
+match (?P<keyword>proc|method)\s+(?P<function>(?:::)?[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)
+match constant \$\{[^}]*\}
+match constant \$(?:::)?[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*
+
+keywords if then elseif else for foreach while break continue return switch
+keywords proc namespace variable global upvar uplevel set unset catch try on
+keywords trap finally throw error eval expr package source apply coroutine
+keywords yield tailcall method constructor destructor default
+
+constants true false
+
+functions after append array binary cd clock close concat dict encoding eof
+functions exec exit fconfigure fcopy file fileevent flush format gets glob
+functions incr info interp join lappend lassign lindex linsert list llength
+functions lmap load lrange lrepeat lreplace lreverse lsearch lset lsort open
+functions pid puts pwd read regexp regsub rename scan seek socket split
+functions string subst tell time trace update vwait
+functions bind destroy grid pack place winfo wm

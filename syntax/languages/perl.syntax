@@ -1,0 +1,118 @@
+# Perl.
+
+language perl
+files *.pl *.pm *.t *.psgi
+shebang perl
+
+# $#array is an array's last index, not a comment.
+match constant \$#(?:\{[^}]*\}|\$*[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)
+comment #
+# POD runs from any =word at the start of a line to =cut.
+region comment
+    start ^=[A-Za-z][A-Za-z0-9]*
+    end ^=cut(?:\s.*)?$
+    multiline
+# What follows __END__ or __DATA__ is the script's data, not its code.
+region comment
+    start ^__(?:END|DATA)__\s*$
+    end [^\x00-\x{10FFFF}]
+    multiline
+
+string "
+string '
+string `
+# A here-document runs to a line holding only its word: indented after <<~,
+# at the margin otherwise. A bare word must follow << at once, so 1 << 2
+# stays a shift.
+region string
+    start <<~(?:\s*"([^"]*)"|\s*'([^']*)'|([A-Za-z_][A-Za-z0-9_]*))
+    end ^\s*\1\2\3$
+    multiline
+region string
+    start <<(?:\s*"([^"]*)"|\s*'([^']*)'|([A-Za-z_][A-Za-z0-9_]*))
+    end ^\1\2\3$
+    multiline
+
+# The quote-like operators, with any delimiter: a bracket closes at its
+# pair, anything else at itself. s, tr and y have a second part, which
+# after a bracket has brackets of its own.
+region string
+    start (?:s|tr|y)\{
+    end \}(?:\s*\{(?:[^\\}]|\\.)*\})?[a-z]*
+    escape \\.
+region string
+    start (?:s|tr|y)\(
+    end \)(?:\s*\((?:[^\\)]|\\.)*\))?[a-z]*
+    escape \\.
+region string
+    start (?:s|tr|y)\[
+    end \](?:\s*\[(?:[^\\\]]|\\.)*\])?[a-z]*
+    escape \\.
+region string
+    start (?:s|tr|y)<
+    end >(?:\s*<(?:[^\\>]|\\.)*>)?[a-z]*
+    escape \\.
+region string
+    start (?:s|tr|y)([^\w\s(\[{<)\]}>=,;])
+    end \1(?:[^\\\1]|\\.)*\1[a-z]*
+    escape \\.
+# The others' bracketed forms may run over lines, as a qw( ) list often
+# does.
+region string
+    start (?:(?:qq|qw|qx|qr)\s*|q|m)\{
+    end \}[a-z]*
+    escape \\.
+    multiline
+region string
+    start (?:(?:qq|qw|qx|qr)\s*|q|m)\(
+    end \)[a-z]*
+    escape \\.
+    multiline
+region string
+    start (?:(?:qq|qw|qx|qr)\s*|q|m)\[
+    end \][a-z]*
+    escape \\.
+    multiline
+region string
+    start (?:(?:qq|qw|qx|qr)\s*|q|m)<
+    end >[a-z]*
+    escape \\.
+    multiline
+region string
+    start (?:qq|qw|qx|qr|q|m)([^\w\s(\[{<)\]}>=,;])
+    end \1[a-z]*
+    escape \\.
+
+# A bare / starts a pattern where a value is expected - after a match, an
+# opening bracket, a comma or a keyword - and divides anywhere else.
+match (?P<operator>[=!]~)\s*(?P<string>/(?:[^/\\]|\\.)*/[a-z]*)
+match (?P<punctuation>[(,{])\s*(?P<string>/(?:[^/\\]|\\.)+/[a-z]*)
+match (?P<function>split|grep)\s+(?P<string>/(?:[^/\\]|\\.)*/[a-z]*)
+match (?P<keyword>if|unless|while|until|and|or|not|return|when)\s+(?P<string>/(?:[^/\\]|\\.)+/[a-z]*)
+
+match (?P<keyword>sub)\s+(?P<function>[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)
+match (?P<keyword>package)\s+(?P<type>[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)
+
+# Scalars, arrays and hashes, by their sigils, and the punctuation
+# variables.
+match constant [$@%]\{\^?[A-Za-z_][A-Za-z0-9_]*\}
+match constant [$@%]\$*(?:::)?[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*
+match constant \$(?:\^[A-Z]|[0-9]+|[&`'+!@/\\,;.<>$"])
+match function &[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*
+
+keywords if elsif else unless while until for foreach do last next redo goto
+keywords return my our local state sub package use no require BEGIN END INIT
+keywords CHECK UNITCHECK and or not xor eq ne lt gt le ge cmp given when
+keywords default continue
+
+constants undef __PACKAGE__ __FILE__ __LINE__ __SUB__ STDIN STDOUT STDERR
+constants ARGV ARGVOUT ENV INC
+
+functions abs binmode bless caller chdir chmod chomp chop chown chr close
+functions closedir defined delete die each eof eval exec exists exit exp
+functions glob gmtime grep hex index int join keys kill lc lcfirst length
+functions localtime lstat map mkdir oct open opendir ord pack pop pos
+functions print printf push quotemeta rand read readdir readline ref rename
+functions reverse rindex rmdir say scalar seek select shift sleep sort
+functions splice split sprintf sqrt srand stat substr system tell time uc
+functions ucfirst unlink unpack unshift values wait waitpid wantarray warn

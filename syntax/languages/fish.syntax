@@ -1,0 +1,26 @@
+# fish, the friendly interactive shell.
+
+language fish
+files *.fish
+shebang fish
+
+calls none
+word-chars -
+numbers [0-9]+
+
+# A # starts a comment only at the start of a word: a#b is one word.
+match comment (?:^|[ \t])#.*$
+match constant \$+[A-Za-z_][A-Za-z0-9_]*
+string " multiline
+string ' multiline
+
+keywords if else end for in while switch case function return break
+keywords continue begin and or not set command builtin exec
+
+functions abbr alias argparse bg bind block cd commandline complete contains
+functions count dirh dirs disown echo emit eval exit fg fish_add_path
+functions functions history isatty jobs math nextd popd prevd printf pushd
+functions pwd random read realpath set_color source status string test time
+functions type ulimit wait
+
+declares function function

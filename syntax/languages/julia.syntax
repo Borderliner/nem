@@ -1,0 +1,55 @@
+# Julia.
+
+language julia
+files *.jl
+shebang julia
+
+operators +-*/\%&|^<>=!~?:'÷≤≥≠∈∉∘√⊻
+
+comment #
+comment #= =# nested
+# A string may carry a prefix - r"", raw"", b"", or any string macro's -
+# and a triple-quoted one may run over lines.
+region string
+    start (?:[A-Za-z_][A-Za-z0-9_]*)?"""
+    end """
+    escape \\.
+    multiline
+region string
+    start (?:[A-Za-z_][A-Za-z0-9_]*)?"
+    end "
+    escape \\.
+string `
+
+# A character is quoted; a quote after a value transposes it: A'.
+match string '(?:[^'\\]|\\.[^']*)'
+# A symbol, :name, where a value starts: 1:n is a range, not a symbol.
+match (?:^|[ \t])(?P<constant>:[A-Za-z_][A-Za-z0-9_!]*)
+match (?P<punctuation>[(\[{,;])(?P<constant>:[A-Za-z_][A-Za-z0-9_!]*)
+# The type after :: and <: is a type, whatever its name.
+match (?P<operator>::|<:|>:)\s*(?P<type>[A-Za-z_][A-Za-z0-9_]*)
+match function @[A-Za-z_][A-Za-z0-9_!]*
+# A name ending in ! is a function's: push!, sort!. x != y is not.
+match (?P<function>[A-Za-z_][A-Za-z0-9_]*!)(?:[^=]|$)
+
+keywords baremodule begin break catch const continue do else elseif end
+keywords export finally for function global if import let local macro module
+keywords quote return struct try using while where in isa abstract mutable
+keywords primitive type outer public
+
+constants true false nothing missing Inf Inf16 Inf32 Inf64 NaN NaN16 NaN32
+constants NaN64 pi π ℯ im undef ARGS ENV C_NULL stdin stdout stderr devnull
+
+types Any Union Nothing Missing Bool Char String Symbol Int Int8 Int16 Int32
+types Int64 Int128 UInt UInt8 UInt16 UInt32 UInt64 UInt128 Float16 Float32
+types Float64 BigInt BigFloat Rational Complex ComplexF32 ComplexF64 Number
+types Real Integer Signed Unsigned AbstractFloat AbstractString AbstractChar
+types AbstractArray AbstractVector AbstractMatrix AbstractRange AbstractDict
+types AbstractSet Array Vector Matrix Dict Set Tuple NamedTuple Pair Function
+types Type DataType UnionAll Module Expr Exception ErrorException
+types ArgumentError BoundsError DomainError KeyError MethodError IO IOBuffer
+types Ref Ptr Cvoid Cint Cstring Task Channel Regex UnitRange StepRange
+types SubString Some Val
+
+declares function function macro
+declares type struct type module

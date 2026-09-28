@@ -1,0 +1,32 @@
+# AWK, and gawk's additions to it.
+
+language awk
+files *.awk
+shebang awk gawk mawk nawk
+
+comment #
+string "
+
+# A / starts a regular expression where a value is expected: a pattern at
+# the start of a line, and after an operator such as ~ && ? or =, an
+# opening bracket, a comma or a semicolon. Anywhere else it divides.
+match ^\s*(?P<string>/(?:[^/\\]|\\.)+/)
+match (?P<operator>!?~|&&|\|\||[!?:=])\s*(?P<string>/(?:[^/\\]|\\.)+/)
+match (?P<punctuation>[(,;{])\s*(?P<string>/(?:[^/\\]|\\.)+/)
+# A field: $1, $NF, or $ before an expression.
+match constant \$(?:[0-9]+|[A-Za-z_][A-Za-z0-9_]*)?
+match keyword ^\s*@(?:include|load|namespace)\b
+
+keywords BEGIN END BEGINFILE ENDFILE if else while for do break continue
+keywords next nextfile exit return delete in function func
+
+constants ARGC ARGIND ARGV BINMODE CONVFMT ENVIRON ERRNO FIELDWIDTHS FILENAME
+constants FNR FPAT FS IGNORECASE LINT NF NR OFMT OFS ORS PROCINFO RLENGTH RS
+constants RSTART RT SUBSEP TEXTDOMAIN
+
+functions atan2 close cos exp fflush gensub getline gsub index int length log
+functions match mktime patsplit print printf rand sin split sprintf sqrt
+functions srand strftime strtonum sub substr system systime tolower toupper
+functions asort asorti isarray typeof and or xor lshift rshift compl
+
+declares function function func

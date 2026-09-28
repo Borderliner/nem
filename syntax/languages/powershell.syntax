@@ -1,0 +1,44 @@
+# PowerShell, whose words are written in any case.
+
+language powershell
+files *.ps1 *.psm1 *.psd1
+shebang pwsh
+
+ignore-case
+comment #
+comment <# #>
+# ` escapes in a double-quoted string; '' is a quote in a single-quoted one.
+string " escape `
+string ' doubled
+# A here-string opens with @" or @' at the end of a line and closes with
+# "@ or '@ at the start of one.
+region string
+    start @"[ \t]*$
+    end ^"@
+    escape `.
+    multiline
+region string
+    start @'[ \t]*$
+    end ^'@
+    multiline
+
+# Variables, with a scope or a drive: $x, $env:PATH, ${odd name}, and the
+# automatic $_ $$ $? $^. @name splats one.
+match constant \$(?:\{[^}]*\}|(?:[A-Za-z_][A-Za-z0-9_]*:)?[A-Za-z_][A-Za-z0-9_]*|[$?^])
+match constant @[A-Za-z_][A-Za-z0-9_]*
+# A cmdlet is named Verb-Noun.
+match function [A-Za-z]+-[A-Za-z][A-Za-z0-9]*
+# The operators written as words: -eq, -like, -and, and their -c and -i
+# forms. -in is not the keyword in.
+match operator (?i)-[ci]?(?:eq|ne|gt|ge|lt|le|like|notlike|match|notmatch|contains|notcontains|in|notin|replace|split|join|is|isnot|as|and|or|xor|not|band|bor|bxor|bnot|shl|shr|f)\b
+# A type in brackets: [string], [int[]], [System.IO.File].
+match type \[[A-Za-z_][A-Za-z0-9_.]*(?:\[\])?\]
+
+keywords begin break catch class continue data default define do
+keywords dynamicparam else elseif end enum exit filter finally for foreach
+keywords from function hidden if in param process return static switch
+keywords throw trap try until using var while workflow parallel sequence
+keywords inlinescript configuration
+
+declares function function filter workflow configuration
+declares type class enum

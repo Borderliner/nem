@@ -1,0 +1,46 @@
+# PHP. What lies outside <?php ... ?> is read as PHP too: a template's
+# HTML is not coloured as HTML.
+
+language php
+files *.php *.phtml *.phpt
+shebang php
+header ^<\?php
+
+ignore-case
+comment //
+comment #
+comment /* */
+string "
+string '
+string `
+# A heredoc, or a nowdoc with its word in single quotes, runs to its word,
+# which since PHP 7.3 may be indented and followed by more of the line.
+region string
+    start <<<[ \t]*["']?([A-Za-z_][A-Za-z0-9_]*)["']?
+    end ^\s*\1\b
+    multiline
+
+match keyword <\?=|<\?(?i:php)?|\?>
+# #[...] is an attribute, not a comment.
+match function #\[\\?[A-Za-z_][A-Za-z0-9_\\]*
+match constant \$+[A-Za-z_][A-Za-z0-9_]*
+
+keywords abstract and as break case catch class clone const continue declare
+keywords default do echo else elseif enddeclare endfor endforeach endif
+keywords endswitch endwhile enum extends final finally fn for foreach from
+keywords function global goto if implements include include_once instanceof
+keywords insteadof interface match namespace new or parent print private
+keywords protected public readonly require require_once return self static
+keywords switch throw trait try use var while xor yield
+
+types array bool callable float int iterable mixed never object string void
+
+constants true false null __CLASS__ __DIR__ __FILE__ __FUNCTION__ __LINE__
+constants __METHOD__ __NAMESPACE__ __TRAIT__ PHP_EOL PHP_VERSION PHP_OS
+constants PHP_INT_MAX PHP_INT_MIN DIRECTORY_SEPARATOR E_ALL E_ERROR
+constants E_WARNING E_NOTICE
+
+functions isset unset empty list eval exit die
+
+declares function function
+declares type class interface trait enum extends implements new instanceof

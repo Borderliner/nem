@@ -1,0 +1,108 @@
+# Ruby.
+
+language ruby
+files *.rb *.rake *.gemspec *.ru rakefile gemfile guardfile podfile
+files vagrantfile brewfile
+shebang ruby
+
+comment #
+# =begin and =end make a block comment only at the start of a line.
+region comment
+    start ^=begin(?:\s|$)
+    end ^=end(?:\s.*)?$
+    multiline
+# What follows __END__ is the script's data, not its code.
+region comment
+    start ^__END__\s*$
+    end [^\x00-\x{10FFFF}]
+    multiline
+
+string "
+string '
+string `
+# A heredoc runs to a line holding only its word, which may be indented
+# after <<~ or <<-, and must be at the margin after a bare <<. A bare <<
+# takes an upper-case or quoted word, so that x << y stays an append.
+region string
+    start <<[~-]['"`]?([A-Za-z_][A-Za-z0-9_]*)['"`]?
+    end ^\s*\1\s*$
+    multiline
+region string
+    start <<(?:['"`]([A-Za-z_][A-Za-z0-9_]*)['"`]|([A-Z_][A-Z0-9_]*))
+    end ^\1\2\s*$
+    multiline
+# %w[] %i() %q{} %Q<> %r|| and the rest: a bracket closes at its pair,
+# anything else at itself, and a bracketed list may run over lines. The
+# letter is required where % alone is more likely the remainder of a
+# division.
+region string
+    start %[qQwWiIrsx]?\(
+    end \)[a-z]*
+    escape \\.
+    multiline
+region string
+    start %[qQwWiIrsx]?\{
+    end \}[a-z]*
+    escape \\.
+    multiline
+region string
+    start %[qQwWiIrsx]\[
+    end \][a-z]*
+    escape \\.
+    multiline
+region string
+    start %[qQwWiIrsx]<
+    end >[a-z]*
+    escape \\.
+    multiline
+region string
+    start %[qQwWiIrsx]([^\sA-Za-z0-9(\[{<])
+    end \1[a-z]*
+    escape \\.
+
+# A / starts a regexp where a value is expected - after a match or an
+# assignment, an opening bracket, a comma or a keyword - and divides
+# anywhere else.
+match (?P<operator>[=!]~|=>|==?|&&|\|\|)\s*(?P<string>/(?:[^/\\]|\\.)*/[a-z]*)
+match (?P<punctuation>[(,\[{])\s*(?P<string>/(?:[^/\\]|\\.)*/[a-z]*)
+match (?P<keyword>when|if|elsif|unless|while|until|and|or|not|return)\s+(?P<string>/(?:[^/\\]|\\.)*/[a-z]*)
+
+# A method is defined under its name, which may end in ? ! or =, or be an
+# operator; def self.name defines one on the class.
+match (?P<keyword>def)\s+(?:(?P<keyword>self)(?P<punctuation>\.))?(?P<function>[A-Za-z_][A-Za-z0-9_]*[?!=]?|\[\]=?|<=>|===?|=~|![=~]?|<<|>>|<=|>=|\*\*|[-+]@|[-+*/%<>~^&|])
+# A class, and the class it inherits from: class Parser < Base::Parser.
+match (?P<keyword>class|module)\s+(?P<type>[A-Z][A-Za-z0-9_]*(?:::[A-Z][A-Za-z0-9_]*)*)(?:\s*(?P<operator><)\s*(?P<type>[A-Z][A-Za-z0-9_]*(?:::[A-Z][A-Za-z0-9_]*)*))?
+match keyword defined\?
+# A name ending in ? or ! is a method's: empty?, save!. x != y is not.
+match (?P<function>[A-Za-z_][A-Za-z0-9_]*[?!])(?:[^=~]|$)
+
+match operator ::
+# Symbols, and the labels that are a hash's symbol keys: :name, name: 1.
+match (?P<constant>[A-Za-z_][A-Za-z0-9_]*[?!]?:)(?:[^:]|$)
+match constant :"(?:[^"\\]|\\.)*"
+match constant :[A-Za-z_][A-Za-z0-9_]*[?!]?
+match constant :(?:\[\]=?|<=>|===?|=~|!=|!~|<<|>>|<=|>=|\*\*|[-+]@|[-+*/%<>!~^&|])
+# Instance, class and global variables.
+match constant @@?[A-Za-z_][A-Za-z0-9_]*
+match constant \$(?:[A-Za-z_][A-Za-z0-9_]*|-[A-Za-z0-9_]|[0-9]+|[!@&~;,/\\.<>:"$?*'+`=])
+
+keywords BEGIN END alias and begin break case class def do else elsif end
+keywords ensure for if in module next not or redo rescue retry return self
+keywords super then undef unless until when while yield raise
+keywords private protected public module_function
+
+constants true false nil __FILE__ __LINE__ __ENCODING__
+constants ARGV ARGF ENV DATA STDIN STDOUT STDERR RUBY_VERSION
+
+types Array BasicObject Class Comparable Complex Dir Encoding Enumerable
+types Enumerator Exception FalseClass File Float Hash Integer IO Kernel
+types Method Module NilClass Numeric Object Proc Random Range Rational
+types Regexp Set String Struct Symbol Thread Time TrueClass
+types StandardError RuntimeError ArgumentError TypeError NameError
+types NoMethodError KeyError IndexError ZeroDivisionError IOError
+
+functions attr_accessor attr_reader attr_writer include extend prepend
+functions require require_relative load puts print p pp printf sprintf
+functions format gets lambda proc loop catch throw sleep rand __dir__ __method__
+
+declares type class module
