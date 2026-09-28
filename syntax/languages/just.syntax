@@ -1,0 +1,30 @@
+# Justfiles: just's recipes, and the shell lines they run.
+
+language just
+files justfile .justfile *.just
+
+# A name may hold a -: dotenv-load, build-release.
+word-chars -
+numbers [0-9]+
+
+comment #
+string """ multiline
+string ''' raw multiline
+string "
+string ' raw
+string ``` raw multiline
+string ` raw
+
+# A recipe: its name, its parameters, and the : that is not :=.
+match ^@?(?P<function>[A-Za-z_][A-Za-z0-9_-]*)[^:]*:(?:[^=]|$)
+# A variable where it is set, and where a recipe's line reads it.
+match ^(?:(?P<keyword>export)\s+)?(?P<constant>[A-Za-z_][A-Za-z0-9_-]*)\s*:=
+match constant \{\{(?:[^}]|\}[^}])*\}\}
+# An attribute: [private], [group('ci')].
+match type ^\[[^\]]*\]
+
+keywords alias export import mod set unexport if else
+
+constants true false
+
+declares function alias

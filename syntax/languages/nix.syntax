@@ -1,0 +1,41 @@
+# Nix.
+
+language nix
+files *.nix
+
+# A function is applied by writing its argument after it, with no
+# parenthesis to find it by; the builtins are listed instead.
+calls none
+# A name may hold a - or a ': pkg-config and x' are names.
+word-chars -'
+operators +*/<>=!&|?@:
+
+comment #
+comment /* */
+string " multiline
+# An indented string, ''...'', in which ''' ''$ and ''\ are escapes.
+region string
+    start ''
+    end ''
+    escape ''(?:'|\$|\\.)
+    multiline
+
+# // is the update operator, not a path.
+match operator //
+# A path holds a /, and is a literal as a string is: ./a.nix, a/b, ~/x,
+# <nixpkgs>. Nix itself reads a/b as a path, which is why division needs
+# blanks around it.
+match string [A-Za-z0-9._+-]*(?:/[A-Za-z0-9._+-]+)+/?
+match string ~(?:/[A-Za-z0-9._+-]+)+/?
+match string <[A-Za-z0-9._+-]+(?:/[A-Za-z0-9._+-]+)*>
+# An attribute before its =, as a key is in TOML: a.b.c = 1;
+match (?P<function>[A-Za-z_][A-Za-z0-9_'-]*(?:\.[A-Za-z_][A-Za-z0-9_'-]*)*)\s*=(?:[^=]|$)
+match constant \$\{[^}]*\}
+
+keywords assert else if in inherit let or rec then with
+
+constants true false null builtins
+
+functions abort baseNameOf derivation dirOf fetchGit fetchTarball fetchTree
+functions fromTOML import isNull map placeholder removeAttrs scopedImport
+functions throw toString

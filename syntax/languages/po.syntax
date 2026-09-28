@@ -1,0 +1,17 @@
+# gettext's catalogues and templates.
+
+language po
+files *.po *.pot
+
+calls none
+numbers [0-9]+
+operators none
+punctuation none
+
+# #. #: #| and #~ are all comments; #, holds the flags, fuzzy among them,
+# which change what the entry means.
+comment #
+match ^(?P<comment>#,)(?P<keyword>.*)$
+string "
+
+keywords msgctxt msgid msgid_plural msgstr

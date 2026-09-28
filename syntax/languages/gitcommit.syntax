@@ -1,0 +1,29 @@
+# Git's commit messages, and the ones it asks for when merging, tagging and
+# squashing.
+#
+# Prose: only the comments git adds, a Conventional Commits prefix and the
+# trailers are coloured.
+
+language gitcommit
+files commit_editmsg merge_msg tag_editmsg squash_msg
+
+calls none
+numbers none
+operators none
+punctuation none
+
+comment #
+# Everything below the scissors line, the diff of commit -v, is left out of
+# the message, to the end of the file.
+region comment
+    start ^# -+ >8 -+$
+    end [^\x00-\x{10FFFF}]
+    multiline
+
+# feat(scope)!: summary
+match ^(?P<keyword>feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(?:\((?P<type>[^()]*)\))?(?P<keyword>!)?:(?:\s|$)
+# Signed-off-by:, Co-authored-by:, Fixes: and the like.
+match ^(?P<function>[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+|Fixes|Closes|Resolves|Refs|References|Cc|Link|Bug|BREAKING CHANGE):(?:\s|$)
+# A # starts a comment only at the very start of a line; anywhere else it is
+# text, as in "fixes #12".
+match plain [^#\s]+#+|\s#+

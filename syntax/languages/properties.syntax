@@ -1,0 +1,23 @@
+# Java's .properties files.
+
+language properties
+files *.properties
+
+calls none
+numbers none
+operators none
+punctuation none
+
+# A # or ! starts a comment only where a line's first rune does.
+comment #
+comment !
+# A key, up to an = or : or blank that is not escaped, and its value: the
+# rest of the line, where a # or ! is text.
+match ^[ \t\f]*(?P<function>(?:[^\s=:\\#!]|\\.)(?:[^\s=:\\]|\\.)*)(?:[ \t\f]*[=:][ \t\f]*|[ \t\f]+)?(?P<plain>(?:[^\\]|\\.)*)
+# A value ending in a lone \ goes on over the next line, which is value too,
+# whatever it starts with.
+region plain
+    start \\$
+    end (?:[^\\]|\\.)+$|^$
+    escape \\.
+    multiline

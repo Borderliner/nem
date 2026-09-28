@@ -1,0 +1,21 @@
+# Go's module and workspace files, go.mod and go.work.
+
+language gomod
+files go.mod go.work
+
+calls none
+operators =>
+punctuation ()[],
+numbers [0-9]+(?:\.[0-9]+)*(?:rc[0-9]+)?
+
+comment //
+string "
+string ` raw
+
+# A module's version - v1.2.3, a pseudo-version, +incompatible - and a
+# toolchain's, go1.22.1.
+match number v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?
+match number go[0-9]+(?:\.[0-9]+)*(?:rc[0-9]+)?\b
+
+keywords module go toolchain require replace exclude retract use godebug
+keywords tool ignore

@@ -1,0 +1,44 @@
+# LaTeX and TeX: documents, and the classes and packages they use.
+#
+# Prose, so only the markup is coloured: commands, environments, math and
+# comments. Words, numbers and punctuation are text.
+
+language latex
+files *.tex *.sty *.cls *.ltx *.dtx
+
+calls none
+numbers none
+operators none
+punctuation none
+
+comment %
+
+# A verbatim environment's body is text, % and $ and all, to its own \end.
+# \begin{ is read here, and the region below opens on the name after it;
+# the same name anywhere else, as in \usepackage{verbatim}, opens nothing.
+match (?P<keyword>\\begin\{)(?:verbatim\*?|Verbatim\*?|lstlisting|minted)\}
+match plain (?:^|[^A-Za-z0-9@\\])(?:verbatim\*?|Verbatim\*?|lstlisting|minted)\}
+region string
+    start (verbatim\*?|Verbatim\*?|lstlisting|minted)\}
+    end \\end\{\1\}
+    multiline
+# \verb and its text, to the next of the rune that follows it.
+match string \\(?:verb\*?|lstinline)(?:\|[^|]*\||\+[^+]*\+|![^!]*!|"[^"]*"|/[^/]*/|=[^=]*=|#[^#]*#|@[^@]*@|:[^:]*:|-[^-]*-|\.[^.]*\.|'[^']*')
+# An environment, named as a type.
+match (?P<keyword>\\(?:begin|end))\s*\{(?P<type>[^}]*)\}
+# A command, or a control symbol such as \% or \\. \[ and \( open math.
+match keyword \\(?:[A-Za-z@]+\*?|[^A-Za-z@\[(])
+
+# Math. $...$ and \(...\) end with their line, so a lone $ colours no more
+# than the rest of it; display math may run over lines.
+string $$ multiline
+string $
+region string
+    start \\\[
+    end \\\]
+    escape \\\\
+    multiline
+region string
+    start \\\(
+    end \\\)
+    escape \\\\

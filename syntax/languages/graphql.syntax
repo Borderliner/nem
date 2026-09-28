@@ -1,0 +1,22 @@
+# GraphQL: schemas, and the queries asked of them.
+
+language graphql
+files *.graphql *.gql *.graphqls
+
+comment #
+# A block string, """...""", which \""" does not close.
+string """ multiline
+string "
+
+match constant \$[A-Za-z_][A-Za-z0-9_]*
+match function @[A-Za-z_][A-Za-z0-9_]*
+
+keywords query mutation subscription fragment on type interface union enum
+keywords input scalar schema extend directive implements repeatable
+
+types Int Float String Boolean ID
+
+constants true false null
+
+declares type type interface union enum input scalar on implements
+declares function query mutation subscription fragment

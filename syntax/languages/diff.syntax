@@ -1,0 +1,25 @@
+# Patches: unified diffs, as diff, git and patch write them.
+#
+# Each line is coloured whole, by what starts it: an added line as a string,
+# a removed one as a constant, a hunk's header as a function and a file's as
+# a keyword. The lines around a change are left as they are.
+
+language diff
+files *.diff *.patch *.rej
+
+calls none
+numbers none
+operators none
+punctuation none
+
+match keyword ^diff .*$
+match keyword ^index .*$
+# A removed "-- note" is also "--- note", so a header is one that names a/
+# or /dev/null, a single path, or a path with a date after a tab.
+match keyword ^--- (?:[a-z]/|/dev/null|[^\t]*\t|\S+$).*$
+match keyword ^\+\+\+ (?:[a-z]/|/dev/null|[^\t]*\t|\S+$).*$
+match keyword ^(?:old mode|new mode|new file mode|deleted file mode|similarity index|dissimilarity index|rename from|rename to|copy from|copy to|Binary files|Only in) .*$
+match function ^@@@?[^@]*@@@?
+match string ^\+.*$
+match constant ^-.*$
+match comment ^\\ .*$

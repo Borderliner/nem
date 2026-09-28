@@ -1,0 +1,23 @@
+# Ignore files: git's, and those of the tools that borrow its patterns.
+
+language gitignore
+files .gitignore .dockerignore .npmignore .hgignore .prettierignore
+files .eslintignore .gcloudignore .containerignore
+
+calls none
+numbers none
+operators none
+punctuation none
+
+comment #
+# A # starts a comment only at the very start of a line; anywhere else, or
+# escaped as \#, it is part of the pattern.
+match plain [^#\s]+#+|\s#+
+match plain \\.
+# Mercurial's choice of pattern syntax.
+match keyword ^syntax:.*$
+# A pattern that takes back what an earlier one ignored.
+match operator ^!
+# The wildcards, and a class of runes.
+match keyword \*\*|[*?]
+match constant \[[^\]]*\]

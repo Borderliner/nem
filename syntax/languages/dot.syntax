@@ -1,0 +1,29 @@
+# Graphviz's DOT.
+
+language dot
+files *.dot *.gv
+
+# The keywords are the same in any case: digraph, Digraph, DIGRAPH.
+ignore-case
+calls none
+operators =
+punctuation {}[];,:
+
+comment //
+comment /* */
+# A line starting with # is a C preprocessor's, which Graphviz skips.
+match comment ^#.*$
+match operator ->|--
+# An attribute before its =, as a key is in TOML.
+match (?P<function>[A-Za-z_][A-Za-z0-9_]*)\s*=
+string " multiline
+# An HTML label, <...>, with its tags nested inside it.
+region string
+    start <
+    end >
+    nested
+    multiline
+
+keywords strict graph digraph subgraph node edge
+
+declares type graph digraph subgraph

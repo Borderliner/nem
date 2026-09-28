@@ -1,0 +1,38 @@
+# CMake: CMakeLists.txt, and the modules and scripts written in it.
+
+language cmake
+files cmakelists.txt *.cmake
+
+# A command is one command in any case - if(), IF() and If() - and so is a
+# boolean constant.
+ignore-case
+operators none
+punctuation ()
+
+comment #
+# A bracket comment or argument closes only at a bracket of its own level,
+# as Lua's long brackets do: ]] inside #[==[ ... ]==] is text.
+region comment
+    start #\[(=*)\[
+    end \]\1\]
+    multiline
+region string
+    start \[(=*)\[
+    end \]\1\]
+    multiline
+string " multiline
+
+# An escape outside quotes is text: \" opens no string and \# no comment.
+match plain \\.
+match constant \$(?:ENV|CACHE)?\{(?:[^{}]|\$\{[^{}]*\})*\}
+match constant \$<[A-Za-z0-9_]*
+# The name a function() or macro() defines comes after the parenthesis.
+match (?P<keyword>(?i:function|macro))\s*\(\s*(?P<function>[A-Za-z_][A-Za-z0-9_.-]*)
+# if()'s operators and a target's scopes, which, unlike commands, are
+# written in upper case only.
+match keyword (?:NOT|AND|OR|COMMAND|POLICY|TARGET|TEST|DEFINED|EXISTS|IS_NEWER_THAN|IS_DIRECTORY|IS_SYMLINK|IS_ABSOLUTE|IS_READABLE|IS_WRITABLE|IS_EXECUTABLE|MATCHES|LESS|GREATER|EQUAL|LESS_EQUAL|GREATER_EQUAL|STRLESS|STRGREATER|STREQUAL|STRLESS_EQUAL|STRGREATER_EQUAL|VERSION_LESS|VERSION_GREATER|VERSION_EQUAL|VERSION_LESS_EQUAL|VERSION_GREATER_EQUAL|PATH_EQUAL|IN_LIST|PUBLIC|PRIVATE|INTERFACE)\b
+
+keywords if elseif else endif foreach endforeach while endwhile function
+keywords endfunction macro endmacro block endblock return break continue
+
+constants on off true false yes no notfound

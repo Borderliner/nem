@@ -1,0 +1,24 @@
+# Protocol Buffers.
+
+language protobuf
+files *.proto
+
+calls none
+
+comment //
+comment /* */
+string "
+string '
+
+keywords syntax edition package import weak public option message enum
+keywords service rpc returns stream oneof map repeated optional required
+keywords reserved extensions extend group
+
+types double float int32 int64 uint32 uint64 sint32 sint64 fixed32 fixed64
+types sfixed32 sfixed64 bool string bytes
+
+constants true false inf nan
+
+declares type message enum service
+# An option's name is its key, as a key is in TOML.
+declares function rpc option

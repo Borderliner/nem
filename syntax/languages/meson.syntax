@@ -1,0 +1,25 @@
+# Meson's build files, and its options files.
+
+language meson
+files meson.build meson_options.txt meson.options
+
+comment #
+# A string may be a format string, f'...@var@...'. A triple-quoted one may
+# run over lines, and has no escapes.
+region string
+    start f?'''
+    end '''
+    multiline
+region string
+    start f?'
+    end '
+    escape \\.
+
+# The names foreach sets are not keyword arguments.
+match (?P<keyword>foreach)\s+(?P<plain>[A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)?)\s*:
+# A keyword argument, as a key is in TOML: install : true.
+match (?P<function>[A-Za-z_][A-Za-z0-9_]*)\s*:
+
+keywords if elif else endif foreach endforeach break continue and or not in
+
+constants true false meson build_machine host_machine target_machine

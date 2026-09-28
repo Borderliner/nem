@@ -1,0 +1,24 @@
+# Environment files: the KEY=value lines dotenv and Compose read.
+
+language dotenv
+files .env .env.* *.env
+
+calls none
+operators =
+punctuation none
+numbers [0-9]+(?:\.[0-9]+)*
+
+comment #
+string " multiline
+string ' raw
+
+match ^\s*(?:(?P<keyword>export)\s+)?(?P<function>[A-Za-z_][A-Za-z0-9_.-]*)\s*=
+match constant \$\{[^}]*\}
+match constant \$[A-Za-z_][A-Za-z0-9_]*
+# A # starts a comment only at the start of a line or after a blank:
+# COLOR=#fff and URL=https://x/#top keep theirs.
+match plain [^#\s"'$]+#+
+
+keywords export
+
+constants true false

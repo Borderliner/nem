@@ -1,0 +1,31 @@
+# HCL: Terraform, OpenTofu, Packer, Nomad and the rest of HashiCorp's
+# configuration.
+
+language hcl
+files *.tf *.tfvars *.hcl *.nomad
+
+comment #
+comment //
+comment /* */
+# A ${...} or %{...} inside a string is part of it, quotes and all:
+# "${var.a == "x" ? 1 : 2}" is one string.
+region string
+    start "
+    end "
+    escape \\.|\$\{[^}]*\}|%\{[^}]*\}
+# A here-document runs to a line holding only its word, indented or not.
+region string
+    start <<-?([A-Za-z_][A-Za-z0-9_-]*)
+    end ^\s*\1\s*$
+    multiline
+
+# A block's type, at the start of its header: resource "a" "b" {.
+match ^\s*(?P<keyword>[A-Za-z_][A-Za-z0-9_-]*)(?:\s+(?:"[^"]*"|[A-Za-z_][A-Za-z0-9_-]*))*\s*\{
+# An attribute before its =, as a key is in TOML; == and => are not one.
+match (?P<function>[A-Za-z_][A-Za-z0-9_-]*)\s*=(?:[^=>]|$)
+
+keywords for in if
+
+types string number bool list map set object tuple any
+
+constants true false null
