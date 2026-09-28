@@ -327,6 +327,7 @@ A command you define is a command like any other: `M-x` finds it, a key runs it,
 echo area while nem carries on with its defaults.
 
 Languages are configured beside `init.lua`, in `syntax/`, one small file each.
+`M-x set-language` colours a buffer as any language, remembered for its file.
 `M-x edit-language` opens the one on screen, a copy of nem's to change, or an
 outline of a language nem doesn't know; saving it recolours every buffer:
 
