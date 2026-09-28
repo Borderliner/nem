@@ -664,7 +664,9 @@ func (x *lineLexer) regionStart(i int) (k, to int, caps []string, ok bool) {
 			continue
 		}
 		if loc, ok := x.at(r.startRe, i); ok && loc[1] > bestTo {
-			best, bestTo, bestLoc = j, loc[1], loc
+			// A copy: at reports into one buffer, and the next start asked
+			// about would write its own captures over the winner's.
+			best, bestTo, bestLoc = j, loc[1], append(bestLoc[:0:0], loc...)
 		}
 	}
 	if best < 0 {

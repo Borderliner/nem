@@ -359,3 +359,12 @@ func TestWordDelimitersStandAlone(t *testing.T) {
 	d := def(t, "language a\ncomment --\n")
 	assertSpanCovers(t, d, "a --x", "--x", Comment)
 }
+
+// When several regions start at one place, the longest wins, and its end is
+// made of what its own start captured - not what another start matching
+// there after it did.
+func TestTheLongestStartKeepsItsCaptures(t *testing.T) {
+	l := def(t, "language a\nregion string\n    start %(\\w+)%\n    end \\1\nregion comment\n    start %(\\w)\n    end \\1\n")
+	assertClass(t, l, "q %ab% a z ab tail", "z", String)
+	assertClass(t, l, "q %ab% a z ab tail", "tail", Plain)
+}

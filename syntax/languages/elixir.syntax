@@ -20,9 +20,8 @@ region string
     end \1[A-Za-z]*
     escape \\.
     multiline
-# A heredoc sigil, ~S""" ... """. It must stay after the sigil above, which
-# also starts at ~S""": nem keeps what the last start to match captured,
-# not the longest's.
+# A heredoc sigil, ~S""" ... """: its start is longer than the sigil
+# above's, which also matches at ~S""", so it wins wherever it is listed.
 region string
     start ~(?:[a-z]|[A-Z][A-Z0-9]*)("""|''')
     end \1[A-Za-z]*
