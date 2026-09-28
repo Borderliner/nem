@@ -1,0 +1,43 @@
+# Groovy, and the Gradle builds and Jenkins pipelines written in it.
+
+language groovy
+files *.groovy *.gradle *.gvy jenkinsfile
+shebang groovy
+
+word-chars $
+
+comment //
+comment /* */
+string ''' multiline
+string """ multiline
+string '
+string "
+# A dollar-slashy string runs over lines, and $ is its escape: $/ and $$.
+string $/ /$ escape $ multiline
+
+match comment ^#!.*$
+# A slashy string is a pattern, written where a / cannot divide: after an
+# operator such as ~ or =~, or an opening bracket or a comma. It never
+# starts with * or /, which would be a comment.
+match (?P<operator>==~|=~|~|==|!=|=|\?|&&|\|\|)\s*(?P<string>/(?:[^/*\\]|\\.)(?:[^/\\]|\\.)*/)
+match (?P<punctuation>[(\[{,:])\s*(?P<string>/(?:[^/*\\]|\\.)(?:[^/\\]|\\.)*/)
+match (?P<keyword>@interface)(?:\s+(?P<type>[A-Za-z_$][A-Za-z0-9_$]*))?
+match function @[A-Za-z_$][A-Za-z0-9_$.]*
+match keyword non-sealed
+match (?P<keyword>record)\s+(?P<type>[A-Za-z_$][A-Za-z0-9_$]*)\s*[(<]
+
+keywords abstract as assert break case catch class const continue def default
+keywords do else enum extends final finally for goto if implements import in
+keywords instanceof interface native new package permits private protected
+keywords public return sealed static strictfp super switch synchronized this
+keywords throw throws trait transient try var volatile while yield
+
+types boolean byte char double float int long short void
+types BigDecimal BigInteger Boolean Byte Character Closure Double Float
+types GString Integer List Long Map Number Object Short String
+
+constants true false null
+
+functions print printf println sprintf
+
+declares type class interface enum trait record

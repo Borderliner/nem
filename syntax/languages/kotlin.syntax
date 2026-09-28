@@ -1,0 +1,46 @@
+# Kotlin.
+
+language kotlin
+files *.kt *.kts
+
+comment //
+comment /* */ nested
+# A raw string has no escapes, runs over lines, and ends at the last quote of
+# a run: """say "hi"""" holds say "hi".
+region string
+    start """
+    end "{3,}
+    multiline
+string "
+string '
+
+match comment ^#!.*$
+# A label on a jump is part of it: return@forEach, this@Outer.
+match keyword (?:return|break|continue|this|super)@[A-Za-z_][A-Za-z0-9_]*
+# An annotation, with its use-site target if it has one: @file:JvmName.
+match function @(?:[A-Za-z_][A-Za-z0-9_]*:)?[A-Za-z_][A-Za-z0-9_.]*
+# Modifiers that are also everyday names are keywords only before what they
+# modify: data class, but val data.
+match (?P<keyword>data|value|inner|annotation|expect|actual)\s+(?:class|object|interface|fun|val|var|typealias|enum|sealed|abstract|open|inner|data|value|annotation|constructor|internal|private|public|protected)\b
+match (?P<keyword>out)\s+[A-Za-z_]
+
+keywords abstract as break by catch class companion const constructor continue
+keywords crossinline do else enum external final finally for fun if import in
+keywords infix init inline interface internal is lateinit noinline object open
+keywords operator override package private protected public reified return
+keywords sealed super suspend tailrec this throw try typealias val var vararg
+keywords when where while
+
+types Any Array Boolean Byte Char Double Exception Float Int List Long Map
+types MutableList MutableMap MutableSet Nothing Number Pair Sequence Set Short
+types String Throwable Triple UByte UInt ULong UShort Unit
+
+constants true false null
+
+functions also apply arrayOf check checkNotNull emptyList emptyMap emptySet
+functions error lazy let listOf mapOf mutableListOf mutableMapOf mutableSetOf
+functions print println repeat require requireNotNull run setOf takeIf
+functions takeUnless TODO use with
+
+declares function fun
+declares type class interface object typealias

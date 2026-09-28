@@ -1,0 +1,49 @@
+# Dart.
+
+language dart
+files *.dart
+
+word-chars $
+
+# /// doc comments are line comments like any other.
+comment //
+comment /* */ nested
+string ''' multiline
+string """ multiline
+string '
+string "
+# r makes a string raw: no escapes, and $ is only a dollar.
+string r''' ''' raw multiline
+string r""" """ raw multiline
+string r' ' raw
+string r" " raw
+
+match comment ^#!.*$
+match function @[A-Za-z_$][A-Za-z0-9_$.]*
+match constant #[A-Za-z_$][A-Za-z0-9_$.]*
+match (?P<keyword>extension\s+type)\s+(?P<type>[A-Za-z_$][A-Za-z0-9_$]*)
+# Words that are keywords only where they are used as one, being everyday
+# names too: a getter or setter, an import's show and hide, part of.
+match (?P<keyword>get|set)\s+(?P<function>[A-Za-z_$][A-Za-z0-9_$]*)
+match (?P<keyword>show|hide)\s+[A-Za-z_$]
+match (?P<keyword>part\s+of)\s
+match (?P<keyword>part)\s+['"]
+match (?P<keyword>base)\s+(?:class|mixin)\b
+
+keywords abstract as assert async await break case catch class const continue
+keywords covariant default deferred do else enum export extends extension
+keywords external factory final finally for if implements import in interface
+keywords is late library mixin new on operator required rethrow return sealed
+keywords static super switch sync this throw try typedef var when while with
+keywords yield
+
+types bool double dynamic int num void
+types BigInt DateTime Duration Error Exception Function Future FutureOr
+types Iterable List Map Never Null Object Record RegExp Set Stream String
+types Symbol Type Uri
+
+constants true false null
+
+functions identical print
+
+declares type class enum mixin extension typedef

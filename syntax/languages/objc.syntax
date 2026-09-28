@@ -1,0 +1,28 @@
+# Objective-C, which is C and more.
+
+language objc
+like c
+files *.m *.mm
+
+string @" "
+
+match constant @(?:YES|NO|true|false)\b
+match (?P<keyword>@(?:interface|implementation|protocol|class))\s+(?P<type>[A-Za-z_][A-Za-z0-9_]*)
+# Every other @word is the language's own: @end, @property, @selector.
+match keyword @[A-Za-z_][A-Za-z0-9_]*
+# A method: - (void)name, + (instancetype)shared, - (NSString *)title.
+match ^\s*(?P<operator>[-+])\s*\(\s*(?P<type>[A-Za-z_][A-Za-z0-9_]*)[\s*]*\)\s*(?P<function>[A-Za-z_][A-Za-z0-9_]*)
+
+keywords in super
+keywords atomic nonatomic strong weak assign readonly readwrite nullable
+keywords nonnull null_unspecified unsafe_unretained
+keywords __autoreleasing __block __bridge __bridge_retained __bridge_transfer
+keywords __kindof __strong __unsafe_unretained __unused __weak _Nonnull
+keywords _Null_unspecified _Nullable
+
+types id instancetype BOOL SEL IMP Class Protocol NSInteger NSUInteger
+types CGFloat NSTimeInterval NSObject NSString NSMutableString NSArray
+types NSMutableArray NSDictionary NSMutableDictionary NSSet NSNumber NSData
+types NSError
+
+constants YES NO nil Nil self

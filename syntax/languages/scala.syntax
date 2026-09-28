@@ -1,0 +1,50 @@
+# Scala 2 and 3.
+
+language scala
+files *.scala *.sc
+shebang scala
+
+comment //
+comment /* */ nested
+# A triple-quoted string has no escapes, runs over lines, and ends at the
+# last quote of a run. A name just before a quote is an interpolator, and
+# the string is its: s"...", f"...", raw"""...""".
+region string
+    start (?:[A-Za-z_][A-Za-z0-9_]*)?"""
+    end "{3,}
+    multiline
+region string
+    start [A-Za-z_][A-Za-z0-9_]*"
+    end "
+    escape \\.|\$[$"]
+string "
+
+# A character, then Scala 2's symbol: 'a' and '\n' close, 'name does not.
+match string '(?:\\.[^']*|[^'\\])'
+match constant '[A-Za-z_][A-Za-z0-9_]*
+match comment ^#!.*$
+match function @[A-Za-z_][A-Za-z0-9_.]*
+# Backquotes make any name a plain one, a keyword included: `type`.
+match plain `[^`]+`
+# end closes a block in Scala 3, and is a name anywhere else.
+match ^\s*(?P<keyword>end)(?:\s|$)
+match (?P<keyword>open)\s+(?:class|trait|abstract|case|sealed|final|enum)\b
+
+keywords abstract case catch class def do else extends final finally for
+keywords forSome if implicit import lazy match new object override package
+keywords private protected return sealed super this throw trait try type val
+keywords var while with yield
+keywords enum export given then
+keywords as derives extension infix inline opaque transparent using
+
+types Any AnyRef AnyVal Array BigDecimal BigInt Boolean Byte Char Double
+types Either Float Int Iterator List Long Map Nothing Null Option Seq Set
+types Short String Unit Vector
+
+constants true false null None Some Nil
+
+functions assert assume identity implicitly print printf println require
+functions summon
+
+declares function def
+declares type class trait object type enum

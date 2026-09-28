@@ -1,0 +1,51 @@
+# C#.
+
+language csharp
+files *.cs *.csx
+
+comment //
+comment /* */
+# A raw string opens with three quotes or more, after any $s, and closes
+# only at as many.
+region string
+    start \$*("{3,})
+    end \1
+    multiline
+# A verbatim string runs over lines, and "" inside it is a quote.
+string @" " doubled multiline
+string $@" " doubled multiline
+string @$" " doubled multiline
+string $" "
+string "
+string '
+
+match comment ^#!.*$
+match keyword ^\s*#:?\s*[a-z]+
+# An attribute at the start of a line: [Obsolete], [assembly: Guid("...")].
+match ^\s*\[(?:(?P<keyword>assembly|module|return|field|property|method|param|type|event|typevar)\s*:\s*)?(?P<function>[A-Z][A-Za-z0-9_.]*)
+# @ makes any name a plain one, a keyword included: @class.
+match plain @[A-Za-z_][A-Za-z0-9_]*
+# record is a keyword only where it declares one, since it is also an
+# everyday name: record Point(int X, int Y);, but var record = Next();.
+match (?P<keyword>record)(?:\s+(?P<keyword>class|struct))?\s+(?P<type>[A-Za-z_][A-Za-z0-9_]*)(?:\s*[(<{:]|\s*$)
+
+keywords abstract as base break case catch checked class const continue
+keywords default delegate do else enum event explicit extern finally fixed
+keywords for foreach goto if implicit in interface internal is lock namespace
+keywords new operator out override params private protected public readonly
+keywords ref return sealed sizeof stackalloc static struct switch this throw
+keywords try typeof unchecked unsafe using virtual volatile while
+keywords add and ascending async await by descending equals from get global
+keywords group init into join let nameof not notnull on or orderby partial
+keywords remove required scoped select set unmanaged var when where with
+keywords yield
+
+types bool byte char decimal double dynamic float int long nint nuint object
+types sbyte short string uint ulong ushort void
+types Action Console DateTime Dictionary Exception Func Guid HashSet
+types IEnumerable IList List Math Object ReadOnlySpan Span String Task
+types TimeSpan ValueTask
+
+constants true false null
+
+declares type class struct interface enum record

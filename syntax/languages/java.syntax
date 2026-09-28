@@ -1,0 +1,36 @@
+# Java.
+
+language java
+files *.java
+
+word-chars $
+
+comment //
+comment /* */
+# A text block runs over lines to its closing """.
+string """ multiline
+string "
+string '
+
+# @interface declares an annotation type; any other @Name is an annotation.
+match (?P<keyword>@interface)(?:\s+(?P<type>[A-Za-z_$][A-Za-z0-9_$]*))?
+match function @[A-Za-z_$][A-Za-z0-9_$.]*
+match keyword non-sealed
+# record is a keyword only where it declares one, since it is also an
+# everyday name: record Point(int x, int y) {}, but for (var record : rows).
+match (?P<keyword>record)\s+(?P<type>[A-Za-z_$][A-Za-z0-9_$]*)\s*[(<]
+
+keywords abstract assert break case catch class const continue default do
+keywords else enum extends final finally for goto if implements import
+keywords instanceof interface native new package permits private protected
+keywords public return sealed static strictfp super switch synchronized this
+keywords throw throws transient try var volatile when while yield
+
+types boolean byte char double float int long short void
+types Boolean Byte Character Class Double Exception Float Integer Iterable
+types Long Math Number Object Runnable RuntimeException Short String
+types StringBuilder System Thread Throwable Void
+
+constants true false null
+
+declares type class interface enum record

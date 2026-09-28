@@ -1,0 +1,63 @@
+# F#.
+
+language fsharp
+files *.fs *.fsi *.fsx
+
+# A name may end in primes: x', acc''.
+word-chars '
+operators +-*/%&|^<>=!~?:@
+
+comment //
+# (* *) nests, and a (*) inside one is the operator, not another opening.
+region comment
+    start \(\*
+    end \*\)
+    escape \(\*\)
+    nested
+    multiline
+# Every string may run over lines. A triple-quoted one has no escapes.
+region string
+    start \$*"""
+    end """
+    multiline
+string @" " doubled multiline
+string $@" " doubled multiline
+string @$" " doubled multiline
+string $" " multiline
+string " multiline
+
+# (*) is multiplication as a function, not a comment.
+match operator \(\*\)
+match comment ^#!.*$
+match keyword ^\s*#[A-Za-z]+
+# A character, then a type variable: 'a' and '\n' close, 'T does not.
+match string '(?:\\.[^']*|[^'\\])'
+match type '[A-Za-z_][A-Za-z0-9_]*
+match \[<\s*(?P<function>[A-Za-z_][A-Za-z0-9_.]*)
+# A member's name, after the self identifier if it has one: this.Name.
+match (?P<keyword>member\s+val)\b
+match (?P<keyword>member|override|default)\s+(?:(?P<keyword>inline)\s+)?(?:[A-Za-z_][A-Za-z0-9_']*\.)?(?P<function>[A-Za-z_][A-Za-z0-9_']*)
+# let f x = ... defines a function, let x = ... a value: the name is a
+# function when a parameter follows it. rec and inline declare one anyway.
+match (?P<keyword>let|and)\s+(?:rec|inline|mutable|private|internal|public)\b
+match (?P<keyword>let|and)\s+(?P<function>[A-Za-z_][A-Za-z0-9_']*)(?:\s+[A-Za-z_'(]|\s*\()
+
+keywords abstract and as assert base begin class const default delegate do
+keywords done downcast downto elif else end exception extern finally fixed
+keywords for fun function global if in inherit inline interface internal lazy
+keywords let match member module mutable namespace new of open or override
+keywords private public rec return select sig static struct then to try type
+keywords upcast use val when while with yield
+
+types bigint bool byte char decimal double exn float float32 int int16 int32
+types int64 int8 nativeint obj sbyte single string uint uint16 uint32 uint64
+types uint8 unativeint unit void array list option seq voption
+
+constants true false null None Some Ok Error
+
+functions box compare decr eprintf eprintfn failwith failwithf fst hash id
+functions ignore incr invalidArg invalidOp isNull nameof not nullArg printf
+functions printfn raise reraise ref snd sprintf typedefof typeof unbox
+
+declares function rec inline
+declares type type exception

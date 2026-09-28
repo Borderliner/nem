@@ -1,0 +1,56 @@
+# Visual Basic .NET and VBScript, which are written in any case.
+
+language vb
+files *.vb *.vbs
+ignore-case
+
+operators +-*/\^&=<>?
+punctuation ()[]{},.:!
+# Digits with _, a fraction, an exponent, then a type suffix: 10UL, 1.5D, 7%.
+numbers (?:[0-9][0-9_]*(?:\.[0-9][0-9_]*)?|\.[0-9][0-9_]*)(?:[eE][-+]?[0-9]+)?(?:[A-Za-z]{1,2}|[!#%&@])?
+
+comment '
+# REM is a statement: a comment to the end of the line.
+match comment (?i)rem(?:[ \t].*)?$
+string $" " doubled
+string " doubled
+
+# A character: "a"c.
+match string "(?:[^"]|"")"[cC]\b
+match number &(?:[Hh][0-9A-Fa-f_]+|[Oo][0-7_]+|[Bb][01_]+)(?:[A-Za-z]{1,2}|[!#%&@])?
+# A date: #12/31/2025#, #2025-12-31 10:30 PM#.
+match number #\s*[0-9][0-9/:. -]*(?:[AaPp][Mm])?\s*#
+match keyword (?i)^\s*#(?:end\s+(?:if|region|externalsource)|[a-z]+)
+# An attribute at the start of a line: <Serializable>, <DllImport("x")>.
+match ^\s*<(?P<function>[A-Za-z_][A-Za-z0-9_.]*)
+
+keywords AddHandler AddressOf Aggregate Alias And AndAlso As Ascending Async
+keywords Await ByRef ByVal Call Case Catch Class Const Continue Custom Declare
+keywords Default Delegate Descending Dim Do Each Else ElseIf End EndIf Enum
+keywords Erase Error Event Execute ExecuteGlobal Exit Explicit Finally For
+keywords Friend From Function Get GetType GetXMLNamespace Global GoSub GoTo
+keywords Handles If Implements Imports In Infer Inherits Interface Into Is
+keywords IsNot Iterator Let Lib Like Loop Me Mod Module MustInherit
+keywords MustOverride MyBase MyClass NameOf Namespace Narrowing New Next Not
+keywords NotInheritable NotOverridable Of Off On Operator Option Optional Or
+keywords OrElse Overloads Overridable Overrides ParamArray Partial Preserve
+keywords Private Property Protected Public RaiseEvent ReadOnly ReDim
+keywords RemoveHandler Resume Return Select Set Shadows Shared Static Step
+keywords Stop Strict Structure Sub SyncLock Then Throw To Try TypeOf Until
+keywords Using Wend When While Widening With WithEvents WriteOnly Xor Yield
+
+types Boolean Byte Char Currency Date Decimal Double Integer Long Object
+types SByte Short Single String UInteger ULong UShort Variant
+
+constants True False Nothing Empty Null vbCr vbCrLf vbLf vbNewLine vbNullChar
+constants vbNullString vbTab
+
+functions Abs Array Asc AscW CBool CByte CChar CDate CDbl CDec Chr ChrW CInt
+functions CLng CObj CreateObject CSByte CShort CSng CStr CType CUInt CULng
+functions CUShort DirectCast Fix Format GetObject InputBox InStr InStrRev Int
+functions IsArray IsDate IsEmpty IsNothing IsNull IsNumeric Join LBound LCase
+functions Left Len LTrim Mid MsgBox Now Randomize Replace Right Rnd Round
+functions RTrim Space Split Sqr Trim TryCast TypeName UBound UCase Val VarType
+
+declares function Function Sub
+declares type Class Structure Interface Enum Module

@@ -1,0 +1,57 @@
+# Swift.
+
+language swift
+files *.swift
+
+comment //
+comment /* */ nested
+string """ multiline
+string "
+# A raw string is fenced with #s, and closes only at a quote and as many:
+# #"a "quoted" \n"#.
+region string
+    start (#+)"""
+    end """\1
+    multiline
+region string
+    start (#+)"
+    end "\1
+# A regex literal fenced the same way: #/[a-z]+/#.
+region string
+    start (#+)/
+    end /\1
+    multiline
+
+match comment ^#!.*$
+match keyword #[A-Za-z_][A-Za-z0-9_]*
+match function @[A-Za-z_][A-Za-z0-9_]*
+# Backquotes make any name a plain one, a keyword included: `default`.
+match plain `[^`]+`
+# class var is a type's own property, not the declaration of a class.
+match (?P<keyword>class)\s+(?:var|let|subscript)\b
+# Modifiers that are also everyday names, before what they modify.
+match (?P<keyword>open|optional|package)\s+[a-z]
+
+keywords actor any as associatedtype async await borrowing break case catch
+keywords class consuming continue convenience default defer deinit didSet do
+keywords dynamic else enum extension fallthrough fileprivate final for func
+keywords get guard if import in indirect infix init inout internal is
+keywords isolated lazy let macro mutating nonisolated nonmutating operator
+keywords override postfix precedencegroup prefix private protocol public
+keywords repeat required rethrows return self Self set some static struct
+keywords subscript super switch throw throws try typealias unowned var weak
+keywords where while willSet
+
+types Any AnyObject Array Bool CGFloat Character Dictionary Double Error
+types Float Float16 Float80 Int Int16 Int32 Int64 Int8 Never Optional Result
+types Set String Substring UInt UInt16 UInt32 UInt64 UInt8 Void
+
+constants true false nil
+
+functions abs assert assertionFailure debugPrint dump fatalError max min
+functions precondition preconditionFailure print readLine repeatElement
+functions stride swap type zip
+
+declares function func
+declares type class struct enum protocol extension actor typealias
+declares type associatedtype
