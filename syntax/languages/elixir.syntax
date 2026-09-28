@@ -1,0 +1,72 @@
+# Elixir.
+#
+# :ok is an atom and so is the ok: of a keyword list; @name is a module
+# attribute. A capitalised name is a module. A sigil's delimiter is the
+# writer's choice, so its end is what its start captured.
+
+language elixir
+files *.ex *.exs
+shebang elixir
+
+word-chars ?
+
+comment #
+string " multiline
+string ' multiline
+string """ multiline
+string ''' multiline
+region string
+    start ~(?:[a-z]|[A-Z][A-Z0-9]*)([/|"'])
+    end \1[A-Za-z]*
+    escape \\.
+    multiline
+# A heredoc sigil, ~S""" ... """. It must stay after the sigil above, which
+# also starts at ~S""": nem keeps what the last start to match captured,
+# not the longest's.
+region string
+    start ~(?:[a-z]|[A-Z][A-Z0-9]*)("""|''')
+    end \1[A-Za-z]*
+    multiline
+region string
+    start ~(?:[a-z]|[A-Z][A-Z0-9]*)\(
+    end \)[A-Za-z]*
+    escape \\.
+    multiline
+region string
+    start ~(?:[a-z]|[A-Z][A-Z0-9]*)\[
+    end \][A-Za-z]*
+    escape \\.
+    multiline
+region string
+    start ~(?:[a-z]|[A-Z][A-Z0-9]*)\{
+    end \}[A-Za-z]*
+    escape \\.
+    multiline
+region string
+    start ~(?:[a-z]|[A-Z][A-Z0-9]*)<
+    end >[A-Za-z]*
+    escape \\.
+    multiline
+
+# :: in a type or a binary is an operator, not the start of an atom.
+match operator ::
+match constant :"(?:[^"\\]|\\.)*"
+match constant :[A-Za-z_][A-Za-z0-9_@]*[?!]?
+match (?P<constant>[A-Za-z_][A-Za-z0-9_]*[?!]?:)(?:\s|$)
+# A character: ?a, ?\n.
+match constant \?(?:\\.|[^\s\\])
+match constant @[a-z_][A-Za-z0-9_]*
+# A name ending in ! is one name where it is called: File.read!(path).
+match (?P<function>[a-z_][A-Za-z0-9_]*!)\s*\(
+match type [A-Z][A-Za-z0-9_]*
+
+keywords after alias and case catch cond def defdelegate defexception
+keywords defguard defguardp defimpl defmacro defmacrop defmodule
+keywords defoverridable defp defprotocol defstruct do else end fn for if
+keywords import in not or quote raise receive require rescue reraise super
+keywords throw try unless unquote unquote_splicing use when with
+
+constants true false nil __CALLER__ __DIR__ __ENV__ __MODULE__
+constants __STACKTRACE__
+
+declares function def defp defmacro defmacrop defguard defguardp defdelegate

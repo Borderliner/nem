@@ -1,0 +1,58 @@
+# Scheme: R7RS, and what Racket, Guile and Chicken add to it.
+#
+# As in Lisp, a name may hold nearly any rune and the name just after a ( is
+# what is called: (define (square x) ...) colours square for that reason,
+# while (define x 1) leaves x alone.
+
+language scheme
+files *.scm *.ss *.sld *.sls *.rkt *.rktl
+shebang guile racket csi gsi chez
+
+calls lisp
+word-chars -*+!?<>=/:%&.$^~
+operators '`,@#|
+punctuation ()[]{}
+
+numbers [-+]?(?:[0-9]+/[0-9]+|[0-9]+(?:\.[0-9]*)?(?:[eE][-+]?[0-9]+)?|\.[0-9]+(?:[eE][-+]?[0-9]+)?)
+
+comment ;;
+comment ;
+comment #| |# nested
+string " multiline
+# Racket's regexps: #rx"..." and #px"...".
+region string
+    start #[rp]x#?"
+    end "
+    escape \\.
+    multiline
+
+# A #! line naming the interpreter, then #!r6rs and the like.
+match comment ^#![ /].*$
+match keyword #![A-Za-z][A-Za-z0-9-]*
+match keyword ^#lang\b
+# #; comments out the datum after it. A pattern cannot count brackets, so a
+# list is followed two deep and no further.
+match comment #;\s*(?:\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|"(?:[^"\\]|\\.)*"|[^\s()\[\]";]+)?
+match constant #(?:true|false|t|f)\b
+match constant #\\(?:[A-Za-z][A-Za-z0-9_+-]*|.)
+match number #(?:[xX][-+]?[0-9a-fA-F]+(?:/[0-9a-fA-F]+)?|[bB][-+]?[01]+(?:/[01]+)?|[oO][-+]?[0-7]+(?:/[0-7]+)?|[dDeEiI][-+]?[0-9][0-9./eE+-]*)
+# Racket's and Guile's #:keyword, and a quoted symbol.
+match constant #:[^\s()\[\]{}"'`,;|\\]+
+match constant '[^\s()\[\]{}"'`,;|\\]+
+
+keywords and begin case case-lambda cond cond-expand define define-library
+keywords define-record-type define-syntax define-values delay delay-force do
+keywords else export guard if import include include-ci lambda let let*
+keywords let*-values let-syntax let-values letrec letrec* letrec-syntax
+keywords library or parameterize quasiquote quote set! syntax-case
+keywords syntax-rules unless unquote unquote-splicing when =>
+# Racket's and Guile's.
+keywords define* define-macro define-module define-public define-struct
+keywords fluid-let for for* for/and for/fold for/hash for/list for/or
+keywords for/sum for/vector lambda* match match-define match-lambda match-let
+keywords module module+ provide receive require struct use-modules λ
+
+constants +inf.0 -inf.0 +nan.0 -nan.0
+
+declares function define-syntax define-macro
+declares type define-record-type define-struct struct

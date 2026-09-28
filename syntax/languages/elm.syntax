@@ -1,0 +1,23 @@
+# Elm.
+#
+# A capitalised name is a type, a constructor or a module; True and False are
+# the constants among them.
+
+language elm
+files *.elm
+
+calls none
+
+comment --
+comment {- -} nested
+string "
+string """ multiline
+string '
+
+match constant (?:True|False)\b
+match type [A-Z][A-Za-z0-9_]*
+# The name a type annotation is for: update : Msg -> Model -> Model.
+match ^\s*(?P<function>[a-z][A-Za-z0-9_]*)\s*:(?:[^:]|$)
+
+keywords alias as case effect else exposing if import in infix let module
+keywords of port then type where

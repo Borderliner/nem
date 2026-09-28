@@ -1,0 +1,24 @@
+# Gleam.
+#
+# A capitalised name is a type or a constructor; True, False and Nil are the
+# constants among them.
+
+language gleam
+files *.gleam
+
+# One comment covers the three: // a note, /// a definition's documentation,
+# //// the module's.
+comment //
+string " multiline
+
+# An attribute: @external(erlang, "lists", "reverse"), @deprecated("...").
+match keyword @[a-z_][a-z0-9_]*
+match constant (?:True|False|Nil)\b
+match type [A-Z][A-Za-z0-9]*
+
+keywords as assert case const echo fn if import let opaque panic pub todo
+keywords type use
+# Reserved for the future.
+keywords auto delegate derive else implement macro test
+
+declares function fn

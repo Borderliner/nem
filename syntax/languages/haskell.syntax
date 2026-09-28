@@ -1,0 +1,42 @@
+# Haskell.
+#
+# A capitalised name is a type, a constructor or a module. An operator is any
+# run of symbol runes, so --> and |-- are operators, while two or more dashes
+# on their own start a comment.
+
+language haskell
+files *.hs
+shebang runhaskell runghc stack
+
+calls none
+word-chars '
+
+# Listed first so that M-; writes --. The match below reads a -- comment,
+# and the operator after it any other run of symbols, so this line never
+# starts one itself.
+comment --
+comment {- -} nested
+# A pragma: {-# LANGUAGE GADTs #-}.
+region keyword
+    start \{-#
+    end #-\}
+    multiline
+string "
+
+match comment ^#!.*$
+# The C preprocessor, which {-# LANGUAGE CPP #-} turns on.
+match keyword ^#\s*[a-z]+
+match comment --+(?:[^!#$%&*+./<=>?@\\^|~:-].*)?$
+# A character: 'a', '\n', '\''. A ' after a name is part of it: foldl'.
+match string '(?:\\.[^']*|[^'\\])'
+match constant (?:True|False)\b
+match type [A-Z][A-Za-z0-9_']*
+# The name a type signature is for.
+match ^\s*(?P<function>[a-z_][A-Za-z0-9_']*)\s*::
+# as names a module only in an import: import qualified Data.Map as M.
+match (?P<keyword>as)\s+[A-Z]
+match operator [!#$%&*+./<=>?@\\^|~:-]+
+
+keywords case class data default deriving do else family forall foreign
+keywords hiding if import in infix infixl infixr instance let mdo module
+keywords newtype of qualified then type where

@@ -1,0 +1,54 @@
+# Clojure, ClojureScript and EDN.
+#
+# As in Lisp, a name may hold nearly any rune and the name just after a ( is
+# what is called. A capitalised name is a Java class or a record.
+
+language clojure
+files *.clj *.cljs *.cljc *.edn *.bb
+shebang bb
+
+calls lisp
+word-chars -*+!?<>=/:%&.$'
+operators `~@^#
+punctuation ()[]{},
+
+# A radix, a ratio, a BigInt or BigDecimal: 0xFF, 2r1010, 1/2, 1N, 1.5M.
+numbers [-+]?(?:0[xX][0-9a-fA-F]+N?|[0-9]+[rR][0-9a-zA-Z]+|[0-9]+/[0-9]+|[0-9]+(?:\.[0-9]*)?(?:[eE][-+]?[0-9]+)?[NM]?)
+
+comment ;;
+comment ;
+comment #!
+string " multiline
+# A regexp: #"\d+".
+string #" " multiline
+
+# #_ discards the form after it. A pattern cannot count brackets, so a list
+# is followed two deep and no further.
+match comment #_\s*(?:\((?:[^()]|\([^()]*\))*\)|\[(?:[^\[\]]|\[[^\[\]]*\])*\]|\{(?:[^{}]|\{[^{}]*\})*\}|"(?:[^"\\]|\\.)*"|[^\s()\[\]{}";]+)?
+# A character: \a, \newline, \u00e9, and \( or \" standing for themselves.
+match constant \\(?:newline|space|tab|formfeed|backspace|return|u[0-9a-fA-F]{4}|o[0-7]{1,3}|.)
+match constant ##(?:Inf|-Inf|NaN)
+match keyword #\?@?
+# A keyword, a quoted symbol, a var.
+match constant ::?[^\s()\[\]{}"`,;@^~\\]+
+match constant '[^\s()\[\]{}"`,;@^~\\]+
+match function #'[^\s()\[\]{}"`,;@^~\\]+
+# A class or a record: String, Point. One followed by / or . is the start of
+# a longer name - Math/abs, Point. - and is read as that name.
+match (?P<type>[A-Z][A-Za-z0-9_$]*)(?:[^A-Za-z0-9_$/.*+!?<>=:%&'-]|$)
+
+# The special forms, then the core macros that bind, branch, loop or
+# declare.
+keywords catch def do finally fn fn* if let letfn loop monitor-enter
+keywords monitor-exit new quote recur set! throw try var
+keywords and binding case comment cond condp declare definline definterface
+keywords defmacro defmethod defmulti defn defn- defonce defprotocol defrecord
+keywords defstruct deftype delay doseq dotimes doto extend-protocol
+keywords extend-type for if-let if-not if-some import lazy-seq locking ns or
+keywords proxy refer reify require use when when-first when-let when-not
+keywords when-some while with-local-vars with-open with-redefs
+
+constants true false nil
+
+declares function defn defn- defmacro defmulti defmethod definline
+declares type defprotocol defrecord deftype definterface defstruct

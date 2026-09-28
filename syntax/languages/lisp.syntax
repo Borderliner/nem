@@ -1,0 +1,72 @@
+# Common Lisp.
+#
+# A name may hold nearly any rune, so 1+, *print-base* and string= are each
+# one name, and the name just after a ( is what is called. The reader folds
+# case, so DEFUN is defun.
+
+language lisp
+files *.lisp *.lsp *.cl *.asd
+shebang sbcl clisp
+
+ignore-case
+calls lisp
+word-chars -*+!?<>=/:%&.$^~
+operators '`,@#|
+punctuation ()[]{}
+
+# An integer, a ratio or a float, any of them signed: -1, 1/2, 1.5d0, .5.
+numbers [-+]?(?:[0-9]+/[0-9]+|[0-9]+(?:\.[0-9]*)?(?:[esfdlESFDL][-+]?[0-9]+)?|\.[0-9]+(?:[esfdlESFDL][-+]?[0-9]+)?)
+
+# ;; is what a programmer writes by hand, so M-; writes it.
+comment ;;
+comment ;
+comment #| |# nested
+string " multiline
+
+# A #! line, which a script run by sbcl --script may start with.
+match comment ^#![ /].*$
+# A character: #\a, #\Space, and #\( or #\" standing for themselves.
+match constant #\\(?:[A-Za-z][A-Za-z0-9_+-]*|.)
+# A number in another radix: #x1F, #b101, #o17, #36rZZ.
+match number #(?:[xX][-+]?[0-9a-fA-F]+(?:/[0-9a-fA-F]+)?|[bB][-+]?[01]+(?:/[01]+)?|[oO][-+]?[0-7]+(?:/[0-7]+)?|[0-9]+[rR][-+]?[0-9a-zA-Z]+)
+# A feature expression, read or skipped at read time: #+sbcl, #-(and).
+match keyword #[+-]:?[A-Za-z0-9_-]*
+# A keyword, an uninterned symbol, a quoted symbol, a function by name.
+match constant #?:[^\s()\[\]{}"'`,;|\\]+
+match constant '[^\s()\[\]{}"'`,;|\\]+
+match function #'[^\s()\[\]{}"'`,;|\\]+
+
+# The special operators, then the standard macros that bind, branch, loop
+# or declare.
+keywords block catch eval-when flet function go if labels let let*
+keywords load-time-value locally macrolet multiple-value-call
+keywords multiple-value-prog1 progn progv quote return-from setq
+keywords symbol-macrolet tagbody the throw unwind-protect
+keywords and case ccase cond ctypecase declaim declare defclass defconstant
+keywords defgeneric define-compiler-macro define-condition
+keywords define-method-combination define-modify-macro define-setf-expander
+keywords define-symbol-macro defmacro defmethod defpackage defparameter
+keywords defsetf defstruct deftype defun defvar destructuring-bind do do*
+keywords do-all-symbols do-external-symbols do-symbols dolist dotimes ecase
+keywords etypecase handler-bind handler-case ignore-errors in-package lambda
+keywords loop multiple-value-bind multiple-value-setq or prog prog* prog1
+keywords prog2 restart-bind restart-case return setf typecase unless when
+keywords with-accessors with-compilation-unit with-condition-restarts
+keywords with-hash-table-iterator with-input-from-string with-open-file
+keywords with-open-stream with-output-to-string with-package-iterator
+keywords with-simple-restart with-slots with-standard-io-syntax
+keywords &allow-other-keys &aux &body &environment &key &optional &rest &whole
+
+# Types that are not also the names of functions: (list 1 2) is a call.
+types array bignum bit-vector boolean condition double-float fixnum
+types hash-table integer keyword long-float number package ratio readtable
+types real sequence short-float simple-array simple-bit-vector simple-string
+types simple-vector single-float standard-char standard-object stream
+types structure-object symbol
+
+constants t nil
+
+declares function defun defmacro defgeneric defmethod define-compiler-macro
+declares function defsetf define-modify-macro
+declares type defclass defstruct deftype define-condition
+declares constant defconstant

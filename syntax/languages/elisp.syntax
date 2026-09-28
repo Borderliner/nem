@@ -1,0 +1,54 @@
+# Emacs Lisp.
+#
+# As in Lisp, a name may hold nearly any rune and the name just after a ( is
+# what is called. ?a is a character, and ? inside a name is part of it.
+
+language elisp
+files *.el .emacs
+
+calls lisp
+word-chars -*+!?<>=/:%&.$^~
+operators '`,@#
+punctuation ()[]
+
+numbers [-+]?(?:[0-9]+(?:\.[0-9]*)?(?:[eE][-+]?[0-9]+)?|\.[0-9]+(?:[eE][-+]?[0-9]+)?)
+
+comment ;;
+comment ;
+string " multiline
+
+# A character: ?a, ?\n, ?\C-x, ?\M-\C-a, ?\^I, ?\x41, and ?( or ?" standing
+# for themselves.
+match constant \?(?:\\(?:[ACHMSs]-\\)*[ACHMSs]-.|\\x[0-9a-fA-F]+|\\u[0-9a-fA-F]{4}|\\U[0-9a-fA-F]{8}|\\N\{[^}]*\}|\\[0-7]{1,3}|\\\^.|\\.|.)
+match number #(?:[xX][-+]?[0-9a-fA-F]+|[bB][-+]?[01]+|[oO][-+]?[0-7]+|[0-9]+[rR][-+]?[0-9a-zA-Z]+)
+# A keyword, a quoted symbol, a function by name.
+match constant :[^\s()\[\]"'`,;\\]+
+match constant '[^\s()\[\]"'`,;\\]+
+match function #'[^\s()\[\]"'`,;\\]+
+
+# The special forms, then the macros that bind, branch, loop or declare.
+keywords and catch cond condition-case defconst defvar function if
+keywords interactive lambda let let* or prog1 prog2 progn quote
+keywords save-current-buffer save-excursion save-restriction setq
+keywords setq-default unwind-protect while
+keywords and-let* cl-block cl-case cl-defgeneric cl-defmacro cl-defmethod
+keywords cl-defstruct cl-defun cl-ecase cl-flet cl-labels cl-letf cl-loop
+keywords cl-return cl-return-from cl-typecase declare declare-function
+keywords defalias defclass defcustom defface defgroup define-derived-mode
+keywords define-error define-globalized-minor-mode define-inline
+keywords define-minor-mode defmacro defsubst defun defvar-local dlet dolist
+keywords dotimes eval-and-compile eval-when-compile if-let if-let*
+keywords ignore-errors letrec named-let pcase pcase-dolist pcase-exhaustive
+keywords pcase-let pcase-let* provide require seq-let setf unless
+keywords use-package when when-let when-let* with-current-buffer
+keywords with-demoted-errors with-eval-after-load with-output-to-string
+keywords with-silent-modifications with-temp-buffer
+keywords &optional &rest &body &key &aux
+
+constants t nil
+
+declares function defun defmacro defsubst cl-defun cl-defmacro cl-defgeneric
+declares function cl-defmethod define-minor-mode define-derived-mode
+declares function define-globalized-minor-mode define-inline
+declares type cl-defstruct defclass
+declares constant defconst
