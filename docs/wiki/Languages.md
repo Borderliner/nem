@@ -5,10 +5,30 @@ nem's own are built in, and yours sit beside `init.lua`. Adding a language
 means writing a short file of its keywords and how it writes comments and
 strings. That's also where `M-;` learns how to write a comment.
 
-**On this page:** [Adding a language](#adding-a-language) ·
+**On this page:** [Choosing a file's language](#choosing-a-files-language) · [Adding a language](#adding-a-language) ·
 [The format](#the-format) · [How a line is read](#how-a-line-is-read) ·
 [Regions](#regions) · [Patterns](#patterns) · [Starting from another language](#starting-from-another-language) ·
 [Built in](#built-in)
+
+## Choosing a file's language
+
+nem picks a file's language from its name, or from its `#!` line. When that's
+wrong, or a file has no name nem knows, `M-x set-language` colours the buffer
+as whichever language you choose. Choose `text` for no colour at all.
+
+nem remembers the choice for the file, so it opens in that language next time,
+and `M-;` writes that language's comments. The file's own language is first in
+the list, so `M-x set-language RET` undoes the choice.
+
+To colour every file of a kind as a language, give the language those names.
+This `elisp.syntax`, in your `syntax` directory, keeps nem's Emacs Lisp and
+adds files ending in `.eld`, and Gnus's `.gnus`:
+
+```
+language elisp
+like elisp
+files *.eld .gnus
+```
 
 ## Adding a language
 
