@@ -1,0 +1,31 @@
+# RPM spec files: a preamble of tags, then sections, with shell in the
+# scriptlets.
+
+language spec
+files *.spec
+
+calls none
+
+# A comment is a line that starts with #. Elsewhere # is text - a URL's
+# fragment, bug #123 in the changelog - so it is read as plain before it
+# can open the comment listed below, which is the one a line is commented
+# out with.
+match comment ^[ \t]*#.*$
+match plain #
+comment #
+
+# A tag and its colon; Requires may name when, as in Requires(post).
+match (?i)^(?P<function>Name|Version|Release|Epoch|Summary|License|SourceLicense|Group|URL|BugURL|Vendor|Packager|Distribution|DistTag|VCS|Icon|Source[0-9]*|Patch[0-9]*|NoSource|NoPatch|BuildRoot|BuildArch|BuildArchitectures|ExclusiveArch|ExcludeArch|ExclusiveOS|ExcludeOS|Prefix|Prefixes|Requires|Provides|Conflicts|Obsoletes|Recommends|Suggests|Supplements|Enhances|OrderWithRequires|BuildRequires|BuildConflicts|BuildPrereq|PreReq|AutoReq|AutoProv|AutoReqProv|ModularityLabel|BuildSystem|BuildOption|DocDir|RemovePathPostfixes)(?:\([^)]*\))?[ \t]*:
+
+# Sections, conditionals, definitions and the directives of %prep and
+# %files. Any other %name is a macro.
+match keyword %(?:package|description|prep|conf|generate_buildrequires|build|install|check|clean|files|changelog|sourcelist|patchlist|pre|post|preun|postun|pretrans|posttrans|preuntrans|postuntrans|verifyscript|triggerprein|triggerin|triggerun|triggerpostun|filetriggerin|filetriggerun|filetriggerpostun|transfiletriggerin|transfiletriggerun|transfiletriggerpostun|if|ifarch|ifnarch|ifos|ifnos|elif|elifarch|elifos|else|endif|define|global|undefine|setup|autosetup|patch|autopatch|doc|license|config|dir|docdir|attr|defattr|ghost|verify|exclude|lang|caps|artifact|missingok|readme)\b
+match constant %%|%\([^)]*\)|%\[[^\]]*\]|%[-!?]*[A-Za-z_][A-Za-z0-9_]*|%[0-9*#]
+# %{name}, %{?name} and %{!?name:value}, which may hold more of them.
+region constant
+    start %\{
+    end \}
+    nested
+
+match constant \$\{[^}]*\}|\$[A-Za-z_][A-Za-z0-9_]*
+string "

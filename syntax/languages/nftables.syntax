@@ -1,0 +1,42 @@
+# nftables rulesets, as nft -f reads them.
+
+language nftables
+files *.nft
+shebang nft
+
+calls none
+
+comment #
+string "
+
+# $name is a variable a define made, and @name a named set or map.
+match constant \$[A-Za-z_][A-Za-z0-9_]*|@[A-Za-z_][A-Za-z0-9_]*
+
+# An IPv6 or a MAC address, which may start with a letter: one with ::, or
+# three or more groups of hex digits between colons.
+match number [0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{1,4})*::(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?(?:/[0-9]{1,3})?|[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){2,7}(?:/[0-9]{1,3})?
+# An IPv4 address with its prefix, a hex mark, a count or a time: 10s, 1h.
+numbers (?:[0-9]{1,3}\.){3}[0-9]{1,3}(?:/[0-9]{1,2})?|0[xX][0-9A-Fa-f]+|[0-9]+(?:ms|[smhdw])?
+
+# Objects, commands and statements; a verdict is control flow.
+keywords table chain rule set map vmap flowtable element elements counter quota
+keywords limit ct meta define redefine undefine include add create delete
+keywords destroy flush insert list replace reset rename describe monitor
+keywords type hook priority policy flags timeout size devices device offload
+keywords accept drop reject queue continue return jump goto log masquerade
+keywords snat dnat redirect notrack tproxy synproxy fwd dup meter comment to
+keywords with over burst rate prefix level group
+
+# Families, chain types, protocols and the types a set holds.
+types ip ip6 inet arp bridge netdev filter nat route ether vlan tcp udp
+types udplite sctp dccp icmp icmpv6 igmp ah esp comp th ipv4_addr ipv6_addr
+types ether_addr inet_proto inet_service ifname verdict
+
+# Hooks, named priorities, connection states and set flags.
+constants prerouting input forward output postrouting ingress egress raw
+constants mangle dstnat srcnat security new established related invalid
+constants untracked interval constant dynamic persistent random fully-random
+constants second minute hour day week bytes kbytes mbytes exists missing
+
+declares type table
+declares function chain jump goto

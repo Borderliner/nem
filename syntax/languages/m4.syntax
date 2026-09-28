@@ -1,0 +1,39 @@
+# m4, and autoconf's configure.ac and aclocal macros written in it.
+
+language m4
+files *.m4 *.ac configure.in
+
+# dnl discards the rest of its line, and is what a macro file comments with;
+# # is m4's own comment, which it copies to the output.
+comment dnl
+comment #
+
+# $1, $#, $* and $@ are a macro's arguments, and a shell variable is one too:
+# read before # can start a comment.
+match constant \$[0-9#*@?]|\$\{[^}]*\}|\$[A-Za-z_][A-Za-z0-9_]*
+
+# The name a definition gives its macro.
+match (?P<keyword>define|pushdef)\([\[`]?(?P<function>[A-Za-z_][A-Za-z0-9_]*)
+match (?P<function>A[CU]_DEFUN(?:_ONCE)?|m4_define(?:_default)?|m4_defun(?:_once)?|m4_pushdef)\(\[?(?P<function>[A-Za-z_][A-Za-z0-9_]*)
+
+# autoconf's own macros and those of automake, libtool and the archive, even
+# where they are called without arguments.
+match function _?(?:A[CMSHTUX]|LT|PKG)_[A-Z0-9_]+|m4_[A-Za-z0-9_]+
+
+# Text quoted with [ ] on one line, when nothing in it is a call: an
+# argument such as [1.0] or [stdio.h]. A quoted body that runs over lines, or
+# calls a macro, is left to be read as code.
+match string \[[^\[\]()]*\]
+
+string "
+
+keywords define undefine pushdef popdef ifdef ifelse include sinclude divert
+keywords undivert changequote changecom changeword m4wrap m4exit
+# configure.ac is shell between its macros.
+keywords if then elif else fi case esac for while until do done
+
+functions builtin debugfile debugmode decr defn divnum dumpdef errprint esyscmd
+functions eval format incr index indir len maketemp mkstemp patsubst regexp
+functions shift substr syscmd sysval traceoff traceon translit
+
+constants __file__ __line__ __program__ __gnu__ __unix__ __windows__

@@ -1,0 +1,65 @@
+# GLSL, OpenGL's and Vulkan's shading language: C's syntax, its own types.
+# C's preprocessor rule takes #version and #extension as it takes #define.
+
+language glsl
+like c
+files *.glsl *.vert *.frag *.geom *.tesc *.tese *.comp
+
+# gl_Position, gl_FragCoord and every other variable the pipeline declares.
+match constant gl_[A-Za-z0-9_]+
+
+# Storage, layout, interpolation, precision and memory qualifiers.
+keywords attribute buffer centroid coherent discard flat highp in inout
+keywords invariant layout lowp mediump noperspective out patch precise
+keywords precision readonly sample shared smooth subroutine uniform varying
+keywords writeonly
+
+types uint atomic_uint
+types vec2 vec3 vec4 dvec2 dvec3 dvec4 bvec2 bvec3 bvec4 ivec2 ivec3 ivec4
+types uvec2 uvec3 uvec4 mat2 mat3 mat4 mat2x2 mat2x3 mat2x4 mat3x2 mat3x3
+types mat3x4 mat4x2 mat4x3 mat4x4 dmat2 dmat3 dmat4 dmat2x2 dmat2x3 dmat2x4
+types dmat3x2 dmat3x3 dmat3x4 dmat4x2 dmat4x3 dmat4x4
+types sampler1D sampler2D sampler3D samplerCube sampler2DRect sampler1DArray
+types sampler2DArray samplerCubeArray samplerBuffer sampler2DMS
+types sampler2DMSArray sampler1DShadow sampler2DShadow samplerCubeShadow
+types sampler2DRectShadow sampler1DArrayShadow sampler2DArrayShadow
+types samplerCubeArrayShadow isampler1D isampler2D isampler3D isamplerCube
+types isampler2DArray isamplerBuffer usampler1D usampler2D usampler3D
+types usamplerCube usampler2DArray usamplerBuffer sampler samplerShadow
+types texture1D texture2D texture3D textureCube texture2DArray subpassInput
+types image1D image2D image3D imageCube image2DRect image1DArray image2DArray
+types imageCubeArray imageBuffer image2DMS image2DMSArray iimage2D iimage3D
+types uimage2D uimage3D
+
+# #version's profile and #extension's behaviour.
+constants core compatibility enable require warn disable
+
+functions radians degrees sin cos tan asin acos atan sinh cosh tanh asinh
+functions acosh atanh pow exp log exp2 log2 sqrt inversesqrt abs sign floor
+functions trunc round roundEven ceil fract mod modf min max clamp mix step
+functions smoothstep isnan isinf fma frexp ldexp floatBitsToInt
+functions floatBitsToUint intBitsToFloat uintBitsToFloat packUnorm2x16
+functions packSnorm2x16 packUnorm4x8 packSnorm4x8 unpackUnorm2x16
+functions unpackSnorm2x16 unpackUnorm4x8 unpackSnorm4x8 packHalf2x16
+functions unpackHalf2x16 length distance dot cross normalize faceforward
+functions reflect refract matrixCompMult outerProduct transpose determinant
+functions inverse lessThan lessThanEqual greaterThan greaterThanEqual equal
+functions notEqual any all not bitfieldExtract bitfieldInsert bitfieldReverse
+functions bitCount findLSB findMSB uaddCarry usubBorrow umulExtended
+functions imulExtended texture textureSize textureQueryLod textureQueryLevels
+functions textureSamples textureProj textureLod textureOffset texelFetch
+functions texelFetchOffset textureProjOffset textureLodOffset textureProjLod
+functions textureGrad textureGradOffset textureProjGrad textureGather
+functions textureGatherOffset texture2D texture2DProj texture2DLod textureCube
+functions texture3D shadow2D imageSize imageSamples imageLoad imageStore
+functions imageAtomicAdd imageAtomicMin imageAtomicMax imageAtomicAnd
+functions imageAtomicOr imageAtomicXor imageAtomicExchange imageAtomicCompSwap
+functions atomicCounterIncrement atomicCounterDecrement atomicCounter
+functions atomicAdd atomicMin atomicMax atomicAnd atomicOr atomicXor
+functions atomicExchange atomicCompSwap dFdx dFdy dFdxFine dFdyFine
+functions dFdxCoarse dFdyCoarse fwidth fwidthFine fwidthCoarse
+functions interpolateAtCentroid interpolateAtSample interpolateAtOffset
+functions EmitVertex EndPrimitive EmitStreamVertex EndStreamPrimitive barrier
+functions memoryBarrier memoryBarrierShared memoryBarrierBuffer
+functions memoryBarrierImage memoryBarrierAtomicCounter groupMemoryBarrier
+functions subpassLoad

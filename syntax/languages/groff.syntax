@@ -1,0 +1,36 @@
+# roff, as groff reads it: manual pages, and the ms, me and mom macros.
+#
+# Prose, so nothing a code language colours by default is coloured here.
+# A line that starts with . or ' is a request or a macro call; any other is
+# text, with escapes in it.
+
+language groff
+files *.[1-9] *.man *.ms *.me *.mom *.roff *.tmac
+
+calls none
+numbers none
+operators none
+punctuation none
+
+# .\" comments out a whole line, which is what a line is commented with; \"
+# starts a comment anywhere, and groff's \# takes the newline with it.
+comment .\"
+comment \"
+comment \#
+match comment ^['.][ \t]*\\["#].*$
+
+# A macro's definition, and the name it gives.
+match ^(?P<keyword>[.'][ \t]*(?:de|de1|dei|am|am1|ami))[ \t]+(?P<function>[^ \t\\]+)
+match keyword ^[.'][ \t]*[^ \t\\]*
+
+# Escapes: a font, a register, a string or a size by a name of one rune, of
+# two after (, or of any length in [ ]; a special character; one with an
+# argument in quotes; and any other rune after a backslash.
+match constant \\[fFgkmMnYV*$][+-]?(?:\[[^\]]*\]|\(..|.)
+match constant \\s[+-]?(?:[0-9]+|\([0-9][0-9]|\[[^\]]*\]|'[^']*')
+match constant \\\(..|\\\[[^\]]*\]
+match constant \\[hvwlLDXoNZbxRAB]'[^']*'
+match constant \\[^"#]
+
+# A macro's argument, quoted to hold its blanks: "" inside is a quote.
+string " doubled

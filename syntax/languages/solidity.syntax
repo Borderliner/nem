@@ -1,0 +1,57 @@
+# Solidity, Ethereum's contract language, and the Yul of its assembly
+# blocks.
+
+language solidity
+files *.sol
+
+word-chars $
+
+# /// and /** */ are NatSpec, documentation read by tools: comments all the
+# same.
+comment //
+comment /* */
+# A string may be hex"…" or unicode"…".
+region string
+    start (?:hex|unicode)?"
+    end "
+    escape \\.
+region string
+    start (?:hex|unicode)?'
+    end '
+    escape \\.
+
+# from is left out: it is a keyword only in an import, and an ERC-20's
+# Transfer(from, to, value) is everywhere.
+keywords pragma solidity import as contract interface library abstract
+keywords is function modifier event emit error revert struct enum
+keywords constructor fallback receive returns return if else for while do
+keywords break continue try catch new delete using assembly unchecked public
+keywords private internal external pure view payable constant immutable
+keywords virtual override memory storage calldata transient indexed anonymous
+keywords type super global
+# Yul, inside assembly { }.
+keywords let leave switch case default
+
+types address bool string bytes byte int uint fixed ufixed mapping
+types int8 int16 int24 int32 int40 int48 int56 int64 int72 int80 int88 int96
+types int104 int112 int120 int128 int136 int144 int152 int160 int168 int176
+types int184 int192 int200 int208 int216 int224 int232 int240 int248 int256
+types uint8 uint16 uint24 uint32 uint40 uint48 uint56 uint64 uint72 uint80
+types uint88 uint96 uint104 uint112 uint120 uint128 uint136 uint144 uint152
+types uint160 uint168 uint176 uint184 uint192 uint200 uint208 uint216 uint224
+types uint232 uint240 uint248 uint256
+types bytes1 bytes2 bytes3 bytes4 bytes5 bytes6 bytes7 bytes8 bytes9 bytes10
+types bytes11 bytes12 bytes13 bytes14 bytes15 bytes16 bytes17 bytes18 bytes19
+types bytes20 bytes21 bytes22 bytes23 bytes24 bytes25 bytes26 bytes27 bytes28
+types bytes29 bytes30 bytes31 bytes32
+
+# Literals, the units a number is written in, and the globals every contract
+# sees.
+constants true false this msg block tx abi now
+constants wei gwei ether finney szabo seconds minutes hours days weeks years
+
+functions require assert keccak256 sha256 ripemd160 ecrecover addmod mulmod
+functions selfdestruct blockhash blobhash gasleft
+
+declares type contract interface library struct enum
+declares function function modifier event error

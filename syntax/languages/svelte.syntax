@@ -1,0 +1,20 @@
+# Svelte components: HTML's rules, with the markup's blocks, tags and
+# expressions. The script and style blocks are read as HTML reads them.
+
+language svelte
+like html
+files *.svelte
+
+# A block - {#if x}, {:else if y}, {/if}, {#each xs as x} - or a tag such as
+# {@html s}: its brace and word are the keyword, what it is given the value.
+match (?P<keyword>\{[#:/@](?:else[ \t]+if|[a-z]+))(?P<constant>[^{}]*)(?P<keyword>\})
+
+# A directive - on:click, bind:value, class:active, use:action - and what
+# it is given, if anything.
+match (?P<keyword>(?:on|bind|class|style|use|transition|in|out|animate|let):[A-Za-z0-9_$|.-]+)(?:\s*=\s*(?P<constant>\{[^{}]*\})|\s*=\s*(?P<string>"[^"]*"|'[^']*'))?
+# An attribute given an expression: onclick={handler}.
+match (?P<type>[A-Za-z_:][A-Za-z0-9_.:-]*)\s*=\s*(?P<constant>\{[^{}]*\})
+
+# { expression } in the text. One that opens with a blank is left alone: that
+# is how a script's or a style's braces are written.
+match constant \{[^\s{}][^{}]*\}

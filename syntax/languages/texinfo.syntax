@@ -1,0 +1,40 @@
+# Texinfo, the GNU manuals' source.
+#
+# Prose, so nothing a code language colours by default is coloured here but
+# the braces @commands take.
+
+language texinfo
+files *.texi *.texinfo *.txi
+
+calls none
+numbers none
+operators none
+punctuation {}
+
+# @c and @comment run to the end of the line. @c is read here, before any
+# command, so that @code or @chapter is never taken for it; the comment
+# listed is the one a line is commented out with.
+match comment @c(?:omment)?(?:[ \t].*)?$
+comment @c
+
+# @ignore hides everything to its @end ignore.
+region comment
+    start ^[ \t]*@ignore\b
+    end ^[ \t]*@end[ \t]+ignore\b
+    multiline
+
+# The TeX line a manual starts with.
+match keyword ^\\input\b
+
+# A node and its name, and a heading, which is the whole line.
+match ^(?P<keyword>@node)[ \t]+(?P<function>[^,@]*[^,@ \t])
+match keyword ^@(?:top|part|chapter|section|subsection|subsubsection|unnumbered|unnumberedsec|unnumberedsubsec|unnumberedsubsubsec|appendix|appendixsec|appendixsection|appendixsubsec|appendixsubsubsec|centerchap|majorheading|chapheading|heading|subheading|subsubheading)(?:[ \t].*)?$
+match keyword @end[ \t]+[A-Za-z]+
+
+# Code and file names are set in type: what they hold is a literal.
+match (?P<keyword>@(?:code|samp|verb|kbd|key|file|command|option|env|t|url|uref|email|indicateurl))(?P<punctuation>\{)(?P<string>[^{}@]*)(?P<punctuation>\})
+
+# Every other command. @ignore is left out, so the region above can open.
+match keyword @(?:[A-Za-hj-z][A-Za-z]*|i(?:[A-Za-fh-z][A-Za-z]*)?\b)
+# @@, @{, @}, @* and the other commands of one rune that is not a letter.
+match constant @[^A-Za-z \t]

@@ -1,0 +1,18 @@
+# Vue's single-file components: HTML's rules, with the template's
+# directives and interpolations. The script and style blocks are read as
+# HTML reads them.
+
+language vue
+like html
+files *.vue
+
+# A directive - v-if, v-on:click, :href, @click.prevent, #default - with the
+# expression it is given.
+match (?P<keyword>(?:v-[A-Za-z0-9-]+|[:@#])[A-Za-z0-9_:.\[\]-]*)\s*=\s*(?P<string>"[^"]*"|'[^']*')
+# Those that take nothing, and a slot named with # where it ends its tag -
+# not a style block's #id, which a brace follows.
+match (?P<keyword>v-(?:else|cloak|pre|once))(?:[ \t]|/?>|$)
+match (?P<keyword>#[A-Za-z][A-Za-z0-9_-]*)[ \t]*(?:/?>|$)
+
+# {{ expression }}, as one value.
+match constant \{\{.*?\}\}

@@ -1,0 +1,30 @@
+# Ninja build files.
+
+language ninja
+files *.ninja
+
+calls none
+numbers none
+operators :|=
+punctuation none
+
+# A comment is a line that starts with #; in a value, # is text. It is read
+# as plain there before it can open the comment listed below, which is the
+# one a line is commented out with.
+match comment ^[ \t]*#.*$
+match plain #
+comment #
+
+# $name and ${name}; $$, $:, $ and a $ that ends the line are escapes.
+match constant \$\{[A-Za-z0-9_.-]*\}|\$[A-Za-z0-9_-]+|\$[$: ]|\$$
+
+# A declaration starts its line: build/ elsewhere is a directory. A rule's
+# name is the function a build statement runs.
+match ^(?P<keyword>rule)[ \t]+(?P<function>[A-Za-z0-9_.-]+)
+match keyword ^(?:build|pool|default|include|subninja)\b
+# A binding, at the top or indented under a rule, build or pool.
+match ^[ \t]*(?P<function>[A-Za-z0-9_.-]+)[ \t]*=
+# The rule a build statement runs, after its outputs' colon.
+match (?P<operator>:)[ \t]*(?P<function>[A-Za-z_][A-Za-z0-9_.-]*)
+
+constants console

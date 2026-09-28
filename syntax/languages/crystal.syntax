@@ -1,0 +1,55 @@
+# Crystal.
+
+language crystal
+files *.cr
+shebang crystal
+
+# A method's name may end in ? or !: empty?, nil?, sort!.
+word-chars ?!
+
+comment #
+string "
+# A character: 'a', '\n'.
+string '
+# A heredoc runs to a line holding only its word.
+region string
+    start <<-['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?
+    end ^[ \t]*\1[ \t]*$
+    multiline
+
+# %(…), %w(…), %i[…], %q{…} and the others, on one line.
+match string %[wiqQrx]?(?:\([^)]*\)|\[[^\]]*\]|\{[^}]*\}|<[^>]*>|\|[^|]*\|)
+# A macro's {% statement %} and {{ expression }}: the delimiters are
+# keywords. A statement's inside is read as code; an expression's }} is
+# found by pairing it with its {{, since }} alone also closes a nested hash.
+match keyword \{%|%\}
+match (?P<keyword>\{\{)(?:[^{}]|\{[^{}]*\})*?(?P<keyword>\}\})
+# A path's :: is not the start of a symbol.
+match operator ::
+# A symbol, :name or :name?; not the : of a type restriction, which a blank
+# follows.
+match constant :[A-Za-z_][A-Za-z0-9_]*[?!=]?
+# @ivar, @@cvar, and an annotation's name.
+match constant @@?[A-Za-z_][A-Za-z0-9_]*
+match function @\[[A-Za-z_:][A-Za-z0-9_:]*
+
+keywords abstract alias annotation as as? asm begin break case class def do
+keywords else elsif end ensure enum extend for fun if in include
+keywords instance_sizeof is_a? lib macro module next nil? of offsetof out
+keywords pointerof private protected require rescue responds_to? return select
+keywords sizeof struct super then type typeof uninitialized union unless until
+keywords verbatim when while with yield
+
+constants true false nil self __FILE__ __LINE__ __DIR__ __END_LINE__
+
+types Int8 Int16 Int32 Int64 Int128 UInt8 UInt16 UInt32 UInt64 UInt128
+types Float32 Float64 Bool Char String Symbol Nil Array Hash Tuple NamedTuple
+types Range Proc Pointer Slice StaticArray Set Regex Object Reference Value
+types Struct Number Int Float Enum Exception IO File Dir Time Channel Fiber
+types Process Path Union Void NoReturn Class BigInt BigFloat BigDecimal
+
+functions puts print p pp raise loop spawn sleep gets caller exit at_exit
+functions getter setter property record
+
+declares type class struct module enum lib annotation alias union
+declares function def macro fun

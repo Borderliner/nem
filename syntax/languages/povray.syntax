@@ -1,0 +1,53 @@
+# POV-Ray's scene description language.
+
+language povray
+files *.pov
+
+# A directive is a word that starts with #.
+word-chars #
+
+comment //
+comment /* */ nested
+string "
+
+# A vector of numbers, <1, 0.5, -2>, is one value.
+match number <[ \t]*[-+]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[ \t]*,[ \t]*[-+]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)){1,4}[ \t]*>
+
+keywords #declare #local #include #macro #end #if #ifdef #ifndef #else #elseif
+keywords #while #for #switch #case #range #break #default #version #debug
+keywords #error #warning #undef #fopen #fclose #read #write #render
+keywords #statistics
+
+# The scene: objects, what they are made of, and how they are placed.
+keywords camera light_source sphere box cylinder cone torus plane disc mesh
+keywords mesh2 polygon triangle smooth_triangle blob lathe sor prism
+keywords superellipsoid height_field julia_fractal text isosurface parametric
+keywords sphere_sweep bicubic_patch union difference intersection merge object
+keywords texture pigment finish normal interior media material color colour
+keywords color_map colour_map pigment_map normal_map texture_map slope_map
+keywords translate rotate scale matrix transform location look_at angle right
+keywords up sky direction perspective orthographic fisheye focal_point
+keywords aperture blur_samples background fog sky_sphere rainbow
+keywords global_settings radiosity photons ambient diffuse specular phong
+keywords phong_size reflection refraction ior roughness brilliance metallic
+keywords emission irid transmit filter rgb rgbf rgbt rgbft srgb checker
+keywords hexagon brick gradient marble wood granite agate bozo bumps dents
+keywords wrinkles ripples waves spotted leopard onion radial crackle
+keywords image_map bump_map uv_mapping turbulence octaves omega lambda
+keywords area_light spotlight parallel shadowless point_at radius
+keywords falloff tightness fade_distance fade_power looks_like no_shadow
+keywords no_image no_reflection hollow open inverse bounded_by clipped_by
+keywords function assumed_gamma max_trace_level adc_bailout
+
+constants x y z t u v pi tau true false yes no on off clock clock_delta
+constants clock_on frame_number initial_frame final_frame initial_clock
+constants final_clock image_width image_height version now
+
+functions abs acos acosh asc asin asinh atan atan2 atanh bitwise_and
+functions bitwise_or bitwise_xor ceil chr concat cos cosh datetime defined
+functions degrees dimension_size dimensions div exp file_exists floor inside
+functions int ln log max min mod pow prod radians rand seed select sin sinh
+functions sqrt str strcmp strlen strlwr strupr substr sum tan tanh val vaxis_rotate
+functions vcross vdot vlength vnormalize vrotate vstr vturbulence
+
+declares function #macro #declare #local

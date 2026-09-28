@@ -1,0 +1,14 @@
+# Starlark, Bazel's dialect of Python: its BUILD and .bzl files.
+#
+# A file named just BUILD or WORKSPACE is not claimed: a script called build
+# is far more often shell, and its #! says so.
+
+language starlark
+like python
+files *.bzl *.star *.bazel build.bazel workspace.bazel module.bazel
+
+# Starlark's own built-ins, and the Bazel functions every BUILD file calls.
+# A rule is a call, and coloured as one wherever it is called.
+functions fail struct depset select glob load package exports_files licenses
+functions rule provider aspect repository_rule module_extension tag_class
+functions module bazel_dep use_extension use_repo

@@ -1,0 +1,39 @@
+# CoffeeScript.
+
+language coffeescript
+files *.coffee *.cson
+shebang coffee
+
+word-chars $
+
+comment #
+# ### opens a block comment; four or more #s are a line comment, as a rule
+# drawn across the page is.
+region comment
+    start ###(?:[^#]|$)
+    end ###
+    multiline
+string """ multiline
+string ''' multiline
+string "
+string '
+# A regular expression written over lines.
+string /// multiline
+
+# @name is this.name.
+match constant @[A-Za-z0-9_$]*
+# A function is an arrow, and a name given one is the function's.
+match (?P<function>[A-Za-z_$][A-Za-z0-9_$]*)[ \t]*[:=][ \t]*(?:\([^()]*\)[ \t]*)?[-=]>
+match keyword [-=]>
+
+keywords if else unless then while until loop for in of by when switch return
+keywords break continue throw try catch finally class extends super new delete
+keywords typeof instanceof and or not is isnt do import export from as default
+keywords await yield debugger this
+
+constants true false yes no on off null undefined NaN Infinity
+
+types Array Boolean Date Error Function JSON Map Math Number Object Promise
+types RegExp Set String Symbol WeakMap WeakSet
+
+declares type class extends
