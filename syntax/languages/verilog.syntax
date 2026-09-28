@@ -1,0 +1,55 @@
+# Verilog and SystemVerilog.
+
+language verilog
+files *.v *.vh *.sv *.svh
+
+comment //
+comment /* */
+string "
+
+# A sized or based literal: 8'hFF, 4'b1010, 'd10, 16'sh_7fff, 4'bx01z.
+match number (?:[0-9][0-9_]*[ \t]*)?'[sS]?[bBoOdDhH][ \t]*[0-9a-fA-FxXzZ?_]+
+# SystemVerilog's unsized fills: '0, '1, 'x, 'z.
+match number '[01xXzZ]\b
+# System tasks and functions: $display, $finish, $clog2.
+match function \$[A-Za-z_][A-Za-z0-9_$]*
+# Compiler directives, then the uses of a `define'd macro.
+match keyword `(?:define|undef|undefineall|include|ifdef|ifndef|elsif|else|endif|timescale|default_nettype|resetall|celldefine|endcelldefine|line|pragma|begin_keywords|end_keywords|unconnected_drive|nounconnected_drive)\b
+match function `[A-Za-z_][A-Za-z0-9_]*
+
+keywords accept_on alias always always_comb always_ff always_latch and assert
+keywords assign assume automatic before begin bind bins binsof break buf
+keywords bufif0 bufif1 case casex casez cell checker class clocking cmos
+keywords config const constraint context continue cover covergroup coverpoint
+keywords cross deassign default defparam design disable dist do edge else end
+keywords endcase endchecker endclass endclocking endconfig endfunction
+keywords endgenerate endgroup endinterface endmodule endpackage endprimitive
+keywords endprogram endproperty endsequence endspecify endtable endtask enum
+keywords eventually expect export extends extern final first_match for force
+keywords foreach forever fork forkjoin function generate global highz0 highz1
+keywords if iff ifnone ignore_bins illegal_bins implements implies import
+keywords incdir include initial inout input inside instance interconnect
+keywords interface intersect join join_any join_none large let liblist
+keywords library local localparam macromodule matches medium modport module
+keywords nand negedge nettype new nexttime nmos nor noshowcancelled not
+keywords notif0 notif1 or output package packed parameter pmos posedge
+keywords primitive priority program property protected pull0 pull1 pulldown
+keywords pullup pulsestyle_ondetect pulsestyle_onevent pure rand randc
+keywords randcase randsequence rcmos ref reject_on release repeat restrict
+keywords return rnmos rpmos rtran rtranif0 rtranif1 s_always s_eventually
+keywords s_nexttime s_until s_until_with scalared sequence showcancelled
+keywords small soft solve specify specparam static strong strong0 strong1
+keywords struct super sync_accept_on sync_reject_on table tagged task this
+keywords throughout timeprecision timeunit tran tranif0 tranif1 typedef
+keywords union unique unique0 until until_with untyped use vectored virtual
+keywords wait wait_order weak weak0 weak1 while wildcard with within xnor xor
+
+types wire reg logic bit byte int integer shortint longint real realtime
+types shortreal time string chandle event tri tri0 tri1 triand trior trireg
+types wand wor uwire supply0 supply1 signed unsigned void genvar var type
+
+constants null
+
+declares function function task
+declares type module macromodule interface program package class primitive
+declares type checker

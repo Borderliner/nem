@@ -1,0 +1,40 @@
+# Odin.
+
+language odin
+files *.odin
+
+comment //
+comment /* */ nested
+string "
+string '
+string ` raw multiline
+
+# A declaration with ::, which is a procedure, a type or a constant:
+# main :: proc(), Vec :: struct, MAX :: 64. Only the name is coloured; the
+# rest is read again.
+match (?P<function>[A-Za-z_][A-Za-z0-9_]*)\s*::\s*(?:#[A-Za-z_]+\s+)*proc\b
+match (?P<type>[A-Za-z_][A-Za-z0-9_]*)\s*::\s*(?:distinct\b|struct\b|enum\b|union\b|bit_set\b|bit_field\b|#type\b)
+match (?P<constant>[A-Za-z_][A-Za-z0-9_]*)\s*::
+# Directives, #partial and #load; attributes, @(private); a parameter's
+# type, $T; and ---, a value left uninitialised.
+match keyword #[A-Za-z_][A-Za-z0-9_]*
+match keyword @\(?[A-Za-z_][A-Za-z0-9_]*
+match type \$[A-Za-z_][A-Za-z0-9_]*
+match constant ---
+
+keywords asm auto_cast bit_field bit_set break case cast context continue
+keywords defer distinct do dynamic else enum fallthrough for foreign if import
+keywords in map matrix not_in or_break or_continue or_else or_return package
+keywords proc return struct switch transmute union using when where
+
+types bool b8 b16 b32 b64 int i8 i16 i32 i64 i128 uint u8 u16 u32 u64 u128
+types uintptr i16le i32le i64le i128le u16le u32le u64le u128le i16be i32be
+types i64be i128be u16be u32be u64be u128be f16 f32 f64 f16le f32le f64le
+types f16be f32be f64be complex32 complex64 complex128 quaternion64
+types quaternion128 quaternion256 rune string cstring rawptr typeid any
+
+constants true false nil
+
+functions len cap size_of align_of offset_of type_of typeid_of type_info_of
+functions make new delete free append clear resize reserve copy min max abs
+functions clamp assert panic

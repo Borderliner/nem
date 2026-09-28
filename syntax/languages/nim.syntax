@@ -1,0 +1,62 @@
+# Nim.
+
+language nim
+files *.nim *.nims *.nimble
+shebang nim
+
+# A # comment, a #[ ]# block that nests, and the ## and ##[ ]## doc forms,
+# which are the same colour; the longest start wins, so #[ is a block.
+comment #
+comment #[ ]# nested
+comment ##[ ]## nested
+
+# A triple-quoted string is raw and may run over lines. A name right
+# before a quote makes it raw too - r"C:\dir", re"\d+", fmt"{x}" - with
+# a quote written twice to mean one; the name is part of the literal.
+region string
+    start (?:[A-Za-z_][A-Za-z0-9_]*)?"""
+    end """
+    multiline
+region string
+    start [A-Za-z_][A-Za-z0-9_]*"
+    end "
+    escape ""
+string "
+string '
+
+# A number may carry a type suffix after a tick: 1'i32, 0xFF'u8, 1.0'f32.
+numbers (?:0[xX][0-9A-Fa-f_]+|0[oO][0-7_]+|0[bB][01_]+|[0-9][0-9_]*(?:\.[0-9][0-9_]*)?(?:[eE][-+]?[0-9_]+)?)(?:'?[A-Za-z][A-Za-z0-9]*)?
+
+# A pragma's braces, {.inline.}.
+match keyword \{\.|\.\}
+# An operator defined in backticks: proc `+`(a, b: V): V.
+match (?P<keyword>proc|func|method|iterator|template|macro|converter)\s+(?P<function>`[^`]+`)
+# A type in a type section, on a line of its own: Node = ref object.
+match ^\s+(?P<type>[A-Za-z_][A-Za-z0-9_]*)\*?\s*(?:\[[^\]]*\])?\s*(?:\{\.[^}]*\.\})?\s*=\s*(?:(?:ref|ptr)\s+)?(?:object|enum|tuple|distinct|concept)\b
+
+keywords addr and as asm bind block break case cast concept const continue
+keywords converter defer discard distinct div do elif else end enum except
+keywords export finally for from func if import in include interface is isnot
+keywords iterator let macro method mixin mod not notin object of or out proc
+keywords ptr raise ref return shl shr static template try tuple type using
+keywords var when while xor yield
+
+types int int8 int16 int32 int64 uint uint8 uint16 uint32 uint64 float
+types float32 float64 bool char string cstring pointer seq array set
+types openArray varargs range typedesc untyped typed void auto byte Natural
+types Positive Ordinal SomeInteger SomeFloat SomeNumber SomeOrdinal cint
+types cuint clong culong cfloat cdouble cchar csize_t RootObj RootRef
+types Exception CatchableError Defect ValueError IOError OSError KeyError
+types IndexDefect
+
+constants true false nil result Inf NegInf NaN
+
+functions echo len high low inc dec add del assert doAssert new newSeq
+functions newString ord chr succ pred quit repr sizeof typeof move reset
+functions setLen swap debugEcho isNil min max abs contains incl excl card
+functions defined declared compiles
+
+declares function proc func method iterator template macro converter
+declares type type
+
+operators +-*/%&|^<>=!~?:@$

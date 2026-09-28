@@ -1,0 +1,75 @@
+# Assembly: NASM and the GNU assembler, for x86, ARM and RISC-V.
+#
+# One file serves several dialects, so where they disagree it takes the
+# reading that misleads least. ; is a comment, as in NASM and most
+# assemblers - GNU's x86 assembler, which separates statements with it, is
+# the exception - and so are // and /* */. # is a comment only at the start of
+# a line or before a blank: ARM writes an immediate as #4 or #CONST, while
+# x86 GNU code writes its comments # like this. @ likewise is ARM's comment
+# before a blank and GNU's type tag, @function, before a name.
+
+language asm
+files *.asm *.s *.nasm
+ignore-case
+calls none
+# GNU symbols and directives hold dots: .text, .L1, b.ne.
+word-chars .
+
+comment ;
+comment //
+comment /* */
+string "
+string `
+# NASM's '...' has no escapes; GNU's 'c is a character with no closing
+# quote, so a lone quote colours one character rather than the line.
+match string '[^']*'
+match string '\\?.
+
+# A label, and the instruction or directive after it on its line; a NASM
+# data label, which needs no colon; and the first word of any other line,
+# which is an instruction or a directive. These come before the rules for
+# # % @ and $ below, so %%local: is a label as other names are.
+match ^\s*(?P<function>(?:%%)?[A-Za-z_.$?][A-Za-z0-9_.$?@]*|[0-9]+)(?P<operator>:)(?:[ \t]*(?P<keyword>[A-Za-z.][A-Za-z0-9_.]*))?
+match ^\s*(?P<function>[A-Za-z_.?][A-Za-z0-9_.?$@]*)[ \t]+(?i:d[bwdqtoyz]|res[bwdqtoyz]|equ|times|proc|endp|struc|struct|ends|macro|segment|label|textequ)\b
+match ^\s*(?P<keyword>[A-Za-z.][A-Za-z0-9_.]*)
+
+# The C preprocessor, which .S files run through.
+match keyword ^\s*#\s*(?:include|define|undef|if|ifdef|ifndef|elif|else|endif|error|warning|pragma|line)\b
+match comment ^\s*#.*
+match number #[-+]?(?:0[xX][0-9A-Fa-f]+|0[bB][01]+|[0-9]+)
+match comment #(?:[ \t#]|$).*
+match comment @(?:[ \t]|$).*
+match constant @[A-Za-z_][A-Za-z0-9_]*
+
+# NASM's preprocessor, its macro arguments and its macro-local labels;
+# GNU's relocation operators, such as RISC-V's %hi(sym); AT&T's registers.
+match keyword (?i)%(?:define|xdefine|idefine|undef|assign|macro|imacro|endmacro|unmacro|rep|endrep|exitrep|include|if|ifdef|ifndef|ifidn|ifidni|ifnum|ifstr|ifmacro|ifctx|elif|elifdef|else|endif|error|warning|fatal|push|pop|repl|rotate|local|strlen|substr|use|pragma|line|arg|stacksize|deftok|defstr)\b
+match constant %[0-9]+
+match plain %%[A-Za-z_.][A-Za-z0-9_.]*
+match (?P<function>%[A-Za-z_][A-Za-z0-9_]*)\s*\(
+match type %[A-Za-z][A-Za-z0-9]*
+
+# AT&T's immediates, and NASM's $ and $$ for here and the section start.
+match number \$[-+]?(?:0[xX][0-9A-Fa-f]+|0[bB][01]+|[0-9]+)
+match constant \$[A-Za-z_.][A-Za-z0-9_.]*|\$\$?
+
+# Registers by number: x86's r8d and xmm0, ARM's x0, w1 and v31, RISC-V's
+# a0, t6, s11 and ft0.
+match type (?i)(?:[rxwvqdsbhftak](?:[0-9]|[12][0-9]|3[01])|r(?:[89]|1[0-5])[dwbl]|[xyz]mm(?:[0-9]|[12][0-9]|3[01])|mm[0-7]|st[0-7]|cr[0-8]|dr[0-7]|f[tsa](?:[0-9]|1[01]))\b
+
+keywords section segment global globl extern bits use16 use32 use64 default
+keywords rel abs org align alignb times equ db dw dd dq dt do dy dz resb resw
+keywords resd resq rest reso resy resz incbin struc endstruc istruc iend at
+keywords ptr offset near far short
+keywords .text .data .bss .rodata .section .globl .global .local .weak .type
+keywords .size .align .balign .p2align .byte .short .word .hword .long .int
+keywords .quad .ascii .asciz .string .zero .skip .space .fill .set .equ .macro
+keywords .endm .rept .endr .if .ifdef .else .endif .include .incbin .extern
+keywords .comm .lcomm .org .intel_syntax .att_syntax .option .end
+
+# Registers by name. Numbered ones are the pattern above.
+types al ah ax eax rax bl bh bx ebx rbx cl ch cx ecx rcx dl dh dx edx rdx
+types si esi rsi sil di edi rdi dil sp esp rsp spl bp ebp rbp bpl ip eip rip
+types cs ds es fs gs ss st eflags rflags
+types lr pc fp xzr wzr cpsr apsr spsr fpscr fpcr fpsr nzcv zero ra gp tp
+types byte word dword qword tword oword yword zword xmmword ymmword zmmword

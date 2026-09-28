@@ -1,0 +1,39 @@
+# Ada.
+
+language ada
+files *.adb *.ads *.ada *.gpr
+ignore-case
+
+comment --
+string " doubled
+
+# A tick is three things: a character literal, 'x'; the start of an
+# attribute, X'Length; and a qualified expression, T'(...). A name before
+# '( is the type being qualified, and its tick is taken with it, so the
+# character literal rule never sees '(' there. A character literal is
+# tried before an attribute, which is any other tick before a name.
+match (?P<type>[A-Za-z][A-Za-z0-9_]*)(?P<punctuation>')\(
+match string '.'
+match (?P<punctuation>')(?P<function>[A-Za-z][A-Za-z0-9_]*)
+
+# A based literal, 16#FF# or 2#1010_1010#, and a decimal one with
+# underscores and an exponent: 1_000, 3.14, 1.0E-6.
+numbers [0-9][0-9_]*#[0-9A-Fa-f_]+(?:\.[0-9A-Fa-f_]+)?#(?:[eE][-+]?[0-9][0-9_]*)?|[0-9][0-9_]*(?:\.[0-9][0-9_]*)?(?:[eE][-+]?[0-9][0-9_]*)?
+
+keywords abort abs abstract accept access aliased all and array at begin body
+keywords case constant declare delay delta digits do else elsif end entry
+keywords exception exit for function generic goto if in interface is limited
+keywords loop mod new not of or others out overriding package parallel pragma
+keywords private procedure protected raise range record rem renames requeue
+keywords return reverse select separate some subtype synchronized tagged task
+keywords terminate then type until use when while with xor
+
+types Boolean Character Wide_Character Wide_Wide_Character Integer Natural
+types Positive Short_Integer Long_Integer Long_Long_Integer Float Short_Float
+types Long_Float Long_Long_Float String Wide_String Wide_Wide_String Duration
+types Unbounded_String Address
+
+constants True False null
+
+declares function function procedure entry
+declares type type subtype package task protected

@@ -1,0 +1,70 @@
+# Fortran, free form and fixed.
+
+language fortran
+files *.f *.for *.ftn *.f77 *.f90 *.f95 *.f03 *.f08 *.fpp
+ignore-case
+# x(i) is far more often an array than a call, so only the intrinsics and
+# what call, function and subroutine name are functions.
+calls none
+
+comment !
+string ' doubled
+string " doubled
+
+# Fixed form's comments: a * or a C in the first column. A free-form line
+# may start with a variable c, so a C is a comment only when a blank and
+# then something no statement starts with follows it (c = 1, c(i) = 2 and
+# c%x = 3 stay code), when a rule of punctuation does (C-----), or when it
+# is alone on its line.
+match comment ^\*.*
+match comment ^[cC](?:[ \t]+[^\s=(%]|[-*=+#!]{2}|[ \t]*$).*
+# The C preprocessor, which .F90 and .fpp files run through.
+match keyword ^\s*#\s*[A-Za-z]+
+# The dotted operators and logicals: .and., .eq., .true._lk.
+match operator (?i)\.(?:and|or|not|eqv|neqv|eq|ne|lt|le|gt|ge)\.
+match constant (?i)\.(?:true|false)\.(?:_[A-Za-z0-9_]+)?
+# BOZ literals: B'1010', O'17', Z'FF'.
+match number (?i)[boz](?:'[0-9a-f]+'|"[0-9a-f]+")
+# A derived type named after ::, type, public :: point.
+match (?i)^\s*(?P<keyword>type)\s*(?:,[^:]*)?::\s*(?P<type>[A-Za-z_][A-Za-z0-9_]*)
+
+# A real with a d or q exponent and a kind, 1.0d0 or 2.5_dp; 1.eq.2 keeps
+# its operator, since a dot followed by a letter is not the number's.
+numbers (?:[0-9]+\.[0-9]+|\.[0-9]+)(?:[eEdDqQ][-+]?[0-9]+)?(?:_[A-Za-z0-9_]+)?|[0-9]+\.?[eEdDqQ][-+]?[0-9]+(?:_[A-Za-z0-9_]+)?|[0-9]+(?:_[A-Za-z0-9_]+)?
+
+keywords abstract allocatable allocate assign associate asynchronous
+keywords backspace bind block call case class close codimension common
+keywords concurrent contains contiguous continue critical cycle data
+keywords deallocate default deferred dimension do elemental else elseif
+keywords elsewhere end endassociate endblock enddo endenum endforall
+keywords endfunction endif endinterface endmodule endprocedure endprogram
+keywords endselect endsubmodule endsubroutine endtype endwhere entry enum
+keywords enumerator equivalence error exit extends external final flush
+keywords forall format function generic go goto if implicit import impure in
+keywords include inout inquire intent interface intrinsic module namelist
+keywords non_overridable none nopass nullify only open operator optional out
+keywords parameter pass pause pointer print private procedure program
+keywords protected public pure read recursive result return rewind save
+keywords select sequence stop submodule subroutine sync target then to type
+keywords use value volatile wait where while write
+
+types integer real double precision complex character logical c_int c_long
+types c_short c_float c_double c_char c_bool c_ptr c_funptr c_size_t
+
+constants real32 real64 real128 int8 int16 int32 int64 c_null_ptr
+constants c_null_char
+
+functions abs achar acos adjustl adjustr aimag aint all allocated anint any
+functions asin associated atan atan2 bit_size btest ceiling char cmplx
+functions conjg cos cosh count cpu_time cshift date_and_time dble digits
+functions dot_product dprod eoshift epsilon exp exponent floor fraction huge
+functions iachar iand ibclr ibits ibset ichar ieor index int ior ishft kind
+functions lbound len len_trim log log10 matmul max maxloc maxval merge min
+functions minloc minval mod modulo move_alloc nint norm2 not pack present
+functions product random_number random_seed repeat reshape scan
+functions selected_int_kind selected_real_kind shape sign sin sinh size
+functions spread sqrt storage_size sum system_clock tan tanh tiny transpose
+functions trim ubound unpack verify
+
+declares function function subroutine call
+declares type type

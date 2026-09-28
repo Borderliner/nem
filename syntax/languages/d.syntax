@@ -1,0 +1,70 @@
+# D.
+
+language d
+files *.d *.di
+shebang rdmd
+
+comment //
+comment /* */
+comment /+ +/ nested
+# A script's #! line.
+match comment ^#!.*
+
+# A double-quoted string may run over lines. `...` and r"..." are
+# WYSIWYG: no escapes.
+string " multiline
+string ` raw multiline
+region string
+    start r"
+    end "
+    multiline
+string '
+
+# q"..." strings: bracketed, q"(...)"; any other rune, q"/.../"; or a
+# here-document, q"EOS on its own up to a line starting EOS".
+region string
+    start q"\(
+    end \)"
+    multiline
+region string
+    start q"\[
+    end \]"
+    multiline
+region string
+    start q"\{
+    end \}"
+    multiline
+region string
+    start q"<
+    end >"
+    multiline
+region string
+    start q"([^\sA-Za-z0-9_(\[{<"])
+    end \1"
+    multiline
+region string
+    start q"([A-Za-z_][A-Za-z0-9_]*)$
+    end ^\1"
+    multiline
+
+# Attributes: @safe, @nogc, @property, and user-defined ones.
+match keyword @[A-Za-z_][A-Za-z0-9_]*
+
+keywords abstract alias align asm assert auto break case cast catch class
+keywords const continue debug default delegate delete deprecated do else
+keywords enum export extern final finally for foreach foreach_reverse
+keywords function goto if immutable import in inout interface invariant is
+keywords lazy mixin module new nothrow out override package pragma private
+keywords protected public pure ref return scope shared static struct super
+keywords switch synchronized template this throw try typeid typeof union
+keywords unittest version while with __gshared __traits __vector __parameters
+
+types void bool byte ubyte short ushort int uint long ulong cent ucent float
+types double real ifloat idouble ireal cfloat cdouble creal char wchar dchar
+types string wstring dstring size_t ptrdiff_t noreturn Object
+
+constants true false null __FILE__ __FILE_FULL_PATH__ __LINE__ __MODULE__
+constants __FUNCTION__ __PRETTY_FUNCTION__ __DATE__ __TIME__ __TIMESTAMP__
+constants __VENDOR__ __VERSION__ __EOF__
+
+declares type class struct interface union

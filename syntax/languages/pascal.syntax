@@ -1,0 +1,51 @@
+# Pascal: Turbo Pascal, Delphi and Free Pascal.
+
+language pascal
+files *.pas *.pp *.dpr *.lpr *.dpk
+ignore-case
+
+comment //
+comment { }
+comment (* *)
+string ' doubled
+
+# A compiler directive is a brace comment starting {$.
+match keyword \{\$[^}]*\}
+# #13 and #$0D are characters; $FF, %1010 and &17 are numbers.
+match string #(?:[0-9]+|\$[0-9A-Fa-f]+)
+match number \$[0-9A-Fa-f]+|%[01]+|&[0-7]+
+# A method's body, procedure TList.Add: its class and its name.
+match (?i)(?P<keyword>procedure|function|constructor|destructor|operator)\s+(?P<type>[A-Za-z_][A-Za-z0-9_]*)(?P<punctuation>\.)(?P<function>[A-Za-z_][A-Za-z0-9_]*)
+# A type in a type section: TPoint = record, TColor = (Red, Green).
+match (?i)^\s*(?P<type>[A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^>]*>)?\s*=\s*(?:(?:bit)?packed\s+)?(?:(?:class|record|object|interface|dispinterface|set|array|file|type|procedure|function|reference|specialize)\b|\(|\^)
+
+keywords and array as asm begin case class const constructor destructor
+keywords dispinterface div do downto else end except exports file
+keywords finalization finally for function goto if implementation in
+keywords inherited initialization inline interface is label library mod not
+keywords object of or out packed procedure program property raise record
+keywords repeat resourcestring set shl shr then threadvar to try type unit
+keywords until uses var while with xor
+keywords absolute abstract assembler cdecl deprecated dynamic external forward
+keywords generic helper operator overload override platform private protected
+keywords public published register reintroduce safecall specialize static
+keywords stdcall strict virtual exit break continue
+
+types Integer Cardinal ShortInt SmallInt LongInt Int64 Byte Word LongWord
+types DWord QWord UInt64 NativeInt NativeUInt Real Single Double Extended
+types Currency Comp Boolean ByteBool WordBool LongBool Char AnsiChar WideChar
+types String AnsiString WideString UnicodeString ShortString PChar PAnsiChar
+types PWideChar Pointer Variant Text TextFile TObject TClass
+
+constants True False nil Self Result
+
+functions Write WriteLn Read ReadLn Length SetLength High Low Inc Dec Ord Chr
+functions Succ Pred Assigned Copy Pos Delete Insert Concat IntToStr StrToInt
+functions FloatToStr Format New Dispose GetMem FreeMem Halt SizeOf Round
+functions Trunc Abs Sqr Sqrt Odd Assign Reset Rewrite Close Append EOF EOLn
+functions Randomize Random Include Exclude FillChar Move UpCase LowerCase
+functions UpperCase Trim
+
+declares function procedure function constructor destructor
+
+operators +-*/=<>:^@
