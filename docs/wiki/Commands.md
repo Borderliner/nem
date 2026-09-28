@@ -66,6 +66,7 @@ A key in a mode - `dired: f` - works only in that mode's buffers; see [Keybindin
 | `dired-up-directory` | dired: `^` `M-<up>` | List the parent directory, with point on this one. |
 | `downcase-region` | `C-x C-l` | Convert the region to lower case. |
 | `downcase-word` | `M-l` | Convert the following word to lower case. |
+| `edit-language` |  | Edit how a language is coloured, in its .syntax file beside init.lua; saving it recolours every buffer. |
 | `end-of-buffer` | `M->` | Move point to the end of the buffer. |
 | `exchange-point-and-mark` | `C-x C-x` | Put point where the mark is, and the mark where point was. |
 | `execute-extended-command` | `M-x` | Read a command name in the minibuffer and run it. |
@@ -182,4 +183,4 @@ A key in a mode - `dired: f` - works only in that mode's buffers; see [Keybindin
 | `yank-pop` | `M-y` | Replace the text just yanked with the next-older kill-ring entry. |
 | `zap-to-char` | `M-z` | Kill up to and including the next occurrence of a character, ARG times. |
 
-172 commands in all.
+173 commands in all.

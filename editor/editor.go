@@ -323,6 +323,9 @@ func New(scr tcell.Screen) (*Editor, error) {
 	if err := registerFinderCommands(e, reg); err != nil {
 		return nil, fmt.Errorf("registering finder commands: %w", err)
 	}
+	if err := registerLanguageCommands(e, reg); err != nil {
+		return nil, fmt.Errorf("registering language commands: %w", err)
+	}
 	if err := registerProjectCommands(e, reg); err != nil {
 		return nil, fmt.Errorf("registering project commands: %w", err)
 	}

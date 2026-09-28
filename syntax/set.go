@@ -75,6 +75,23 @@ func loadBuiltin() {
 	builtinErr = errors.Join(append(errs, more...)...)
 }
 
+// BuiltinSource returns the text of nem's own definition of a language, as
+// it is written: what a user starts from to change it.
+func BuiltinSource(name string) (string, bool) {
+	if !ValidName(name) {
+		return "", false
+	}
+	data, err := languagesFS.ReadFile(path.Join("languages", name+".syntax"))
+	if err != nil {
+		return "", false
+	}
+	return string(data), true
+}
+
+// ValidName reports whether name may name a language: lower-case letters,
+// digits and + # . _ -.
+func ValidName(name string) bool { return languageName.MatchString(name) }
+
 // Builtin returns nem's own languages.
 func Builtin() *Set {
 	builtinOnce.Do(loadBuiltin)

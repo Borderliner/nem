@@ -176,6 +176,12 @@ func TestAFileIsColouredByItsLanguage(t *testing.T) {
 // userLanguages starts an editor whose config directory holds the given
 // definitions, as ~/.config/nem/syntax would.
 func userLanguages(t *testing.T, defs map[string]string) (*Editor, string) {
+	e, dir, _ := userLanguagesScreen(t, defs)
+	return e, dir
+}
+
+// userLanguagesScreen is userLanguages, with the screen to type into.
+func userLanguagesScreen(t *testing.T, defs map[string]string) (*Editor, string, tcell.SimulationScreen) {
 	t.Helper()
 	cfg := t.TempDir()
 	dir := filepath.Join(cfg, "syntax")
@@ -187,9 +193,9 @@ func userLanguages(t *testing.T, defs map[string]string) (*Editor, string) {
 			t.Fatal(err)
 		}
 	}
-	e, _ := newTestEditor(t, "x")
+	e, scr := newTestEditor(t, "x")
 	_ = e.LoadConfig(filepath.Join(cfg, "init.lua"))
-	return e, dir
+	return e, dir, scr
 }
 
 // A language of the user's own colours its files, and one named as nem's
@@ -317,5 +323,40 @@ func TestCommentFollowsTheUsersLanguage(t *testing.T) {
 	press(t, e, "M-;")
 	if got := b.Line(0).String(); !strings.HasPrefix(got, "-- Put_Line (X);") {
 		t.Errorf("M-; made %q, want Ada's comment", got)
+	}
+}
+
+// edit-language opens the definition of the language on screen: a copy of
+// nem's own to change, which saved replaces nem's; or the outline of a
+// language nem does not know, which saved colours its files.
+func TestEditLanguage(t *testing.T) {
+	e, dir, scr := userLanguagesScreen(t, nil)
+	e.Buf().SetPath(filepath.Join(t.TempDir(), "main.go"))
+
+	feed(t, scr, key(t, "RET"))
+	if err := e.Run("edit-language"); err != nil {
+		t.Fatal(err)
+	}
+	b := e.Buf()
+	if b.Path() != filepath.Join(dir, "go.syntax") {
+		t.Fatalf("editing %s, want the user's go.syntax", b.Path())
+	}
+	if src, _ := syntax.BuiltinSource("go"); b.String() != src {
+		t.Error("the user's go.syntax did not start as nem's own")
+	}
+
+	feed(t, scr, txt("ada"), key(t, "M-RET"))
+	if err := e.Run("edit-language"); err != nil {
+		t.Fatal(err)
+	}
+	b = e.Buf()
+	if !strings.Contains(b.String(), "language ada\n") {
+		t.Fatalf("a new language starts as %q", b.String())
+	}
+	if err := e.SaveBuffer(b, ""); err != nil {
+		t.Fatal(err)
+	}
+	if e.languages().Language("ada") == nil {
+		t.Error("the outline saved as it was did not load")
 	}
 }
