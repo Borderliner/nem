@@ -36,7 +36,7 @@ func assertSpanCovers(t *testing.T, lx Lexer, src, sub string, want Class) {
 }
 
 func TestGoKeywordsAndIdentifiersThatMerelyStartLikeOne(t *testing.T) {
-	lx := goLexer{}
+	lx := lang(t, "go")
 	for _, tc := range []struct {
 		src, sub string
 		want     Class
@@ -56,7 +56,7 @@ func TestGoKeywordsAndIdentifiersThatMerelyStartLikeOne(t *testing.T) {
 }
 
 func TestGoFunctionPositions(t *testing.T) {
-	lx := goLexer{}
+	lx := lang(t, "go")
 	for _, tc := range []struct{ src, sub string }{
 		{"func main() {", "main"},
 		{"func (e *Editor) Redraw() {", "Redraw"},
@@ -74,14 +74,14 @@ func TestGoFunctionPositions(t *testing.T) {
 }
 
 func TestGoTypeAfterTypeKeyword(t *testing.T) {
-	lx := goLexer{}
+	lx := lang(t, "go")
 	assertClass(t, lx, "type Editor struct {", "Editor", Type)
 	assertClass(t, lx, "type   Spaced  int", "Spaced", Type)
 	assertClass(t, lx, "type Editor struct {", "type", Keyword)
 }
 
 func TestGoStringsAndRunes(t *testing.T) {
-	lx := goLexer{}
+	lx := lang(t, "go")
 	assertSpanCovers(t, lx, `s := "hello"`, `"hello"`, String)
 	assertSpanCovers(t, lx, `s := "a\"b"`, `"a\"b"`, String) // escaped quote does not end it
 	assertSpanCovers(t, lx, `r := '\''`, `'\''`, String)     // the awkward rune literal
@@ -94,7 +94,7 @@ func TestGoStringsAndRunes(t *testing.T) {
 }
 
 func TestGoNumbers(t *testing.T) {
-	lx := goLexer{}
+	lx := lang(t, "go")
 	for _, lit := range []string{
 		"42", "0", "1_000_000", "0x1f", "0xDEAD_beef", "0b1010", "0o777",
 		"3.14", "1e9", "1E-9", "6.02e23", "1.5i", "2i", "0x1.8p3", ".5",
@@ -108,14 +108,14 @@ func TestGoNumbers(t *testing.T) {
 }
 
 func TestGoLineComment(t *testing.T) {
-	lx := goLexer{}
+	lx := lang(t, "go")
 	assertSpanCovers(t, lx, `x := 1 // trailing`, `// trailing`, Comment)
 	// A // inside a string is not a comment.
 	assertSpanCovers(t, lx, `u := "http://x"`, `"http://x"`, String)
 }
 
 func TestGoBlockCommentSpansLines(t *testing.T) {
-	_, spans := lexDoc(goLexer{}, "/* open\n   still\n   here */ x := 1\n")
+	_, spans := lexDoc(lang(t, "go"), "/* open\n   still\n   here */ x := 1\n")
 	if classAt(spans[0], 0) != Comment {
 		t.Error("line 0 should open a comment")
 	}
@@ -126,7 +126,7 @@ func TestGoBlockCommentSpansLines(t *testing.T) {
 		t.Error("line 2 up to the close should be Comment")
 	}
 	// After the close, code resumes.
-	lines, _ := lexDoc(goLexer{}, "/* open\n   still\n   here */ x := 1\n")
+	lines, _ := lexDoc(lang(t, "go"), "/* open\n   still\n   here */ x := 1\n")
 	last := lines[2]
 	idx := strings.Index(string(last), "x :=")
 	if classAt(spans[2], len([]rune(string(last)[:idx]))) == Comment {
@@ -135,7 +135,7 @@ func TestGoBlockCommentSpansLines(t *testing.T) {
 }
 
 func TestGoRawStringSpansLines(t *testing.T) {
-	_, spans := lexDoc(goLexer{}, "s := `raw\nstill raw\nend` + x\n")
+	_, spans := lexDoc(lang(t, "go"), "s := `raw\nstill raw\nend` + x\n")
 	if classAt(spans[0], 6) != String {
 		t.Error("the backtick should open a string")
 	}
@@ -154,7 +154,7 @@ func TestGoRawStringSpansLines(t *testing.T) {
 // comment does not open a string. Both are the kind of interaction that a
 // lexer handling each construct separately gets wrong.
 func TestGoConstructsDoNotLeakIntoEachOther(t *testing.T) {
-	lx := goLexer{}
+	lx := lang(t, "go")
 	spans, out := lx.Lex([]rune("s := `a // b`"), 0)
 	if out != 0 {
 		t.Errorf("a closed raw string left state %v", out)

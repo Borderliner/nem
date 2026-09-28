@@ -1,0 +1,27 @@
+# SQL, which is written in either case, often in both at once.
+
+language sql
+files *.sql *.ddl *.psql
+
+ignore-case
+comment --
+comment /* */
+string ' doubled
+string " doubled
+
+keywords add all alter and as asc begin between by case cast check column
+keywords commit constraint create cross database default delete desc
+keywords distinct drop else end exists foreign from full group having if in
+keywords index inner insert into is join key left like limit not offset on or
+keywords order outer primary references returning right rollback select set
+keywords table then transaction union unique update using values view when
+keywords where with
+
+types bigint binary bit blob boolean char date datetime decimal double float
+types int integer interval json jsonb numeric real serial smallint text time
+types timestamp uuid varchar varbinary
+
+constants true false null current_date current_time current_timestamp
+
+functions avg coalesce concat count greatest least lower max min now nullif
+functions round substring sum trim upper

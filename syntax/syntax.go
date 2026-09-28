@@ -12,17 +12,14 @@
 // That convergence check is why State is a comparable value type rather than an
 // interface or a pointer: == has to mean "the rest of the file is unaffected".
 //
-// tree-sitter is deliberately not used. It is a C library, and cgo would cost
-// nem the single static binary that Go was chosen for. These are hand-written
-// lexers, which are approximate at the edges - they are colouring text, not
-// compiling it - and the tests pin the cases that actually break highlighters
-// rather than trying to model each grammar completely.
+// Every language is described the same way, by a .syntax file - nem's own
+// embedded from languages/, and the user's read from beside init.lua - and
+// compiled into a Language, which is the Lexer. tree-sitter is deliberately
+// not used: it is a C library, and cgo would cost nem the single static binary
+// Go was chosen for. A definition colours text rather than compiling it, so it
+// is approximate at the edges, and the tests pin the cases that actually break
+// highlighters rather than modelling each grammar completely.
 package syntax
-
-import (
-	"path/filepath"
-	"strings"
-)
 
 // Class is what a span of text is, for colouring purposes.
 //
@@ -91,24 +88,12 @@ type Span struct {
 // State is what one line leaves open for the next: a block comment, a raw
 // string, a fenced code block.
 //
-// It is opaque and its encoding is private to each lexer, but its layout is
-// fixed so that the zero value means the same thing everywhere:
-//
-//	bits 0..7    mode   - lexer-specific; 0 always means "nothing is open"
-//	bits 8..23   param  - lexer-specific; a Lua long-bracket level, a Markdown
-//	                      fence length and its delimiter
-//	bits 24..31  unused, always zero
-//
-// The zero State is therefore "start of file", which is what a caller passes
-// for line 0 without needing to ask the lexer for an initial value.
+// It is opaque, and its encoding belongs to the lexer that made it - a
+// Language's is documented beside regionState - but the zero value means
+// the same everywhere: nothing is open. It is therefore "start of file",
+// which is what a caller passes for line 0 without asking the lexer for an
+// initial value.
 type State uint32
-
-func mkState(mode uint8, param uint16) State {
-	return State(uint32(mode) | uint32(param)<<8)
-}
-
-func (s State) mode() uint8   { return uint8(s & 0xFF) }
-func (s State) param() uint16 { return uint16((s >> 8) & 0xFFFF) }
 
 // Lexer classifies one line at a time.
 //
@@ -127,33 +112,6 @@ type Lexer interface {
 	Lex(line []rune, in State) (spans []Span, out State)
 	// Name identifies the language, for the modeline and for tests.
 	Name() string
-}
-
-// For returns the lexer for a path, by file name.
-//
-// It never returns nil: a name nothing recognises gets the plain lexer, so a
-// caller never has to check before lexing. Use ForWithHeader when the file's
-// first line is available, which is what identifies a script with no extension.
-func For(path string) Lexer { return ForWithHeader(path, "") }
-
-// nativeFor returns the hand-written lexer for a path, or nil if there is none.
-//
-// These come first everywhere. They carry state properly across lines and know
-// their grammar, where a rule file can only approximate with regexes - so a
-// bundled or nano-supplied definition for the same language must never displace
-// one of these.
-func nativeFor(path string) Lexer {
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".go":
-		return goLexer{}
-	case ".lua":
-		return luaLexer{}
-	case ".json":
-		return jsonLexer{}
-	case ".md", ".markdown":
-		return markdownLexer{}
-	}
-	return nil
 }
 
 // PlainLexer classifies nothing, for text nem has no grammar for.

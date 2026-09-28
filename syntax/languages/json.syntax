@@ -1,0 +1,18 @@
+# JSON, with the comments JSONC allows.
+
+language json
+files *.json *.jsonc *.jsonl *.json5 *.geojson *.webmanifest .babelrc .eslintrc
+
+calls none
+operators none
+punctuation {}[],:
+numbers -?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?
+
+# A string followed by a colon is a key, coloured apart from the values. The
+# colon is left to be read again, as punctuation.
+match (?P<function>"(?:[^"\\]|\\.)*")\s*:
+string "
+comment //
+comment /* */
+
+constants true false null

@@ -1,0 +1,16 @@
+# Dockerfiles, and Containerfiles.
+
+language dockerfile
+files dockerfile dockerfile.* *.dockerfile containerfile containerfile.*
+
+calls none
+operators none
+
+# A # is a comment only at the start of a line; anywhere else it is text.
+match comment ^\s*#.*$
+match keyword (?i)^\s*(?:add|arg|cmd|copy|entrypoint|env|expose|from|healthcheck|label|maintainer|onbuild|run|shell|stopsignal|user|volume|workdir)\b
+match \s(?P<keyword>(?i:as))\s
+match constant \$\{[^}]*\}
+match constant \$[A-Za-z_][A-Za-z0-9_]*
+string "
+string ' raw

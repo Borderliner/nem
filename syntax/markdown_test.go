@@ -3,7 +3,7 @@ package syntax
 import "testing"
 
 func TestMarkdownHeadings(t *testing.T) {
-	lx := markdownLexer{}
+	lx := lang(t, "markdown")
 	for _, src := range []string{"# One", "## Two", "###### Six", "   # Indented"} {
 		line := []rune(src)
 		spans, _ := lx.Lex(line, 0)
@@ -22,7 +22,7 @@ func TestMarkdownHeadings(t *testing.T) {
 }
 
 func TestMarkdownFencedCodeSpansLines(t *testing.T) {
-	_, spans := lexDoc(markdownLexer{}, "before\n```go\nfunc x() {}\n```\nafter\n")
+	_, spans := lexDoc(lang(t, "markdown"), "before\n```go\nfunc x() {}\n```\nafter\n")
 	if classAt(spans[0], 0) == String {
 		t.Error("text before the fence is not code")
 	}
@@ -41,7 +41,7 @@ func TestMarkdownFencedCodeSpansLines(t *testing.T) {
 // visible mistake a Markdown highlighter can make.
 func TestMarkdownFenceClosingRules(t *testing.T) {
 	// A tilde fence does not close a backtick fence.
-	_, spans := lexDoc(markdownLexer{}, "```\ncode\n~~~\nstill code\n```\nout\n")
+	_, spans := lexDoc(lang(t, "markdown"), "```\ncode\n~~~\nstill code\n```\nout\n")
 	if classAt(spans[3], 0) != String {
 		t.Error("~~~ must not close a ``` fence")
 	}
@@ -53,7 +53,7 @@ func TestMarkdownFenceClosingRules(t *testing.T) {
 	// delimiter: a backtick run must not close a tilde fence. Testing only the
 	// first direction passes even if the delimiter is ignored entirely, because
 	// a tilde line contains no backticks either way.
-	_, spansT := lexDoc(markdownLexer{}, "~~~\ncode\n```\nstill code\n~~~\nout\n")
+	_, spansT := lexDoc(lang(t, "markdown"), "~~~\ncode\n```\nstill code\n~~~\nout\n")
 	if classAt(spansT[3], 0) != String {
 		t.Error("``` must not close a ~~~ fence")
 	}
@@ -62,7 +62,7 @@ func TestMarkdownFenceClosingRules(t *testing.T) {
 	}
 
 	// A shorter run does not close a longer fence.
-	_, spans2 := lexDoc(markdownLexer{}, "````\ncode\n```\nstill code\n````\nout\n")
+	_, spans2 := lexDoc(lang(t, "markdown"), "````\ncode\n```\nstill code\n````\nout\n")
 	if classAt(spans2[3], 0) != String {
 		t.Error("``` must not close a ```` fence")
 	}
@@ -71,20 +71,20 @@ func TestMarkdownFenceClosingRules(t *testing.T) {
 	}
 
 	// A line of code that merely begins with backticks does not close it.
-	_, spans3 := lexDoc(markdownLexer{}, "```\n``` and more text\nstill code\n```\nout\n")
+	_, spans3 := lexDoc(lang(t, "markdown"), "```\n``` and more text\nstill code\n```\nout\n")
 	if classAt(spans3[2], 0) != String {
 		t.Error("a fence line with trailing text must not close the block")
 	}
 }
 
 func TestMarkdownInlineCode(t *testing.T) {
-	lx := markdownLexer{}
+	lx := lang(t, "markdown")
 	assertSpanCovers(t, lx, "use `code` here", "`code`", String)
 	assertSpanCovers(t, lx, "a ``tick ` inside`` b", "``tick ` inside``", String)
 }
 
 func TestMarkdownEmphasisAndLinks(t *testing.T) {
-	lx := markdownLexer{}
+	lx := lang(t, "markdown")
 	assertSpanCovers(t, lx, "an *italic* word", "*italic*", Constant)
 	assertSpanCovers(t, lx, "an _italic_ word", "_italic_", Constant)
 	assertSpanCovers(t, lx, "a **bold** word", "**bold**", Constant)
@@ -101,7 +101,7 @@ func TestMarkdownEmphasisAndLinks(t *testing.T) {
 // A bullet is consumed before inline scanning, so the * that starts a list item
 // is not read as the opening of emphasis.
 func TestMarkdownListMarkersAreNotEmphasis(t *testing.T) {
-	lx := markdownLexer{}
+	lx := lang(t, "markdown")
 	for _, src := range []string{"* item", "- item", "+ item", "1. item", "2) item"} {
 		line := []rune(src)
 		spans, _ := lx.Lex(line, 0)
@@ -114,7 +114,7 @@ func TestMarkdownListMarkersAreNotEmphasis(t *testing.T) {
 
 func TestMarkdownBlockquote(t *testing.T) {
 	line := []rune("> quoted text")
-	spans, _ := markdownLexer{}.Lex(line, 0)
+	spans, _ := lang(t, "markdown").Lex(line, 0)
 	if classAt(spans, 0) != Comment {
 		t.Errorf("a blockquote should read as an aside, got %s", describe(line, spans))
 	}

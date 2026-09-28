@@ -1,0 +1,46 @@
+# Python.
+
+language python
+files *.py *.pyi *.pyw sconstruct sconscript
+shebang python pypy
+
+comment #
+# A string may carry a prefix - r, b, f, u, and two of them together - and a
+# triple-quoted one may run over lines.
+region string
+    start (?i)(?:[rbuf]|br|rb|fr|rf)?"""
+    end """
+    escape \\.
+    multiline
+region string
+    start (?i)(?:[rbuf]|br|rb|fr|rf)?'''
+    end '''
+    escape \\.
+    multiline
+region string
+    start (?i)(?:[rbuf]|br|rb|fr|rf)?"
+    end "
+    escape \\.
+region string
+    start (?i)(?:[rbuf]|br|rb|fr|rf)?'
+    end '
+    escape \\.
+
+match function @[A-Za-z_][A-Za-z0-9_.]*
+
+keywords and as assert async await break case class continue def del elif
+keywords else except finally for from global if import in is lambda match
+keywords nonlocal not or pass raise return try while with yield
+
+constants True False None NotImplemented Ellipsis __name__ __main__ self cls
+
+types bool bytearray bytes complex dict float frozenset int list object set
+types str tuple type
+
+functions abs all any ascii bin callable chr dir divmod enumerate eval exec
+functions filter format getattr globals hasattr hash hex id input isinstance
+functions issubclass iter len locals map max min next oct open ord pow print
+functions range repr reversed round setattr slice sorted sum super vars zip
+
+declares function def
+declares type class

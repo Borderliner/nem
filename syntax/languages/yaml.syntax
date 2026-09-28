@@ -1,0 +1,20 @@
+# YAML.
+
+language yaml
+files *.yaml *.yml .clang-format .clang-tidy
+
+calls none
+operators none
+punctuation []{},
+numbers -?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?
+
+match comment (?:^|[ \t])#.*$
+match keyword ^---|^\.\.\.
+match ^\s*(?:-\s+)?(?P<function>[A-Za-z_][A-Za-z0-9_./-]*|"[^"]*"|'[^']*')\s*:(?:\s|$)
+match ^\s*(?P<keyword>-)(?:\s|$)
+match constant [&*][A-Za-z0-9_-]+
+match type ![A-Za-z0-9_!/:.-]*
+string ' doubled
+string "
+
+constants true false yes no on off null True False Null TRUE FALSE NULL

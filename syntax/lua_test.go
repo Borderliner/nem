@@ -3,7 +3,7 @@ package syntax
 import "testing"
 
 func TestLuaKeywordsConstantsAndCalls(t *testing.T) {
-	lx := luaLexer{}
+	lx := lang(t, "lua")
 	for _, tc := range []struct {
 		src, sub string
 		want     Class
@@ -26,14 +26,14 @@ func TestLuaKeywordsConstantsAndCalls(t *testing.T) {
 }
 
 func TestLuaLineComment(t *testing.T) {
-	lx := luaLexer{}
+	lx := lang(t, "lua")
 	assertSpanCovers(t, lx, "x = 1 -- a note", "-- a note", Comment)
 	// A -- inside a string is not a comment.
 	assertSpanCovers(t, lx, `s = "a -- b"`, `"a -- b"`, String)
 }
 
 func TestLuaQuotedStrings(t *testing.T) {
-	lx := luaLexer{}
+	lx := lang(t, "lua")
 	assertSpanCovers(t, lx, `s = "hello"`, `"hello"`, String)
 	assertSpanCovers(t, lx, `s = 'hello'`, `'hello'`, String)
 	assertSpanCovers(t, lx, `s = "a\"b"`, `"a\"b"`, String)
@@ -41,7 +41,7 @@ func TestLuaQuotedStrings(t *testing.T) {
 }
 
 func TestLuaLongCommentSpansLines(t *testing.T) {
-	_, spans := lexDoc(luaLexer{}, "--[[ open\nstill\nclosed ]] x = 1\n")
+	_, spans := lexDoc(lang(t, "lua"), "--[[ open\nstill\nclosed ]] x = 1\n")
 	for i := 0; i < 3; i++ {
 		if classAt(spans[i], 0) != Comment {
 			t.Errorf("line %d should be inside the long comment", i)
@@ -53,7 +53,7 @@ func TestLuaLongCommentSpansLines(t *testing.T) {
 }
 
 func TestLuaLongStringSpansLines(t *testing.T) {
-	_, spans := lexDoc(luaLexer{}, "s = [[ open\nstill\nclosed ]]\n")
+	_, spans := lexDoc(lang(t, "lua"), "s = [[ open\nstill\nclosed ]]\n")
 	if classAt(spans[0], 4) != String {
 		t.Error("[[ should open a long string")
 	}
@@ -68,7 +68,7 @@ func TestLuaLongStringSpansLines(t *testing.T) {
 // The level must match. This is the case a lexer that merely looks for "]]"
 // gets wrong, and it silently recolours the rest of the file.
 func TestLuaLongBracketLevelsMustMatch(t *testing.T) {
-	_, spans := lexDoc(luaLexer{}, "s = [==[ open\ncontains ]] which does not close it\nreal close ]==]\nx = 1\n")
+	_, spans := lexDoc(lang(t, "lua"), "s = [==[ open\ncontains ]] which does not close it\nreal close ]==]\nx = 1\n")
 	if classAt(spans[1], 10) != String {
 		t.Error("]] must not close a [==[ string")
 	}
@@ -81,7 +81,7 @@ func TestLuaLongBracketLevelsMustMatch(t *testing.T) {
 
 	// And the reverse: a longer closer does not close a shorter opener early,
 	// because ]==] contains no ]] that matches level 0 exactly.
-	_, spans2 := lexDoc(luaLexer{}, "s = [[ open\nnot ]=] either\nclose ]]\n")
+	_, spans2 := lexDoc(lang(t, "lua"), "s = [[ open\nnot ]=] either\nclose ]]\n")
 	if classAt(spans2[1], 4) != String {
 		t.Error("]=] must not close a [[ string")
 	}
@@ -91,7 +91,7 @@ func TestLuaLongBracketLevelsMustMatch(t *testing.T) {
 }
 
 func TestLuaLongCommentWithLevel(t *testing.T) {
-	_, spans := lexDoc(luaLexer{}, "--[==[ open\nstill\n]==]\nx = 1\n")
+	_, spans := lexDoc(lang(t, "lua"), "--[==[ open\nstill\n]==]\nx = 1\n")
 	if classAt(spans[1], 0) != Comment {
 		t.Error("line 1 is inside the level-2 long comment")
 	}
@@ -101,7 +101,7 @@ func TestLuaLongCommentWithLevel(t *testing.T) {
 }
 
 func TestLuaNumbers(t *testing.T) {
-	lx := luaLexer{}
+	lx := lang(t, "lua")
 	for _, lit := range []string{"42", "3.14", "0xff", "1e9", "1E-3", ".5"} {
 		assertSpanCovers(t, lx, "x = "+lit+" + y", lit, Number)
 	}
@@ -109,5 +109,5 @@ func TestLuaNumbers(t *testing.T) {
 
 // A lone [ is a table index, not a long bracket.
 func TestLuaSingleBracketIsPunctuation(t *testing.T) {
-	assertClass(t, luaLexer{}, "x = t[1]", "[", Punctuation)
+	assertClass(t, lang(t, "lua"), "x = t[1]", "[", Punctuation)
 }

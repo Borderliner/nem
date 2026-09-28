@@ -1,0 +1,20 @@
+# TOML.
+
+language toml
+files *.toml cargo.lock poetry.lock uv.lock
+
+calls none
+operators =
+punctuation []{},.
+numbers [-+]?(?:0x[0-9a-fA-F_]+|0o[0-7_]+|0b[01_]+|[0-9][0-9_]*(?:\.[0-9_]+)?(?:[eE][-+]?[0-9_]+)?)
+
+comment #
+match type ^\s*\[\[?[^\]]*\]\]?
+match ^\s*(?P<function>[A-Za-z0-9_.-]+|"[^"]*"|'[^']*')\s*=
+match number [0-9]{4}-[0-9]{2}-[0-9]{2}(?:[Tt ][0-9:.+Zz-]+)?
+string """ multiline
+string ''' raw multiline
+string "
+string ' raw
+
+constants true false inf nan

@@ -1,0 +1,16 @@
+# Makefiles.
+
+language makefile
+files makefile gnumakefile *.mk *.make
+
+calls none
+numbers none
+comment #
+string "
+string ' raw
+
+match type \.(?:PHONY|SUFFIXES|DEFAULT|PRECIOUS|INTERMEDIATE|SECONDARY|DELETE_ON_ERROR|IGNORE|SILENT|EXPORT_ALL_VARIABLES|NOTPARALLEL|ONESHELL|POSIX)\b
+match keyword ^\s*-?(?:include|sinclude|ifeq|ifneq|ifdef|ifndef|else|endif|define|endef|export|unexport|override|vpath)\b
+match ^(?P<function>[A-Za-z0-9_./$()%-]+\s*::?)(?:\s|$)
+match constant \$[({][^)}]*[)}]
+match constant \$[@<^+*?%]

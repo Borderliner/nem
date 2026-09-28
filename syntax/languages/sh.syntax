@@ -1,0 +1,31 @@
+# The Bourne shell and its descendants: sh, bash, zsh, ksh.
+
+language sh
+files *.sh *.bash *.zsh *.ksh .bashrc .bash_profile .bash_logout .zshrc
+files .zprofile .zshenv .zlogin .profile .kshrc pkgbuild apkbuild *.ebuild
+shebang sh bash zsh ksh dash ash mksh
+
+calls none
+word-chars -
+numbers [0-9]+
+
+# A # starts a comment only at the start of a word.
+match comment (?:^|[ \t])#.*$
+match ^\s*(?P<function>[A-Za-z_][A-Za-z0-9_-]*)\s*\(\)
+match constant \$\{[^}]*\}
+match constant \$[A-Za-z_][A-Za-z0-9_]*
+match constant \$[0-9*@#?$!-]
+string " multiline
+string ' raw multiline
+# A here-document runs to a line holding only its word.
+region string
+    start <<-?\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?
+    end ^\s*\1$
+    multiline
+
+keywords if then elif else fi for while until do done case esac in function
+keywords select time coproc
+keywords alias bg break builtin cd command continue declare echo eval exec
+keywords exit export fg getopts hash jobs kill local printf pwd read readonly
+keywords return set shift shopt source test trap type typeset ulimit umask
+keywords unalias unset wait

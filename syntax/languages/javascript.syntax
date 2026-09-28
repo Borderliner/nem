@@ -1,0 +1,26 @@
+# JavaScript.
+
+language javascript
+files *.js *.mjs *.cjs *.jsx
+shebang node deno bun
+
+word-chars $
+comment //
+comment /* */
+string "
+string '
+string ` multiline
+
+keywords async await break case catch class const continue debugger default
+keywords delete do else export extends finally for from function get if
+keywords import in instanceof let new of return set static super switch
+keywords this throw try typeof var void while with yield
+
+constants true false null undefined NaN Infinity globalThis
+
+types Array ArrayBuffer BigInt Boolean DataView Date Error Function Intl
+types JSON Map Math Number Object Promise Proxy Reflect RegExp Set String
+types Symbol WeakMap WeakRef WeakSet
+
+declares function function
+declares type class

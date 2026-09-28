@@ -60,7 +60,7 @@ func goSource(n int) [][]rune {
 
 func BenchmarkGoLexFile(b *testing.B) {
 	lines := goSource(500)
-	lx := goLexer{}
+	lx := builtin("go")
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -75,7 +75,7 @@ func BenchmarkGoLexFile(b *testing.B) {
 // only far enough to converge.
 func BenchmarkGoLexOneLine(b *testing.B) {
 	line := []rune("\treturn fmt.Sprintf(\"%s: %d\", w.Name, 1_000+0xff) // done")
-	lx := goLexer{}
+	lx := builtin("go")
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -90,7 +90,7 @@ func BenchmarkLuaLexFile(b *testing.B) {
 	for _, s := range src {
 		lines = append(lines, []rune(s))
 	}
-	lx := luaLexer{}
+	lx := builtin("lua")
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

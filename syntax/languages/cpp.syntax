@@ -1,0 +1,25 @@
+# C++, which is C and more.
+
+language cpp
+like c
+files *.cc *.cpp *.cxx *.c++ *.hh *.hpp *.hxx *.h++ *.ipp *.tpp *.inl
+
+# R"delim( ... )delim" runs to its own delimiter.
+region string
+    start R"([^(\s\\]{0,16})\(
+    end \)\1"
+    multiline
+
+keywords alignas alignof catch class concept consteval constexpr constinit
+keywords co_await co_return co_yield decltype delete explicit export final
+keywords friend mutable namespace new noexcept operator override private
+keywords protected public requires static_assert template this throw try
+keywords typeid typename using virtual
+
+types string wstring string_view vector array map unordered_map set
+types unordered_set deque list pair tuple optional variant shared_ptr
+types unique_ptr weak_ptr function span
+
+constants nullptr
+
+declares type class namespace

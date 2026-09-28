@@ -1,0 +1,24 @@
+# XML, and the formats written in it.
+
+language xml
+files *.xml *.xsd *.xsl *.xslt *.svg *.rss *.atom *.plist *.pom *.csproj
+files *.fsproj *.vbproj *.props *.targets *.xaml *.kml *.gpx *.wsdl *.xul
+header ^<\?xml
+
+calls none
+numbers none
+operators none
+punctuation none
+
+comment <!-- -->
+region string
+    start <!\[CDATA\[
+    end \]\]>
+    multiline
+match keyword <\?[A-Za-z][^?]*\?>
+match keyword </?[A-Za-z_:][A-Za-z0-9_.:-]*
+match keyword /?>
+# An attribute and its value. Quotes outside a tag are only text: the
+# apostrophe in don't opens nothing.
+match (?P<type>[A-Za-z_:][A-Za-z0-9_.:-]*)\s*=\s*(?P<string>"[^"]*"|'[^']*')
+match constant &[A-Za-z][A-Za-z0-9]*;|&#[0-9]+;|&#[xX][0-9a-fA-F]+;

@@ -1,0 +1,8 @@
+# Sass and Less: CSS, and line comments.
+
+language scss
+like css
+files *.scss *.sass *.less
+
+comment //
+match constant [$@][A-Za-z_-][A-Za-z0-9_-]*

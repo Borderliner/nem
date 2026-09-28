@@ -1,0 +1,15 @@
+# nem's language definitions: the files this directory holds.
+
+language syntax
+files *.syntax
+
+calls none
+numbers none
+operators none
+punctuation none
+
+match comment ^\s*#.*$
+match ^(?P<keyword>declares|match|region)\s+(?P<type>plain|keyword|type|constant|function|string|comment|number|operator|punctuation)\b
+match keyword ^(?:language|like|files|shebang|header|ignore-case|word-chars|keywords|types|constants|functions|declares|calls|numbers|operators|punctuation|comment|string|region|match)\b
+match ^\s+(?P<keyword>start|end|escape|nested|multiline)\b
+match \s(?P<constant>raw|doubled|multiline|nested|paren|lisp|none)$

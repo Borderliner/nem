@@ -6,11 +6,34 @@ import (
 	"testing"
 )
 
-// allLexers is every lexer the package offers. Each invariant below runs
-// against all of them, because an invariant that holds only for the lexer its
-// author was thinking about is not an invariant.
+// allLexers is every lexer the package offers: the plain one and each of
+// nem's languages. Each invariant below runs against all of them, because an
+// invariant that holds only for the lexer its author was thinking about is not
+// an invariant.
 func allLexers() []Lexer {
-	return []Lexer{PlainLexer{}, goLexer{}, luaLexer{}, jsonLexer{}, markdownLexer{}}
+	out := []Lexer{PlainLexer{}}
+	for _, l := range Builtin().Languages() {
+		out = append(out, l)
+	}
+	return out
+}
+
+// builtin returns one of nem's languages.
+func builtin(name string) Lexer {
+	if l := Builtin().Language(name); l != nil {
+		return l
+	}
+	panic("no built-in language " + name)
+}
+
+// lang returns one of nem's languages, for a test.
+func lang(t testing.TB, name string) *Language {
+	t.Helper()
+	l := Builtin().Language(name)
+	if l == nil {
+		t.Fatalf("no built-in language %q", name)
+	}
+	return l
 }
 
 // checkSpans asserts the structural promises the Lexer interface makes. A
@@ -85,7 +108,7 @@ func TestLexingIsPureAndResumable(t *testing.T) {
 // cached, every line below is provably unchanged. This is the stopping rule, so
 // it is worth pinning rather than assuming.
 func TestReLexConvergesOnTheCachedState(t *testing.T) {
-	lx := goLexer{}
+	lx := builtin("go")
 	lines := splitLines("package main\n\nfunc a() {}\n\nfunc b() {}\n\nfunc c() {}\n")
 
 	var st State
@@ -110,10 +133,10 @@ func TestUnterminatedConstructsAreSafe(t *testing.T) {
 		lexer Lexer
 		lines []string
 	}{
-		{goLexer{}, []string{`s := "unclosed`, "/* open forever", "r := `raw and open", `c := 'x`, "`", `"`, "'"}},
-		{luaLexer{}, []string{"s = [==[ open", "--[[ open comment", `s = "unclosed`, "s = 'unclosed", "[=", "--[=", "]="}},
-		{jsonLexer{}, []string{`{"a": "unclosed`, `{"a":`, `[`, `"`}},
-		{markdownLexer{}, []string{"```go", "`inline unclosed", "# ", "```", "> ", "["}},
+		{builtin("go"), []string{`s := "unclosed`, "/* open forever", "r := `raw and open", `c := 'x`, "`", `"`, "'"}},
+		{builtin("lua"), []string{"s = [==[ open", "--[[ open comment", `s = "unclosed`, "s = 'unclosed", "[=", "--[=", "]="}},
+		{builtin("json"), []string{`{"a": "unclosed`, `{"a":`, `[`, `"`}},
+		{builtin("markdown"), []string{"```go", "`inline unclosed", "# ", "```", "> ", "["}},
 	}
 	for _, c := range cases {
 		for _, s := range c.lines {
@@ -133,12 +156,12 @@ func TestSpansAreRuneIndicesNotByteOffsets(t *testing.T) {
 		lexer Lexer
 		line  string
 	}{
-		{goLexer{}, `s := "日本語のテキスト" // コメント`},
-		{goLexer{}, `s := "🙂🚀" // emoji`},
-		{goLexer{}, "s := \"café\" // decomposed"},
-		{luaLexer{}, `s = "日本語" -- コメント`},
-		{jsonLexer{}, `{"キー": "値"}`},
-		{markdownLexer{}, "# 見出し `コード`"},
+		{builtin("go"), `s := "日本語のテキスト" // コメント`},
+		{builtin("go"), `s := "🙂🚀" // emoji`},
+		{builtin("go"), "s := \"café\" // decomposed"},
+		{builtin("lua"), `s = "日本語" -- コメント`},
+		{builtin("json"), `{"キー": "値"}`},
+		{builtin("markdown"), "# 見出し `コード`"},
 	} {
 		line := []rune(tc.line)
 		spans, _ := tc.lexer.Lex(line, 0)

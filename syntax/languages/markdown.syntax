@@ -1,0 +1,30 @@
+# Markdown.
+#
+# Prose, so nothing a code language colours by default is coloured here:
+# words, numbers and operators are text.
+
+language markdown
+files *.md *.markdown *.mkd *.mdown
+
+calls none
+numbers none
+operators none
+punctuation none
+
+# HTML's comments are Markdown's: they hide text from the page.
+comment <!-- -->
+
+# A fenced block runs to a fence of its own rune, at least as long.
+region string
+    start ^ {0,3}(`{3,}|~{3,})
+    end ^ {0,3}\1[`~]*[ \t]*$
+    multiline
+
+match keyword ^ {0,3}#{1,6}(?:[ \t].*)?$
+match comment ^ *>.*$
+match ^ *(?P<punctuation>[-*+]|[0-9]+[.)])[ \t]
+match string ``[^`](?:[^`]|`[^`])*``
+match string `[^`]+`
+match (?P<function>\[[^\]]*\])(?P<string>\([^)]*\))
+match constant \*\*\*[^\s*](?:[^*]*[^\s*])?\*\*\*|\*\*[^\s*](?:[^*]*[^\s*])?\*\*|\*[^\s*](?:[^*]*[^\s*])?\*
+match constant ___[^\s_](?:[^_]*[^\s_])?___|__[^\s_](?:[^_]*[^\s_])?__|_[^\s_](?:[^_]*[^\s_])?_

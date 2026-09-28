@@ -1,0 +1,32 @@
+# Rust.
+
+language rust
+files *.rs
+
+comment //
+comment /* */ nested
+string " multiline
+# r"...", r#"..."# and b variants: a raw string ends at a quote and as many
+# #s as it opened with.
+region string
+    start b?r(#*)"
+    end "\1
+    multiline
+# A character literal, then a lifetime: 'a' and '\n' close, 'a does not.
+match string b?'(?:\\.[^']*|[^'\\])'
+match constant '[A-Za-z_][A-Za-z0-9_]*
+# A macro call; the ! is part of its name.
+match (?P<function>[A-Za-z_][A-Za-z0-9_]*!)\s*[(\[{]
+
+keywords as async await break const continue crate dyn else enum extern fn
+keywords for if impl in let loop match mod move mut pub ref return self Self
+keywords static struct super trait type unsafe use where while yield
+
+types bool char f32 f64 i8 i16 i32 i64 i128 isize str u8 u16 u32 u64 u128
+types usize String Vec Option Result Box Rc Arc RefCell Cell HashMap HashSet
+types BTreeMap BTreeSet
+
+constants true false None Some Ok Err
+
+declares function fn
+declares type struct enum trait union type

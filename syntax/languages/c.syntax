@@ -1,0 +1,24 @@
+# C.
+
+language c
+files *.c *.h
+
+comment //
+comment /* */
+string "
+string '
+match keyword ^\s*#\s*[a-z]+
+
+keywords auto break case const continue default do else enum extern for goto
+keywords if inline register restrict return sizeof static struct switch
+keywords typedef union volatile while _Alignas _Alignof _Atomic _Bool
+keywords _Generic _Noreturn _Static_assert _Thread_local
+
+types void char short int long float double signed unsigned bool size_t
+types ssize_t ptrdiff_t wchar_t char16_t char32_t intptr_t uintptr_t
+types int8_t int16_t int32_t int64_t uint8_t uint16_t uint32_t uint64_t
+types FILE va_list
+
+constants NULL true false EOF stdin stdout stderr
+
+declares type struct union enum

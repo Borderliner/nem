@@ -1,0 +1,15 @@
+# TypeScript, which is JavaScript and more.
+
+language typescript
+like javascript
+files *.ts *.tsx *.mts *.cts
+
+keywords abstract as asserts declare enum implements infer interface is keyof
+keywords namespace override private protected public readonly satisfies type
+keywords unique
+
+types any bigint boolean never number object string symbol unknown void
+types Awaited Exclude Extract NonNullable Omit Parameters Partial Pick
+types Readonly Record Required ReturnType
+
+declares type interface type enum

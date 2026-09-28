@@ -3,7 +3,7 @@ package syntax
 import "testing"
 
 func TestJSONKeysAreDistinctFromValues(t *testing.T) {
-	lx := jsonLexer{}
+	lx := lang(t, "json")
 	assertSpanCovers(t, lx, `{"name": "value"}`, `"name"`, Function)
 	assertSpanCovers(t, lx, `{"name": "value"}`, `"value"`, String)
 	// Whitespace between the key and its colon is still a key.
@@ -13,7 +13,7 @@ func TestJSONKeysAreDistinctFromValues(t *testing.T) {
 }
 
 func TestJSONConstantsAndNumbers(t *testing.T) {
-	lx := jsonLexer{}
+	lx := lang(t, "json")
 	for _, tc := range []struct {
 		src, sub string
 		want     Class
@@ -31,7 +31,7 @@ func TestJSONConstantsAndNumbers(t *testing.T) {
 
 func TestJSONPunctuation(t *testing.T) {
 	line := []rune(`{"a":[1,2]}`)
-	spans, out := jsonLexer{}.Lex(line, 0)
+	spans, out := lang(t, "json").Lex(line, 0)
 	checkSpans(t, "json punctuation", line, spans)
 	if out != 0 {
 		t.Errorf("JSON carried state %v; it should never need to", out)
@@ -45,7 +45,7 @@ func TestJSONPunctuation(t *testing.T) {
 // cannot contain a raw newline, so this is a typo, and ending it at the line
 // break keeps one mistake from recolouring the rest of the document.
 func TestJSONUnterminatedStringDoesNotCarry(t *testing.T) {
-	_, out := jsonLexer{}.Lex([]rune(`{"a": "oops`), 0)
+	_, out := lang(t, "json").Lex([]rune(`{"a": "oops`), 0)
 	if out != 0 {
 		t.Errorf("state %v carried from an unterminated JSON string", out)
 	}
@@ -53,5 +53,5 @@ func TestJSONUnterminatedStringDoesNotCarry(t *testing.T) {
 
 // A bare word that is not a JSON constant is left Plain rather than guessed at.
 func TestJSONUnknownBareWordIsPlain(t *testing.T) {
-	assertClass(t, jsonLexer{}, `{"a": undefined}`, "undefined", Plain)
+	assertClass(t, lang(t, "json"), `{"a": undefined}`, "undefined", Plain)
 }

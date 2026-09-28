@@ -1,0 +1,25 @@
+# Lua.
+
+language lua
+files *.lua *.rockspec .luacheckrc
+shebang lua luajit
+
+comment --
+# A long comment or string closes only at a bracket of its own level, so
+# ]] inside [==[ ... ]==] is text: the end is what the start captured.
+region comment
+    start --\[(=*)\[
+    end \]\1\]
+    multiline
+region string
+    start \[(=*)\[
+    end \]\1\]
+    multiline
+string "
+string '
+
+keywords and break do else elseif end for function goto if in local not or
+keywords repeat return then until while
+constants nil true false
+
+operators +-*/%^#&~|<>=:

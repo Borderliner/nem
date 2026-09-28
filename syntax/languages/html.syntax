@@ -1,0 +1,7 @@
+# HTML, which is XML's rules and a doctype.
+
+language html
+like xml
+files *.html *.htm *.xhtml *.shtml
+
+match keyword (?i)<!doctype[^>]*>
