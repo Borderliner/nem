@@ -1,6 +1,7 @@
 // Package memory is what nem remembers from one session to the next: what was
 // typed at each kind of prompt, the files opened most recently, where point
-// was in each file when it was left, and the projects worked in.
+// was in each file when it was left, the language a file was set to be read
+// as, and the projects worked in.
 //
 // It is one small JSON file in the state directory, beside the backups. Saving
 // merges with what is on disk rather than overwriting it, so two nem windows
@@ -23,10 +24,11 @@ const FileName = "memory.json"
 // How much is kept. A history longer than this is not scrolled through; a
 // place in a file untouched for this many other files is not missed.
 const (
-	historySize  = 100
-	recentSize   = 200
-	placesSize   = 1000
-	projectsSize = 100
+	historySize   = 100
+	recentSize    = 200
+	placesSize    = 1000
+	projectsSize  = 100
+	languagesSize = 1000
 )
 
 // Place is where point was in a file, and the first line on screen.
@@ -39,6 +41,16 @@ type Place struct {
 	Used int64 `json:"used"`
 }
 
+// Language is the language a file was set to be coloured as, when it is not
+// the one its name says.
+type Language struct {
+	// Name is the language, or "" when the choice was undone: kept, so the
+	// undoing outlasts a merge with an older choice on disk.
+	Name string `json:"name"`
+	// Used is when it was chosen, in Unix seconds: the newer wins a merge.
+	Used int64 `json:"used"`
+}
+
 // Memory is the remembered state. The zero value is empty and does not
 // persist; Load gives one that does.
 type Memory struct {
@@ -48,6 +60,9 @@ type Memory struct {
 	Recent   []string            `json:"recent"`
 	Places   map[string]Place    `json:"places"`
 	Projects []string            `json:"projects"`
+	// Languages are the languages files were set to be coloured as, by
+	// path.
+	Languages map[string]Language `json:"languages,omitempty"`
 
 	// forgotten are projects forgotten this session, kept so that saving
 	// does not bring them back from the copy on disk.
@@ -69,6 +84,7 @@ func Load(dir string) (*Memory, error) {
 		return m, nil
 	}
 	m.History, m.Recent, m.Places, m.Projects = disk.History, disk.Recent, disk.Places, disk.Projects
+	m.Languages = disk.Languages
 	return m, nil
 }
 
@@ -137,6 +153,22 @@ func (m *Memory) PlaceOf(path string) (Place, bool) {
 	return p, ok
 }
 
+// SetLanguage records that the file at path is to be coloured as name, or,
+// with "", that it is to be coloured as its name says after all.
+func (m *Memory) SetLanguage(path, name string) {
+	if m.Languages == nil {
+		m.Languages = map[string]Language{}
+	}
+	m.Languages[path] = Language{Name: name, Used: time.Now().Unix()}
+	trimLanguages(m.Languages)
+}
+
+// LanguageOf is the language the file at path was set to be coloured as, or
+// "" when it was not.
+func (m *Memory) LanguageOf(path string) string {
+	return m.Languages[path].Name
+}
+
 // Save writes the memory, merged with whatever another session saved since
 // this one loaded: this session's entries first, since they are the newer,
 // then the other's that this one does not have. A memory that was not loaded
@@ -175,6 +207,15 @@ func (m *Memory) Save() error {
 			}
 		}
 		trimPlaces(m.Places)
+		for path, l := range disk.Languages {
+			if mine, ok := m.Languages[path]; !ok || l.Used > mine.Used {
+				if m.Languages == nil {
+					m.Languages = map[string]Language{}
+				}
+				m.Languages[path] = l
+			}
+		}
+		trimLanguages(m.Languages)
 	}
 
 	data, err := json.MarshalIndent(m, "", " ")
@@ -242,5 +283,19 @@ func trimPlaces(places map[string]Place) {
 	slices.SortFunc(all, func(a, b used) int { return int(b.at - a.at) })
 	for _, u := range all[placesSize:] {
 		delete(places, u.path)
+	}
+}
+
+// trimLanguages drops the least recently chosen languages beyond
+// languagesSize.
+func trimLanguages(langs map[string]Language) {
+	for len(langs) > languagesSize {
+		oldest, at := "", int64(0)
+		for p, l := range langs {
+			if oldest == "" || l.Used < at {
+				oldest, at = p, l.Used
+			}
+		}
+		delete(langs, oldest)
 	}
 }

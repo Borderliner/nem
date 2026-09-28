@@ -141,3 +141,42 @@ func TestProjects(t *testing.T) {
 		t.Errorf("projects %q after adding /q back", got.Projects)
 	}
 }
+
+// A file's language is remembered, and two sessions merge as places do: the
+// newer choice wins, and undoing one is a choice too, so an older choice on
+// disk does not come back.
+func TestLanguages(t *testing.T) {
+	dir := t.TempDir()
+	a, _ := Load(dir)
+	a.SetLanguage("/init", "elisp")
+	if err := a.Save(); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := Load(dir)
+	if l := got.LanguageOf("/init"); l != "elisp" {
+		t.Fatalf("remembered %q, want elisp", l)
+	}
+	if l := got.LanguageOf("/other"); l != "" {
+		t.Errorf("a file never set has language %q", l)
+	}
+
+	old, _ := Load(dir)
+	old.Languages["/x"] = Language{Name: "lisp", Used: 100}
+	if err := old.Save(); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := Load(dir)
+	b.Languages["/x"] = Language{Name: "", Used: 200} // undone later
+	if err := b.Save(); err != nil {
+		t.Fatal(err)
+	}
+	c, _ := Load(dir)
+	c.Languages["/x"] = Language{Name: "scheme", Used: 50} // older than both
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = Load(dir)
+	if l := got.LanguageOf("/x"); l != "" {
+		t.Errorf("after an undo, an older choice came back: %q", l)
+	}
+}
