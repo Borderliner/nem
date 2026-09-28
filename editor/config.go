@@ -2,6 +2,7 @@ package editor
 
 import (
 	"errors"
+	"path/filepath"
 	"time"
 
 	"github.com/Borderliner/nem/command"
@@ -57,6 +58,9 @@ func (e *Editor) LoadConfig(path string) error {
 		}
 		path = p
 	}
+	// The user's languages live beside init.lua, and load whatever becomes of
+	// it: a broken config must not cost the colours.
+	e.loadLanguages(filepath.Join(filepath.Dir(path), "syntax"))
 
 	h, err := lua.New(lua.Options{
 		Registry:    e.reg,

@@ -1,6 +1,9 @@
 package editor
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/Borderliner/nem/highlight"
@@ -40,57 +43,107 @@ func (e *Editor) spansOf(b *text.Buffer, line int) []syntax.Span {
 	return e.cacheFor(b).Spans(b, line)
 }
 
-// nanoSet holds the languages read from the system's nano installation.
-//
-// Loaded once and lazily: reading forty files is cheap but pointless for an
-// editor that never opens a file nano covers, and doing it at init would charge
-// every launch for it. sync.Once rather than a plain nil check because the
-// editor may hold several buffers and the first lex of each could race - the
-// input loop is single-threaded today, and this does not depend on that staying
-// true.
+// languages returns the languages buffers are coloured in: nem's own, and
+// once the config has loaded, the user's from beside init.lua.
+func (e *Editor) languages() *syntax.Set {
+	if e.langs == nil {
+		return syntax.Builtin()
+	}
+	return e.langs
+}
+
+// loadLanguages reads the user's language definitions from dir, over nem's.
+// A broken definition is reported, as a broken init.lua is, and costs only
+// itself: every other language, the user's and nem's, is still coloured.
+func (e *Editor) loadLanguages(dir string) []error {
+	if abs, err := filepath.Abs(dir); err == nil {
+		dir = abs
+	}
+	e.syntaxDir = dir
+	set, errs := syntax.Load(dir)
+	e.langs = set
+	if len(errs) > 0 {
+		more := ""
+		if len(errs) > 1 {
+			more = fmt.Sprintf(" (and %d more)", len(errs)-1)
+		}
+		e.Echo("syntax: %v%s", errs[0], more)
+	}
+	return errs
+}
+
+// reloadLanguagesAfterSaving reads the definitions again when a file saved is
+// one of them, and recolours every buffer, so a language is written and tried
+// in one sitting: the definition in one window, a file of it in the other.
+func (e *Editor) reloadLanguagesAfterSaving(path string) {
+	if e.syntaxDir == "" || filepath.Ext(path) != ".syntax" {
+		return
+	}
+	if dir, err := filepath.Abs(filepath.Dir(path)); err != nil || !sameDir(dir, e.syntaxDir) {
+		return
+	}
+	if errs := e.loadLanguages(e.syntaxDir); len(errs) > 0 {
+		return // reported
+	}
+	for b := range e.hl {
+		e.retuneHighlight(b)
+	}
+	e.Echo("syntax: %d languages", len(e.langs.Languages()))
+}
+
+// sameDir reports whether a and b name one directory.
+func sameDir(a, b string) bool {
+	if a == b {
+		return true
+	}
+	ia, err1 := os.Stat(a)
+	ib, err2 := os.Stat(b)
+	return err1 == nil && err2 == nil && os.SameFile(ia, ib)
+}
+
+// lexerFor picks the lexer for a buffer: its language by its name, or by its
+// first line, which is what identifies a script with no extension by its #!.
+// A buffer nothing matches gets the plain lexer, so *scratch* and *Buffer
+// List* render uncoloured without a special case.
+func (e *Editor) lexerFor(b *text.Buffer) syntax.Lexer {
+	first := firstLine(b)
+	lex := e.languages().For(b.Path(), first)
+	if _, plain := lex.(syntax.PlainLexer); !plain || b.Path() == "" {
+		return lex
+	}
+	if n := nanoLexers().For(b.Path(), first); n != nil {
+		return n
+	}
+	return lex
+}
+
+// nanoSet holds the languages read from the system's nano installation, for
+// what no definition covers. Loaded once and lazily.
 var (
 	nanoOnce sync.Once
 	nanoSet  *nanorc.Set
 )
 
 func nanoLexers() *nanorc.Set {
-	nanoOnce.Do(func() {
-		// Problems are dropped rather than reported: a malformed file in a
-		// system directory is not something the user of this editor can act on,
-		// and one warning per launch would be noise. The affected language is
-		// simply not offered.
-		nanoSet, _ = nanorc.Load(nanorc.DefaultDirs()...)
-	})
+	nanoOnce.Do(func() { nanoSet, _ = nanorc.Load(nanorc.DefaultDirs()...) })
 	return nanoSet
 }
 
-// lexerFor picks the lexer for a buffer.
-//
-// nem's hand-written lexers come first: they carry proper state across lines
-// and are precise where a regex pass can only approximate. nano's definitions
-// fill in everything else, which is most languages. A buffer nothing matches
-// gets the plain lexer, so *scratch* and *Buffer List* render uncoloured
-// without a special case.
-func lexerFor(b *text.Buffer) syntax.Lexer {
-	// The first line is read up front because the bundled rules need the
-	// shebang too, not just nano's. An extensionless script called "deploy"
-	// starting with #!/bin/sh must highlight on a machine with no nano
-	// installed, which is the whole reason the rules are bundled.
-	var first string
-	if b.NumLines() > 0 {
-		first = b.Line(0).String()
+// firstLine is a buffer's first line, or "".
+func firstLine(b *text.Buffer) string {
+	if b.NumLines() == 0 {
+		return ""
 	}
-	lex := syntax.ForWithHeader(b.Path(), first)
-	if _, plain := lex.(syntax.PlainLexer); !plain {
-		return lex
+	return b.Line(0).String()
+}
+
+// LanguageOf reports the language a buffer is written in, or nil: what M-;
+// asks, to write a comment the way the language does.
+func (e *Editor) LanguageOf(b *text.Buffer) *syntax.Language {
+	if b == nil {
+		return nil
 	}
-	if b.Path() == "" {
-		return lex // a nameless buffer has nothing to match on
-	}
-	if n := nanoLexers().For(b.Path(), first); n != nil {
-		return n
-	}
-	return lex
+	return e.languages().Detect(b.Path(), firstLine(b))
 }
 
 // cacheFor returns the buffer's highlight cache, creating it on first use.
@@ -101,7 +154,7 @@ func (e *Editor) cacheFor(b *text.Buffer) *highlight.Cache {
 	if c, ok := e.hl[b]; ok {
 		return c
 	}
-	c := highlight.New(lexerFor(b))
+	c := highlight.New(e.lexerFor(b))
 	e.hl[b] = c
 	return c
 }
@@ -117,8 +170,10 @@ func (e *Editor) retuneHighlight(b *text.Buffer) {
 	if !ok {
 		return // no cache yet; cacheFor will pick the right lexer when one is made
 	}
-	lex := lexerFor(b)
-	if lex.Name() == c.Lexer().Name() {
+	// The same language is the same Language: a reloaded definition is a
+	// new one, and must replace the old even though its name is the same.
+	lex := e.lexerFor(b)
+	if lex == c.Lexer() {
 		return
 	}
 	c.SetLexer(lex)

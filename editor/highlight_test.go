@@ -2,6 +2,7 @@ package editor
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Borderliner/nem/text"
@@ -151,12 +152,8 @@ func TestEditingUpdatesTheColours(t *testing.T) {
 	}
 }
 
-// A language nem has no hand-written lexer for must still be coloured, from
-// nano's definitions. Skipped where nano is not installed, which is normal.
-func TestNanorcLanguagesAreColoured(t *testing.T) {
-	if _, err := os.Stat("/usr/share/nano"); err != nil {
-		t.Skip("nano is not installed here")
-	}
+// A file is coloured end to end, from its definition to its spans.
+func TestAFileIsColouredByItsLanguage(t *testing.T) {
 	e, _ := newTestEditor(t, `def handler(self):`, `    return "hi"  # done`)
 	e.Buf().SetPath(filepath.Join(t.TempDir(), "script.py"))
 	e.retuneHighlight(e.Buf())
@@ -164,45 +161,106 @@ func TestNanorcLanguagesAreColoured(t *testing.T) {
 	if name := e.cacheFor(e.Buf()).Lexer().Name(); name != "python" {
 		t.Fatalf("lexer = %q, want python", name)
 	}
-
-	var classes []syntax.Class
+	var sawString, sawComment bool
 	for ln := 0; ln < e.Buf().NumLines(); ln++ {
 		for _, s := range e.spansOf(e.Buf(), ln) {
-			classes = append(classes, s.Class)
+			sawString = sawString || s.Class == syntax.String
+			sawComment = sawComment || s.Class == syntax.Comment
 		}
 	}
-	if len(classes) == 0 {
-		t.Fatal("no spans for a Python file; highlighting is not reaching nanorc")
-	}
-	var sawString, sawComment bool
-	for _, c := range classes {
-		switch c {
-		case syntax.String:
-			sawString = true
-		case syntax.Comment:
-			sawComment = true
-		}
-	}
-	if !sawString {
-		t.Error(`no String span for "hi"`)
-	}
-	if !sawComment {
-		t.Error("no Comment span for the trailing #")
+	if !sawString || !sawComment {
+		t.Errorf("string %v, comment %v: a Python file lost its colours", sawString, sawComment)
 	}
 }
 
-// nem's own lexers must not be displaced by nano's, which ship definitions for
-// the same four languages and are less precise.
-func TestNativeLexersWinOverNanorc(t *testing.T) {
-	for _, tc := range []struct{ file, want string }{
-		{"a.go", "go"}, {"b.lua", "lua"}, {"c.json", "json"}, {"d.md", "markdown"},
-	} {
-		e, _ := newTestEditor(t, "x")
-		e.Buf().SetPath(filepath.Join(t.TempDir(), tc.file))
-		e.retuneHighlight(e.Buf())
-		if got := e.cacheFor(e.Buf()).Lexer().Name(); got != tc.want {
-			t.Errorf("%s: lexer = %q, want nem's own %q", tc.file, got, tc.want)
+// userLanguages starts an editor whose config directory holds the given
+// definitions, as ~/.config/nem/syntax would.
+func userLanguages(t *testing.T, defs map[string]string) (*Editor, string) {
+	t.Helper()
+	cfg := t.TempDir()
+	dir := filepath.Join(cfg, "syntax")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, src := range defs {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o644); err != nil {
+			t.Fatal(err)
 		}
+	}
+	e, _ := newTestEditor(t, "x")
+	_ = e.LoadConfig(filepath.Join(cfg, "init.lua"))
+	return e, dir
+}
+
+// A language of the user's own colours its files, and one named as nem's
+// replaces it.
+func TestUserLanguagesColourTheirFiles(t *testing.T) {
+	e, _ := userLanguages(t, map[string]string{
+		"ada.syntax": "language ada\nfiles *.adb\nignore-case\ncomment --\nkeywords procedure is begin end\n",
+		"go.syntax":  "language go\nlike go\nkeywords must\n",
+	})
+	b := e.Buf()
+	b.SetPath(filepath.Join(t.TempDir(), "main.adb"))
+	e.retuneHighlight(b)
+	if name := e.cacheFor(b).Lexer().Name(); name != "ada" {
+		t.Fatalf("main.adb is lexed as %q", name)
+	}
+	if lang := e.LanguageOf(b); lang == nil || lang.Name() != "ada" {
+		t.Errorf("LanguageOf(main.adb) = %v", lang)
+	}
+	b.SetPath(filepath.Join(t.TempDir(), "main.go"))
+	e.retuneHighlight(b)
+	spans, _ := e.cacheFor(b).Lexer().Lex([]rune("must(x)"), 0)
+	if len(spans) == 0 || spans[0].Class != syntax.Keyword {
+		t.Errorf("the user's go did not replace nem's: %v", spans)
+	}
+}
+
+// Saving a definition reloads the languages and recolours what is open, so
+// a language is written and tried without leaving nem.
+func TestSavingADefinitionRecolours(t *testing.T) {
+	e, dir := userLanguages(t, map[string]string{
+		"nim.syntax": "language nim\nfiles *.nim\nkeywords proc\n",
+	})
+	code := e.Buf()
+	code.SetPath(filepath.Join(t.TempDir(), "a.nim"))
+	code.Insert(text.Pos{}, []rune("echo 1\n"))
+	e.retuneHighlight(code)
+	if spans := e.cacheFor(code).Spans(code, 0); len(spans) > 1 || len(spans) == 1 && spans[0].Class == syntax.Keyword {
+		t.Fatalf("echo is coloured before the definition says so: %v", spans)
+	}
+
+	def := e.NewBuffer("nim.syntax")
+	def.Insert(text.Pos{}, []rune("language nim\nfiles *.nim\nkeywords proc echo\n"))
+	if err := e.SaveBuffer(def, filepath.Join(dir, "nim.syntax")); err != nil {
+		t.Fatal(err)
+	}
+	spans := e.cacheFor(code).Spans(code, 0)
+	if len(spans) == 0 || spans[0].Class != syntax.Keyword {
+		t.Errorf("after saving the definition echo is %v, want a keyword", spans)
+	}
+
+	// A mistake saved is reported, and the languages that were loaded stay.
+	def.Insert(text.Pos{Line: 2}, []rune("match keyowrd x\n"))
+	if err := e.SaveBuffer(def, ""); err != nil {
+		t.Fatal(err)
+	}
+	if msg := e.Message(); !strings.Contains(msg, "nim.syntax:3") {
+		t.Errorf("echo %q does not report the broken line", msg)
+	}
+}
+
+// A broken definition is reported when nem starts, and costs only itself.
+func TestABrokenDefinitionIsReported(t *testing.T) {
+	e, _ := userLanguages(t, map[string]string{
+		"bad.syntax":  "language bad\nfiles *.bad\nmatch keyowrd x\n",
+		"good.syntax": "language good\nfiles *.good\nkeywords yes\n",
+	})
+	if msg := e.Message(); !strings.Contains(msg, "bad.syntax:3") {
+		t.Errorf("echo %q does not report the broken definition", msg)
+	}
+	if e.languages().Language("good") == nil || e.languages().Language("go") == nil {
+		t.Error("one broken definition cost the others")
 	}
 }
 
@@ -221,7 +279,8 @@ func TestExtensionlessScriptHighlightsFromItsShebang(t *testing.T) {
 		t.Fatalf("LoadFile: %v", err)
 	}
 
-	lex := lexerFor(b)
+	e, _ := newTestEditor(t)
+	lex := e.lexerFor(b)
 	if _, plain := lex.(syntax.PlainLexer); plain {
 		t.Fatal("an extensionless #!/bin/sh script got the plain lexer")
 	}
@@ -241,7 +300,8 @@ func TestNamelessUnmarkedFileStaysPlain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadFile: %v", err)
 	}
-	if _, plain := lexerFor(b).(syntax.PlainLexer); !plain {
+	e, _ := newTestEditor(t)
+	if _, plain := e.lexerFor(b).(syntax.PlainLexer); !plain {
 		t.Error("a file with no extension and no shebang should stay plain")
 	}
 }

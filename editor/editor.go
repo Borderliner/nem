@@ -28,6 +28,7 @@ import (
 	"github.com/Borderliner/nem/keymap"
 	"github.com/Borderliner/nem/lua"
 	"github.com/Borderliner/nem/memory"
+	"github.com/Borderliner/nem/syntax"
 	"github.com/Borderliner/nem/sysopen"
 	"github.com/Borderliner/nem/text"
 	"github.com/Borderliner/nem/ui"
@@ -97,6 +98,11 @@ type Editor struct {
 	// hl caches syntax state per buffer, so a keystroke re-lexes from the edit
 	// rather than from the top of the file. See highlight.go.
 	hl map[*text.Buffer]*highlight.Cache
+	// langs is the languages buffers are coloured in, nem's and the user's,
+	// read from syntaxDir; nil until the config loads, when nem's alone are.
+	// See highlight.go.
+	langs     *syntax.Set
+	syntaxDir string
 
 	// vcs caches each buffer's git branch, because the modeline asks for it on
 	// every frame and the answer costs a walk up the directory tree. See vcs.go.

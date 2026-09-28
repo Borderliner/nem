@@ -331,6 +331,7 @@ func (e *Editor) backupBeforeWrite(target string) {
 // afterSave updates the on-disk record and discards the now-redundant autosave.
 func (e *Editor) afterSave(target string) {
 	e.noteOnDisk(target)
+	e.reloadLanguagesAfterSaving(target)
 	if s := &e.safe; s.store != nil && s.enabled {
 		// A stale autosave would offer to "recover" work that is already on
 		// disk, so a successful save must clear it.
