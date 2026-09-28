@@ -77,11 +77,10 @@ How many lines of context to keep above and below the cursor when scrolling,
 
 ### syntax
 
-Colour code. Go, Lua, JSON and Markdown have lexers of their own; C, Python,
-shell, Rust, JavaScript, TypeScript, YAML, TOML, HTML, CSS, SQL, Makefile,
-Dockerfile, XML and INI have rules built in; and nano's rules, where nano is
-installed, cover about forty more. A file without an extension is matched by its
-`#!` line.
+Colour code. Every language nem colours is described by a short definition,
+and dozens are built in, from Ada to Zig; a file without an extension is
+matched by its `#!` line. You can change how a language is coloured, or add
+one nem doesn't know: see [Languages](Languages).
 
 ### theme
 

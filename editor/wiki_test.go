@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/Borderliner/nem/keymap"
+	"github.com/Borderliner/nem/syntax"
 )
 
 // The wiki's reference pages - every key, and every command - are written
@@ -49,6 +50,48 @@ func TestWikiReferenceIsCurrent(t *testing.T) {
 		if err != nil || string(got) != want {
 			t.Errorf("docs/wiki/%s does not match the code. Run\n\tNEM_UPDATE_WIKI=1 go test ./editor -run TestWikiReferenceIsCurrent\nand publish the wiki.", name)
 		}
+	}
+	languagesSection(t)
+}
+
+// languagesSection keeps the Languages page's list of built-in languages to
+// the definitions: the page is written by hand, and only the part between
+// its markers is made from the code.
+func languagesSection(t *testing.T) {
+	t.Helper()
+	const open, closing = "<!-- languages: generated from the definitions by TestWikiReferenceIsCurrent -->\n", "<!-- /languages -->"
+	path := filepath.Join(wikiDir, "Languages.md")
+	page, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	i, j := strings.Index(string(page), open), strings.Index(string(page), closing)
+	if i < 0 || j < i {
+		t.Fatalf("docs/wiki/Languages.md has lost its markers for the list of languages")
+	}
+	var sb strings.Builder
+	sb.WriteString("\n| Language | Files |\n|---|---|\n")
+	for _, l := range syntax.Builtin().Languages() {
+		d := l.Def()
+		var claims []string
+		for _, f := range d.Files {
+			claims = append(claims, "`"+f+"`")
+		}
+		for _, s := range d.Shebangs {
+			claims = append(claims, "`#!"+s+"`")
+		}
+		fmt.Fprintf(&sb, "| %s | %s |\n", l.Name(), strings.Join(claims, " "))
+	}
+	sb.WriteString("\n")
+	want := string(page[:i+len(open)]) + sb.String() + string(page[j:])
+	if os.Getenv("NEM_UPDATE_WIKI") != "" {
+		if err := os.WriteFile(path, []byte(want), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	if string(page) != want {
+		t.Errorf("docs/wiki/Languages.md does not list the languages built in. Run\n\tNEM_UPDATE_WIKI=1 go test ./editor -run TestWikiReferenceIsCurrent\nand publish the wiki.")
 	}
 }
 

@@ -6,4 +6,5 @@
 - [Keybindings](Keybindings)
 - [Commands](Commands)
 - [Searching](Searching)
+- [Languages](Languages)
 - [Recipes](Recipes)

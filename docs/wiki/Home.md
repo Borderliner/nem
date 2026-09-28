@@ -15,6 +15,7 @@ This wiki is the reference for configuring it and for every key it binds.
 | [Lua API](Lua-API) | `nem.set`, `nem.bind`, `nem.command`, `nem.run`, `nem.hook` and `nem.buf` |
 | [Keybindings](Keybindings) | Every key, globally and in each mode, in prompts and in questions |
 | [Commands](Commands) | Every command by name, with its keys: what `M-x` runs |
+| [Languages](Languages) | How nem colours code, the languages built in, and how to add your own |
 | [Searching](Searching) | The built-in ripgrep and fzf, their options, and the syntax every list narrows by |
 | [Recipes](Recipes) | Configs to copy: projectile's keys, format on save, commands of your own |
 
