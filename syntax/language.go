@@ -262,7 +262,7 @@ func (l *Language) index() {
 			continue
 		}
 		var f first
-		f.addRune(r.start[0], false)
+		f.addRune(r.start[0], l.ignoreCase)
 		l.starts.add(f)
 		l.startsAt0.add(f)
 	}
@@ -530,13 +530,15 @@ func (x *lineLexer) at(m *matcher, i int) ([]int, bool) {
 	return x.loc, true
 }
 
-// hasAt reports whether s is at rune i.
+// hasAt reports whether s is at rune i: in any case, in a language that
+// ignores case, so its REM is its rem.
 func (x *lineLexer) hasAt(i int, s []rune) bool {
 	if len(s) == 0 || i+len(s) > x.n {
 		return false
 	}
 	for k, r := range s {
-		if x.line[i+k] != r {
+		c := x.line[i+k]
+		if c != r && (!x.l.ignoreCase || unicode.ToLower(c) != unicode.ToLower(r)) {
 			return false
 		}
 	}
@@ -656,7 +658,7 @@ func (x *lineLexer) regionStart(i int) (k, to int, caps []string, ok bool) {
 	var bestLoc []int
 	for j, r := range x.l.regions {
 		if r.startRe == nil {
-			if x.hasAt(i, r.start) && i+len(r.start) > bestTo {
+			if x.hasAt(i, r.start) && i+len(r.start) > bestTo && x.wordEnds(i+len(r.start), r.start) {
 				best, bestTo, bestLoc = j, i+len(r.start), nil
 			}
 			continue
@@ -721,6 +723,16 @@ func (x *lineLexer) inRegion(r *region, end *matcher, j, depth int) (int, bool, 
 		j++
 	}
 	return x.n, false, depth
+}
+
+// wordEnds reports whether a delimiter ending at to stands alone there: one
+// that ends in a letter, as REM, dnl and @c do, must not run on into a longer
+// word, or @code would open a texinfo comment.
+func (x *lineLexer) wordEnds(to int, delim []rune) bool {
+	if len(delim) == 0 || !isWordRune(delim[len(delim)-1]) || to >= x.n {
+		return true
+	}
+	return !x.l.isWordPart(x.line[to])
 }
 
 // startsAt reports whether r starts at j, and where its start ends.

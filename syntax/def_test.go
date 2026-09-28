@@ -346,3 +346,16 @@ func TestLanguageComment(t *testing.T) {
 		t.Error("yaml's comments are a match rule, since # starts one only after a blank; none is listed")
 	}
 }
+
+// A delimiter that is a word is one only where it stands alone: REM starts a
+// comment, and REMARK is a name.
+func TestWordDelimitersStandAlone(t *testing.T) {
+	l := def(t, "language a\nignore-case\ncomment rem\ncomment @c\n")
+	assertSpanCovers(t, l, "REM a note", "REM a note", Comment)
+	assertClass(t, l, "remark = 1", "remark", Plain)
+	assertSpanCovers(t, l, "@c a note", "@c a note", Comment)
+	assertClass(t, l, "see @code{x}", "@code{x}", Plain)
+	// A delimiter of symbols needs no such care: --x is a comment.
+	d := def(t, "language a\ncomment --\n")
+	assertSpanCovers(t, d, "a --x", "--x", Comment)
+}
