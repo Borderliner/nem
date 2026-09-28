@@ -418,11 +418,16 @@ func (e *Editor) run(name string, skip bool) (err error) {
 			err = e.fault(name, r, debug.Stack())
 		}
 	}()
+	e.laterEcho = ""
 	e.runHooks(e.before, name)
 	if !skip {
 		err = e.reg.Run(name, e)
 	}
 	e.runHooks(e.after, name)
+	if err == nil && e.laterEcho != "" {
+		e.Echo("%s", e.laterEcho)
+	}
+	e.laterEcho = ""
 	return err
 }
 

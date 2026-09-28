@@ -54,20 +54,37 @@ func (e *Editor) languages() *syntax.Set {
 // A broken definition is reported, as a broken init.lua is, and costs only
 // itself: every other language, the user's and nem's, is still coloured.
 func (e *Editor) loadLanguages(dir string) []error {
+	errs := e.readLanguages(dir)
+	if len(errs) > 0 {
+		e.Echo("%s", languageErrors(errs))
+	}
+	return errs
+}
+
+// readLanguages reads the definitions, reporting nothing.
+func (e *Editor) readLanguages(dir string) []error {
+	set, errs := e.readLanguageSet(dir)
+	e.langs = set
+	return errs
+}
+
+// readLanguageSet reads the definitions without putting them to use.
+func (e *Editor) readLanguageSet(dir string) (*syntax.Set, []error) {
 	if abs, err := filepath.Abs(dir); err == nil {
 		dir = abs
 	}
 	e.syntaxDir = dir
-	set, errs := syntax.Load(dir)
-	e.langs = set
-	if len(errs) > 0 {
-		more := ""
-		if len(errs) > 1 {
-			more = fmt.Sprintf(" (and %d more)", len(errs)-1)
-		}
-		e.Echo("syntax: %v%s", errs[0], more)
+	return syntax.Load(dir)
+}
+
+// languageErrors is the echo area's report of broken definitions: the first,
+// with its file and line, and how many more there are.
+func languageErrors(errs []error) string {
+	more := ""
+	if len(errs) > 1 {
+		more = fmt.Sprintf(" (and %d more)", len(errs)-1)
 	}
-	return errs
+	return fmt.Sprintf("syntax: %v%s", errs[0], more)
 }
 
 // reloadLanguagesAfterSaving reads the definitions again when a file saved is
@@ -80,13 +97,20 @@ func (e *Editor) reloadLanguagesAfterSaving(path string) {
 	if dir, err := filepath.Abs(filepath.Dir(path)); err != nil || !sameDir(dir, e.syntaxDir) {
 		return
 	}
-	if errs := e.loadLanguages(e.syntaxDir); len(errs) > 0 {
-		return // reported
+	// A mistake is reported once the save is done, over its "Wrote", since
+	// it is what the one saving needs to see; and the languages stay as they
+	// were until it is put right, so a typo halfway through a change does
+	// not take the colours the definition already gave.
+	set, errs := e.readLanguageSet(e.syntaxDir)
+	if len(errs) > 0 {
+		e.echoAfterCommand("%s", languageErrors(errs))
+		return
 	}
+	e.langs = set
 	for b := range e.hl {
 		e.retuneHighlight(b)
 	}
-	e.Echo("syntax: %d languages", len(e.langs.Languages()))
+	e.echoAfterCommand("Wrote %s, and recoloured every buffer by it", filepath.Base(path))
 }
 
 // sameDir reports whether a and b name one directory.

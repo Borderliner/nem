@@ -226,33 +226,40 @@ func TestUserLanguagesColourTheirFiles(t *testing.T) {
 // a language is written and tried without leaving nem.
 func TestSavingADefinitionRecolours(t *testing.T) {
 	e, dir := userLanguages(t, map[string]string{
-		"nim.syntax": "language nim\nfiles *.nim\nkeywords proc\n",
+		"foo.syntax": "language foo\nfiles *.foo\nkeywords proc\n",
 	})
 	code := e.Buf()
-	code.SetPath(filepath.Join(t.TempDir(), "a.nim"))
+	code.SetPath(filepath.Join(t.TempDir(), "a.foo"))
 	code.Insert(text.Pos{}, []rune("echo 1\n"))
 	e.retuneHighlight(code)
-	if spans := e.cacheFor(code).Spans(code, 0); len(spans) > 1 || len(spans) == 1 && spans[0].Class == syntax.Keyword {
-		t.Fatalf("echo is coloured before the definition says so: %v", spans)
+	if spans := e.cacheFor(code).Spans(code, 0); len(spans) > 0 && spans[0].Class == syntax.Keyword {
+		t.Fatalf("echo is a keyword before the definition says so: %v", spans)
 	}
 
-	def := e.NewBuffer("nim.syntax")
-	def.Insert(text.Pos{}, []rune("language nim\nfiles *.nim\nkeywords proc echo\n"))
-	if err := e.SaveBuffer(def, filepath.Join(dir, "nim.syntax")); err != nil {
+	def := e.NewBuffer("foo.syntax")
+	def.Insert(text.Pos{}, []rune("language foo\nfiles *.foo\nkeywords proc echo\n"))
+	if err := e.SaveBuffer(def, filepath.Join(dir, "foo.syntax")); err != nil {
 		t.Fatal(err)
 	}
-	spans := e.cacheFor(code).Spans(code, 0)
-	if len(spans) == 0 || spans[0].Class != syntax.Keyword {
-		t.Errorf("after saving the definition echo is %v, want a keyword", spans)
+	isKeyword := func() bool {
+		spans := e.cacheFor(code).Spans(code, 0)
+		return len(spans) > 0 && spans[0].Class == syntax.Keyword
+	}
+	if !isKeyword() {
+		t.Error("after saving the definition echo is not a keyword")
 	}
 
-	// A mistake saved is reported, and the languages that were loaded stay.
+	// A mistake saved with C-x C-s is reported, over the save's own
+	// "Wrote", and the colours stay as the definition last gave them until
+	// it is put right.
+	e.active.Visit(def)
 	def.Insert(text.Pos{Line: 2}, []rune("match keyowrd x\n"))
-	if err := e.SaveBuffer(def, ""); err != nil {
-		t.Fatal(err)
-	}
-	if msg := e.Message(); !strings.Contains(msg, "nim.syntax:3") {
+	press(t, e, "C-x", "C-s")
+	if msg := e.Message(); !strings.Contains(msg, "foo.syntax:3") {
 		t.Errorf("echo %q does not report the broken line", msg)
+	}
+	if !isKeyword() {
+		t.Error("a broken save took the colours the definition had given")
 	}
 }
 

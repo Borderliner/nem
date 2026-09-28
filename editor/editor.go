@@ -74,6 +74,9 @@ type Editor struct {
 	lastCmd string
 
 	echo string
+	// laterEcho is echoed when the command running is done. See
+	// echoAfterCommand.
+	laterEcho string
 
 	scr tcell.Screen
 	th  ui.Theme
@@ -459,6 +462,14 @@ func (e *Editor) Seq() *command.Seq   { return &e.seq }
 // Echo shows a message on the bottom row.
 func (e *Editor) Echo(format string, a ...any) {
 	e.echo = fmt.Sprintf(format, a...)
+}
+
+// echoAfterCommand echoes a message now, and again once the command running
+// is done, over whatever the command itself says last: a save's report of
+// what reading a definition found must outlast its "Wrote".
+func (e *Editor) echoAfterCommand(format string, a ...any) {
+	e.Echo(format, a...)
+	e.laterEcho = e.echo
 }
 
 // Message returns the current echo-area text, for tests.
