@@ -258,8 +258,9 @@ Persian, Arabic and Hebrew are shown in the order they are read, their letters
 joined, by the Unicode bidirectional algorithm - most terminals do neither. In
 prose a line takes its direction from its first letter; in code every line
 stays left to right, with a Persian comment or string reading right to left
-where it is. Terminals that lay such text out themselves - Konsole, GNOME
-Terminal, mlterm - are left to it.
+where it is. It looks the same in every terminal: one that would reorder the text
+again, as GNOME Terminal and mintty do, is told not to, over ssh too. Only
+Konsole, mlterm and macOS's Terminal, which cannot be told, are left to it.
 
 Key bindings work whatever keyboard layout is on: with a Persian keyboard,
 Control on the x key sends `C-ط`, and nem reads it as the `C-x` it sits on - for
