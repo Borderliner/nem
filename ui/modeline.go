@@ -130,6 +130,9 @@ func modelineString(th Theme, w *view.Window, width int, active bool, info model
 	}
 
 	name := bufferName(w.Buf, info.Name)
+	if th.usesBidi([]rune(name)) {
+		name, _ = bidiString(name)
+	}
 
 	// Line numbers are 1-based and columns 0-based, which is what emacs
 	// reports. The column is a display column, not a rune index, so a cursor
@@ -143,6 +146,9 @@ func modelineString(th Theme, w *view.Window, width int, active bool, info model
 	}
 
 	fileType, branch := info.segments(w.Buf)
+	if th.usesBidi([]rune(branch)) {
+		branch, _ = bidiString(branch)
+	}
 	nameW, posW := lipgloss.Width(name), lipgloss.Width(pos)
 
 	// Preferred shape: mark, name, segments, space, rule, space, position,

@@ -203,3 +203,18 @@ func TestModelineFallsBackWithoutNameOf(t *testing.T) {
 		t.Errorf("modeline = %q, want the file name when NameOf returns empty", got)
 	}
 }
+
+// A buffer named in Persian is named on the mode line as it is read, when nem
+// lays right-to-left text out.
+func TestModelineNameIsLaidOut(t *testing.T) {
+	b := bufferOf(t, "hi")
+	b.SetPath("/tmp/یادداشت.txt")
+	w := view.NewWindow(b)
+	th := DefaultTheme()
+	th.Bidi = true
+	got := modelineString(th, w, 60, true, modelineInfo{})
+	want, _ := bidiString("یادداشت.txt")
+	if !strings.Contains(got, want) {
+		t.Errorf("modeline %q does not name the file as it is read, %q", got, want)
+	}
+}
