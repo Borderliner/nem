@@ -366,6 +366,9 @@ func New(scr tcell.Screen) (*Editor, error) {
 	scratch := e.NewBuffer(ui.ScratchName)
 	e.active = view.NewWindow(scratch)
 	e.tree = view.NewTree(e.active)
+	// Told now, with the default, and again once the config has said: a
+	// config that fails to load still leaves the terminal told.
+	e.takeBidi()
 	return e, nil
 }
 

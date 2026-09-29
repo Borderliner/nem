@@ -3,7 +3,6 @@ package ui
 import (
 	"os"
 	"sort"
-	"strconv"
 
 	"github.com/Borderliner/nem/bidi"
 	"github.com/Borderliner/nem/syntax"
@@ -245,17 +244,21 @@ func bidiString(s string) (string, func(text.RuneIdx) int) {
 }
 
 // TerminalDoesBidi reports whether the terminal lays out right-to-left text
-// itself, so nem must not: Konsole, mlterm, and terminals built on VTE since
-// its version 0.58, such as GNOME Terminal. Laid out twice, text comes out
-// backwards again.
+// itself whatever it is told, so nem must not: laid out twice, text comes out
+// backwards again. These are Konsole, mlterm and macOS's Terminal: each
+// reorders a line as a left-to-right paragraph, so a right-to-left line
+// stays against the left edge, and none can be asked to stop.
+//
+// A terminal that follows the BiDi recommendation for terminal emulators -
+// VTE's, as in GNOME Terminal, Tilix and Xfce's, and mintty - reorders too,
+// but is told not to while nem runs: see Screen.TakeBidi. nem then lays the
+// text out itself, set against the right edge, as it does in a terminal that
+// never reorders. Handing it to them instead left every right-to-left line
+// against the left edge; and where VTE's variable did not reach nem - over
+// ssh, under sudo - nem laid the text out and VTE reversed it again.
 func TerminalDoesBidi() bool {
-	if os.Getenv("KONSOLE_VERSION") != "" || os.Getenv("MLTERM") != "" {
-		return true
-	}
-	if v, err := strconv.Atoi(os.Getenv("VTE_VERSION")); err == nil && v >= 5800 {
-		return true
-	}
-	return false
+	return os.Getenv("KONSOLE_VERSION") != "" || os.Getenv("MLTERM") != "" ||
+		os.Getenv("TERM_PROGRAM") == "Apple_Terminal"
 }
 
 // isBlank reports whether c is a space or a tab.

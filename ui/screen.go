@@ -1,14 +1,22 @@
 package ui
 
 import (
+	"io"
+	"os"
+	"strings"
+
 	"github.com/Borderliner/nem/ui/blit"
 	"github.com/gdamore/tcell/v2"
 )
 
-// Screen owns the terminal. It is a thin wrapper over tcell.Screen whose only
-// real job is making sure Lip Gloss is pointed at the right place.
+// Screen owns the terminal. It is a thin wrapper over tcell.Screen whose jobs
+// are making sure Lip Gloss is pointed at the right place, and telling the
+// terminal who lays out right-to-left text.
 type Screen struct {
 	tcell.Screen
+	// bidiTaken is set while the terminal is told nem lays right-to-left
+	// text out itself. See TakeBidi.
+	bidiTaken bool
 }
 
 // NewScreen opens and initialises the terminal.
@@ -61,5 +69,56 @@ func (s *Screen) Resync() {
 
 // Close restores the terminal.
 func (s *Screen) Close() {
+	s.TakeBidi(false)
 	s.Screen.Fini()
+}
+
+// The BiDi recommendation for terminal emulators' switch, ECMA-48's BDSM:
+// explicit mode, in which the application has laid right-to-left text out
+// and the terminal shows it as it is sent; and implicit mode, the terminal's
+// own default, in which it reorders each line itself.
+const (
+	bidiExplicit = "\x1b[8l"
+	bidiImplicit = "\x1b[8h"
+)
+
+// TakeBidi says whether nem lays right-to-left text out itself. While it
+// does, the terminal is told not to reorder it again: VTE's terminals and
+// mintty do as they are told, and a terminal that does not know the switch
+// ignores it. Close gives the terminal its own layout back.
+//
+// The switch travels with nem's output, so it reaches the terminal over ssh
+// and under sudo, where nothing in the environment says what the terminal
+// is. Inside tmux or screen it is also sent through to the terminal outside,
+// which draws every pane: tmux passes it on only with allow-passthrough on.
+func (s *Screen) TakeBidi(take bool) {
+	if take == s.bidiTaken {
+		return
+	}
+	seq := bidiImplicit
+	if take {
+		seq = bidiExplicit
+	}
+	tty, ok := s.Screen.Tty()
+	if !ok || tty == nil {
+		return
+	}
+	_, _ = io.WriteString(tty, seq)
+	if wrapped := passThrough(seq); wrapped != "" {
+		_, _ = io.WriteString(tty, wrapped)
+	}
+	s.bidiTaken = take
+}
+
+// passThrough wraps seq for the terminal outside a multiplexer nem runs in,
+// or returns "" outside one. Both multiplexers take it as a device control
+// string; tmux wants its name first, and every escape inside doubled.
+func passThrough(seq string) string {
+	switch {
+	case os.Getenv("TMUX") != "":
+		return "\x1bPtmux;" + strings.ReplaceAll(seq, "\x1b", "\x1b\x1b") + "\x1b\\"
+	case os.Getenv("STY") != "":
+		return "\x1bP" + seq + "\x1b\\"
+	}
+	return ""
 }

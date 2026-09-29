@@ -446,3 +446,44 @@ func TestSetLanguage(t *testing.T) {
 		t.Errorf("main.go set to text is %s", name)
 	}
 }
+
+// takingScreen is a screen that remembers what it was told about laying out
+// right-to-left text.
+type takingScreen struct {
+	tcell.SimulationScreen
+	took []bool
+}
+
+func (s *takingScreen) TakeBidi(take bool) { s.took = append(s.took, take) }
+
+// The terminal is told who lays out right-to-left text as nem starts, and
+// again as the bidi setting says: nem, unless the terminal reorders whatever
+// it is told.
+func TestTheTerminalIsToldWhoLaysOutRightToLeft(t *testing.T) {
+	for _, k := range []string{"KONSOLE_VERSION", "MLTERM", "TERM_PROGRAM"} {
+		t.Setenv(k, "")
+	}
+	t.Setenv("VTE_VERSION", "7600") // a terminal that is told, and does as it is told
+	sim := tcell.NewSimulationScreen("UTF-8")
+	if err := sim.Init(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sim.Fini)
+	scr := &takingScreen{SimulationScreen: sim}
+	e, err := New(scr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scr.took) == 0 || !scr.took[len(scr.took)-1] {
+		t.Fatalf("in a VTE terminal nem did not take the layout: %v", scr.took)
+	}
+
+	cfg := filepath.Join(t.TempDir(), "init.lua")
+	if err := os.WriteFile(cfg, []byte(`nem.set("bidi", false)`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_ = e.LoadConfig(cfg)
+	if got := scr.took[len(scr.took)-1]; got {
+		t.Errorf("with bidi off the terminal was last told nem lays text out")
+	}
+}

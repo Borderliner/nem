@@ -59,3 +59,11 @@ func registerBidiCommands(e *Editor, reg *command.Registry) error {
 	}
 	return nil
 }
+
+// takeBidi tells the terminal whether nem lays right-to-left text out itself,
+// so that one that would reorder it again does not. See ui.Screen.TakeBidi.
+func (e *Editor) takeBidi() {
+	if s, ok := e.scr.(interface{ TakeBidi(bool) }); ok {
+		s.TakeBidi(e.th.Bidi)
+	}
+}

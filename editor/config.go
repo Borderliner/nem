@@ -134,6 +134,7 @@ func (e *Editor) applySettings(s lua.Settings) {
 	default:
 		e.th.Bidi = !ui.TerminalDoesBidi()
 	}
+	e.takeBidi()
 	e.SetDeleteSelection(s.DeleteSelection)
 	e.th.Syntax = s.Syntax
 	// "auto" guesses from the terminal; an explicit choice always wins, because
