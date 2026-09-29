@@ -95,9 +95,18 @@ washed out, set `"light"`.
 Lay out right-to-left text - Persian, Arabic, Hebrew - in the order it is read,
 with Arabic letters joined, and set a line that starts right to left against the
 right edge. Only the drawing changes: the cursor, the region and every command
-still work on the text as it is stored, as in emacs. `"auto"` does it unless the
-terminal lays such text out itself - Konsole, mlterm, and GNOME Terminal and
-others built on VTE - which would reverse it a second time.
+still work on the text as it is stored, as in emacs.
+
+`"auto"` does it everywhere but Konsole, mlterm and macOS's Terminal, which
+reorder such text themselves whatever they are told, so nem leaves it to them;
+they keep each line against the left edge. Terminals that reorder but can be
+told not to - GNOME Terminal and the others built on VTE, and mintty - are told
+so while nem runs, over ssh too, and nem lays the text out itself.
+
+Over ssh from Konsole or macOS's Terminal, nothing tells nem which terminal it
+is in, and the text comes out backwards: set `false` there. Inside tmux, the
+terminal outside draws every pane, and hears nem only with
+`set -g allow-passthrough on` in `tmux.conf`.
 
 ### icons
 
